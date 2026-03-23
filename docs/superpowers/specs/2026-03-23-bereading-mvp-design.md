@@ -255,8 +255,8 @@ Ao clicar em um aluno, o professor ve:
 3. Busca BookContent do capitulo no banco
 4. Monta prompt para a LLM com: conteudo do capitulo, tipo mix, quantidade 3-5, tom conversacional, contexto do livro e faixa etaria
 5. LLM retorna perguntas em JSON estruturado
-6. Salva Questions no banco vinculadas ao chapter + student
-7. Push notification ou badge no app
+6. Salva Questions no banco vinculadas ao chapter (sem student_id — compartilhadas)
+7. Push notification ou badge no app para o aluno que completou o capitulo
 
 ### Prompt Template
 
@@ -298,7 +298,7 @@ Perguntas sao geradas por capitulo (sem student_id) e compartilhadas entre aluno
 ### Fallback de IA
 
 Se a API de IA estiver indisponivel ou retornar erro:
-- Geracao de perguntas: marcar capitulo como "quiz pendente" e tentar novamente via job agendado (retry com backoff exponencial, max 3 tentativas)
+- Geracao de perguntas: marcar capitulo como "quiz pendente" e tentar novamente via pg_cron (extensao nativa do Supabase) com backoff exponencial, max 3 tentativas
 - Avaliacao de respostas: salvar a resposta e avaliar posteriormente. Aluno ve "Resposta recebida, avaliacao em breve."
 
 ### Custo Estimado
@@ -388,8 +388,8 @@ Admin:
 | Supabase | supabase.com (free tier a Pro) | $0-25/mes |
 | Dashboard Web | Vercel (Next.js) | $0/mes |
 | App Mobile | Expo EAS (builds iOS/Android) | $0 |
-| API de IA | Claude API ou OpenAI API | ~$10-30/mes |
-| **Total** | | **~$10-55/mes** |
+| API de IA | Claude API ou OpenAI API | ~$20-45/mes |
+| **Total** | | **~$20-70/mes** |
 
 ### App Stores
 
