@@ -42,6 +42,7 @@ O menor conjunto de funcionalidades que valida a hipotese para um piloto com a e
 | Dashboard Web (professor) | Next.js (React) |
 | Backend | Supabase (Auth + PostgreSQL + Storage + Edge Functions) |
 | IA | Claude API ou OpenAI API (via Edge Functions) |
+| Push Notifications | Expo Push Notifications (via Expo SDK) |
 
 ### Diagrama
 
@@ -83,28 +84,72 @@ O menor conjunto de funcionalidades que valida a hipotese para um piloto com a e
 | **School** | id, name, city, state | Escola participante |
 | **Classroom** | id, school_id, name, grade, year | Ex: "7o ano A - 2026" |
 | **Teacher** | id, user_id, school_id | Vinculado ao auth do Supabase |
+| **ClassroomTeacher** | id, classroom_id, teacher_id | Juncao N-N entre professor e turma |
 | **Student** | id, user_id, classroom_id, display_name | Vinculado ao auth do Supabase |
 | **Book** | id, title, author, cover_url, total_pages, genre | Catalogo universal |
 | **Chapter** | id, book_id, number, title, start_page, end_page | Mapeamento de capitulos por livro |
-| **BookContent** | id, chapter_id, content_text | Conteudo ingerido para a IA gerar perguntas |
+| **BookContent** | id, chapter_id, content_text | Conteudo ingerido para a IA gerar perguntas (ver secao Ingestao de Conteudo) |
+| **StudentBook** | id, student_id, book_id, status (reading/finished/dropped), current_page, started_at, finished_at | Relacionamento ativo do aluno com um livro |
 | **ReadingSession** | id, student_id, book_id, start_page, end_page, read_at, pages_read | Cada registro de leitura |
-| **Question** | id, chapter_id, student_id, type (comprehension/reflection), question_text, generated_at | Perguntas geradas pela IA |
+| **Question** | id, chapter_id, type (comprehension/reflection), question_text, generated_at | Perguntas geradas pela IA (cacheadas por capitulo, compartilhadas entre alunos) |
 | **Answer** | id, question_id, student_id, answer_text, comprehension_score, answered_at | Resposta do aluno + score da IA |
 | **Streak** | id, student_id, current_streak, longest_streak, last_read_at | Calculado a cada ReadingSession |
 | **Badge** | id, name, description, icon_url, criteria | Ex: "Leitor de 7 dias" |
 | **StudentBadge** | id, student_id, badge_id, earned_at | Badges conquistados |
-| **ClassroomBook** | id, classroom_id, book_id, assigned_by, is_required | Livros atribuidos a turma pelo professor |
+| **ClassroomBook** | id, classroom_id, book_id, assigned_by, status (required/recommended) | Livros atribuidos a turma pelo professor |
 
 ### Relacionamentos-chave
 
 - School 1-N Classroom 1-N Student
-- Classroom N-N Teacher (um professor pode ter varias turmas)
+- Classroom N-N Teacher (via ClassroomTeacher)
 - Book 1-N Chapter 1-1 BookContent
+- Student 1-N StudentBook (livros que o aluno esta lendo/finalizou)
 - Student 1-N ReadingSession
 - Quando ReadingSessions acumuladas cobrem um Chapter inteiro, dispara geracao de Questions
-- Question 1-1 Answer (uma resposta por pergunta por aluno)
+- Question pertence a Chapter (compartilhada entre alunos, sem student_id)
+- Answer vincula Question + Student (uma resposta por pergunta por aluno)
 - Student 1-1 Streak (atualizado a cada sessao)
 - ClassroomBook vincula livros da grade a turmas especificas
+- A cada ReadingSession, o sistema atualiza StudentBook.current_page
+
+### Regra de Capitulo Completo
+
+Um capitulo e considerado completo quando a uniao de todas as ReadingSessions do aluno para aquele livro cobre a pagina final do capitulo (end_page). Ou seja: se o aluno ja leu ate pelo menos a end_page do capitulo (considerando o maximo de end_page entre todas as suas sessoes acumuladas), o capitulo esta completo. Paginas sobrepostas entre sessoes sao ignoradas — o que importa e o progresso maximo atingido.
+
+### Validacao de ReadingSession
+
+- start_page deve ser >= 1 e <= total_pages do livro
+- end_page deve ser >= start_page e <= total_pages do livro
+- Sessoes com paginas identicas a uma sessao anterior sao aceitas (o aluno pode reler)
+- pages_read = end_page - start_page + 1
+
+### Roles e Admin
+
+O MVP tem 3 roles:
+
+| Role | Acesso | Como e criado |
+|---|---|---|
+| **Student** | App mobile, seus proprios dados | Self-signup no app + codigo da turma |
+| **Teacher** | Dashboard web, dados da turma (apenas livros da grade) | Self-signup no dashboard + codigo da escola |
+| **Admin** | Supabase Dashboard (painel nativo) | Acesso direto ao Supabase pelos devs |
+
+No MVP, operacoes de admin sao feitas diretamente pelo painel do Supabase:
+- Criar/editar Schools
+- Gerenciar o catalogo de Books (adicionar livros, capitulos, conteudo)
+- Upload de BookContent (ingestao de conteudo para IA)
+- Monitoramento geral
+
+Nao ha dashboard admin custom no MVP. O painel nativo do Supabase e suficiente para o piloto (~1 escola, ~3 livros, ~50 alunos).
+
+### Ingestao de Conteudo (BookContent)
+
+No MVP, a ingestao e manual feita pelos devs/admin:
+
+1. Obter o texto do livro (digitado, copiado de ebook, ou OCR de fisico)
+2. Dividir o texto por capitulos seguindo o mapeamento da tabela Chapter
+3. Inserir cada trecho na tabela BookContent via painel do Supabase
+
+Para o piloto com Oliveira (~3 livros, ~10-20 capitulos cada), isso e viavel manualmente. Automacao de ingestao (upload de PDF com parsing automatico) fica fora do MVP.
 
 ---
 
@@ -246,13 +291,22 @@ Regras:
 
 **Reflexao:** score mede profundidade e coerencia (nao existe certo/errado, mas avalia se o aluno engajou de verdade vs resposta vazia/generica).
 
-### Cache
+### Cache de Perguntas
 
-Perguntas podem ser cacheadas por capitulo — se outro aluno do mesmo livro/capitulo completar, pode reutilizar perguntas ja geradas (variando levemente).
+Perguntas sao geradas por capitulo (sem student_id) e compartilhadas entre alunos. Quando o primeiro aluno completa um capitulo, as perguntas sao geradas e salvas. Alunos subsequentes que completam o mesmo capitulo recebem as mesmas perguntas. Isso reduz drasticamente as chamadas a API de IA.
+
+### Fallback de IA
+
+Se a API de IA estiver indisponivel ou retornar erro:
+- Geracao de perguntas: marcar capitulo como "quiz pendente" e tentar novamente via job agendado (retry com backoff exponencial, max 3 tentativas)
+- Avaliacao de respostas: salvar a resposta e avaliar posteriormente. Aluno ve "Resposta recebida, avaliacao em breve."
 
 ### Custo Estimado
 
-Com ~50 alunos e ~3 livros, ~2 chamadas a API por quiz: ~$10-30/mes.
+Com ~50 alunos, ~3 livros (~15 capitulos cada):
+- Geracao: ~45 chamadas unicas (cacheadas por capitulo) = ~$2-5
+- Avaliacao: ~50 alunos x 45 capitulos x 4 perguntas = ~9.000 avaliacoes. Com batching (avaliar todas as respostas de um quiz em 1 chamada), ~2.250 chamadas = ~$15-40/mes
+- Estimativa total IA: ~$20-45/mes
 
 ---
 
@@ -263,7 +317,7 @@ Com ~50 alunos e ~3 livros, ~2 chamadas a API por quiz: ~$10-30/mes.
 | Regra | Detalhe |
 |---|---|
 | **Incremento** | Qualquer ReadingSession no dia (minimo 1 pagina) conta como dia ativo |
-| **Reset** | Se o aluno nao registra nenhuma leitura por 1 dia completo (meia-noite a meia-noite), streak zera |
+| **Reset** | Se o aluno nao registra nenhuma leitura por 1 dia completo (meia-noite a meia-noite, fuso horario America/Sao_Paulo para o MVP), streak zera |
 | **Protecao** | Sem freeze/protecao no MVP |
 | **Exibicao** | Numero grande na home do app, com animacao de fogo |
 | **Historico** | Guarda longest_streak no perfil |
@@ -308,8 +362,8 @@ Com ~50 alunos e ~3 livros, ~2 chamadas a API por quiz: ~$10-30/mes.
 
 ```
 Aluno:
-  - Ve/edita apenas suas ReadingSessions, Answers, Streaks, Badges
-  - Ve todos os Books e Chapters (catalogo publico)
+  - Ve/edita apenas suas ReadingSessions, Answers, Streaks, Badges, StudentBooks
+  - Ve todos os Books, Chapters e Questions (catalogo publico)
   - Ve ClassroomBooks da sua turma
 
 Professor:
@@ -317,9 +371,14 @@ Professor:
     APENAS para livros vinculados a turma (ClassroomBook)
   - Ve Answers/Questions dos alunos da sua turma
     APENAS para livros da grade
-  - NAO ve livros pessoais, sessoes pessoais,
+  - NAO ve livros pessoais, sessoes pessoais, StudentBooks pessoais,
     nem respostas de livros pessoais
   - Gerencia ClassroomBooks da sua turma
+
+Admin:
+  - Acesso via painel nativo do Supabase (service_role key)
+  - Gerencia Schools, Books, Chapters, BookContent
+  - Sem RLS — acesso total ao banco
 ```
 
 ### Deploy
@@ -337,3 +396,7 @@ Professor:
 - Android: Google Play ($25 taxa unica)
 - iOS: App Store ($99/ano)
 - Para o piloto: TestFlight (iOS) e APK direto (Android) antes de publicar nas stores
+
+### Comportamento Offline
+
+O MVP requer conexao com internet para funcionar. Registro de leitura, quizzes e sincronizacao de dados dependem do Supabase. Se o aluno estiver offline, o app mostra mensagem pedindo conexao. Suporte a offline (queue local + sync) fica fora do MVP.
