@@ -7,11 +7,13 @@ const MAX_ATTEMPTS = 3;
 Deno.serve(async (_req) => {
   const supabase = createServiceClient();
 
-  // Buscar capítulos com quiz failed com menos de MAX_ATTEMPTS tentativas
+  // Buscar capítulos com quiz failed ou pending travado (> 30 min sem atualização)
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+
   const { data: pending, error: queryError } = await supabase
     .from('chapter_quiz_status')
-    .select('chapter_id, attempts')
-    .eq('status', 'failed')
+    .select('chapter_id')
+    .or(`status.eq.failed,and(status.eq.pending,last_attempt_at.lt.${thirtyMinutesAgo})`)
     .lt('attempts', MAX_ATTEMPTS);
 
   if (queryError) {
@@ -41,7 +43,7 @@ Deno.serve(async (_req) => {
   let retried = 0;
   for (const item of pending) {
     try {
-      await fetch(`${supabaseUrl}/functions/v1/generate-questions`, {
+      const res = await fetch(`${supabaseUrl}/functions/v1/generate-questions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -49,7 +51,11 @@ Deno.serve(async (_req) => {
         },
         body: JSON.stringify({ chapter_id: item.chapter_id }),
       });
-      retried++;
+      if (res.ok) {
+        retried++;
+      } else {
+        console.error(`generate-questions returned ${res.status} for chapter ${item.chapter_id}`);
+      }
     } catch (err) {
       console.error(`Failed to retry chapter ${item.chapter_id}:`, err);
     }
