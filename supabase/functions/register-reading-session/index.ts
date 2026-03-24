@@ -28,24 +28,36 @@ function findNewlyCompletedChapters(
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   let payload: ReadingSessionPayload;
   try {
     payload = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 });
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   const { student_id, book_id, start_page, end_page } = payload;
 
   // Validação básica
   if (!student_id || !book_id || !start_page || !end_page) {
-    return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400 });
+    return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
   if (start_page < 1 || end_page < start_page) {
-    return new Response(JSON.stringify({ error: 'Invalid page range' }), { status: 400 });
+    return new Response(JSON.stringify({ error: 'Invalid page range' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   const supabase = createServiceClient();
@@ -59,10 +71,16 @@ Deno.serve(async (req) => {
     .single();
 
   if (bookError || !book) {
-    return new Response(JSON.stringify({ error: 'Book not found' }), { status: 404 });
+    return new Response(JSON.stringify({ error: 'Book not found' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
   if (end_page > book.total_pages) {
-    return new Response(JSON.stringify({ error: 'end_page exceeds book total_pages' }), { status: 400 });
+    return new Response(JSON.stringify({ error: 'end_page exceeds book total_pages' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   // 2. Buscar sessões anteriores para calcular progresso
@@ -80,13 +98,16 @@ Deno.serve(async (req) => {
     .insert({ student_id, book_id, start_page, end_page });
 
   if (sessionError) {
-    return new Response(JSON.stringify({ error: 'Failed to create session' }), { status: 500 });
+    return new Response(JSON.stringify({ error: 'Failed to create session' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   const newMaxPage = Math.max(previousMaxPage, end_page);
 
   // 4. Atualizar (ou criar) StudentBook
-  await supabase
+  const { error: studentBookError } = await supabase
     .from('student_books')
     .upsert({
       student_id,
@@ -95,6 +116,10 @@ Deno.serve(async (req) => {
       status: newMaxPage >= book.total_pages ? 'finished' : 'reading',
       ...(newMaxPage >= book.total_pages ? { finished_at: new Date().toISOString() } : {})
     }, { onConflict: 'student_id,book_id' });
+
+  if (studentBookError) {
+    console.error('Failed to upsert student_book:', studentBookError.message);
+  }
 
   // 5. Atualizar Streak
   const { data: streak } = await supabase
@@ -121,7 +146,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  await supabase
+  const { error: streakUpsertError } = await supabase
     .from('streaks')
     .upsert({
       student_id,
@@ -129,6 +154,10 @@ Deno.serve(async (req) => {
       longest_streak: newLongestStreak,
       last_read_date: today
     }, { onConflict: 'student_id' });
+
+  if (streakUpsertError) {
+    console.error('Failed to upsert streak:', streakUpsertError.message);
+  }
 
   // 6. Detectar capítulos recém-completados
   const { data: chapters } = await supabase
@@ -154,14 +183,17 @@ Deno.serve(async (req) => {
 
     if (!quizStatus || quizStatus.status === 'pending' || quizStatus.status === 'failed') {
       // Disparar generate-questions (fire-and-forget)
-      fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-questions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-        },
-        body: JSON.stringify({ chapter_id: ch.id }),
-      }).catch(() => {}); // fire-and-forget, fallback via pg_cron
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      if (supabaseUrl) {
+        fetch(`${supabaseUrl}/functions/v1/generate-questions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({ chapter_id: ch.id }),
+        }).catch(() => {}); // fire-and-forget, fallback via pg_cron
+      }
     }
 
     completedChapterIds.push(ch.id);
