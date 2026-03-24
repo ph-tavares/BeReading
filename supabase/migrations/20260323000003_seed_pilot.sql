@@ -72,6 +72,7 @@ on conflict (book_id, number) do nothing;
 insert into public.chapter_quiz_status (chapter_id, status)
 select id, 'pending' from public.chapters
 where book_id in (
+  -- UUIDs fixos dos 3 livros do piloto inseridos acima
   '00000000-0000-0000-0001-000000000001',
   '00000000-0000-0000-0002-000000000002',
   '00000000-0000-0000-0003-000000000003'
