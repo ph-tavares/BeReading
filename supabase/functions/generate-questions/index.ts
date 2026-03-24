@@ -23,7 +23,7 @@ Regras:
 }
 
 function parseQuestionsJson(raw: string): { type: string; question_text: string }[] {
-  const match = raw.match(/\[[\s\S]*\]/);
+  const match = raw.match(/\[[\s\S]*?\]/);
   if (!match) throw new Error('No JSON array found in LLM response');
   return JSON.parse(match[0]);
 }
