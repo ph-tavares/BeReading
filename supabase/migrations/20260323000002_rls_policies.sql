@@ -7,6 +7,8 @@ alter table public.students enable row level security;
 alter table public.books enable row level security;
 alter table public.chapters enable row level security;
 alter table public.book_contents enable row level security;
+-- book_contents: acesso exclusivo via service_role (Edge Functions)
+-- Nenhuma policy de leitura para clientes — conteúdo protegido, entregue pela Edge Function generate-questions
 alter table public.student_books enable row level security;
 alter table public.reading_sessions enable row level security;
 alter table public.questions enable row level security;
