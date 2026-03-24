@@ -26,7 +26,7 @@ create table public.classrooms (
 create table public.teachers (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null unique references auth.users(id) on delete cascade,
-  school_id uuid not null references public.schools(id),
+  school_id uuid not null references public.schools(id) on delete cascade,
   created_at timestamptz default now()
 );
 
@@ -42,7 +42,7 @@ create table public.classroom_teachers (
 create table public.students (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null unique references auth.users(id) on delete cascade,
-  classroom_id uuid not null references public.classrooms(id),
+  classroom_id uuid not null references public.classrooms(id) on delete cascade,
   display_name text not null,
   created_at timestamptz default now()
 );
@@ -53,7 +53,7 @@ create table public.books (
   title text not null,
   author text not null,
   cover_url text,
-  total_pages int not null,
+  total_pages int not null check (total_pages > 0),
   genre text,
   created_at timestamptz default now()
 );
@@ -67,7 +67,7 @@ create table public.chapters (
   start_page int not null,
   end_page int not null,
   unique(book_id, number),
-  constraint valid_pages check (end_page >= start_page)
+  constraint valid_pages check (end_page >= start_page and start_page >= 1)
 );
 
 -- BookContent (conteúdo para IA)
@@ -130,6 +130,7 @@ create table public.answers (
   comprehension_score int check (comprehension_score between 0 and 100),
   ai_feedback text,
   answered_at timestamptz default now(),
+  evaluation_status text not null default 'pending' check (evaluation_status in ('pending', 'completed', 'failed')),
   evaluated_at timestamptz,
   unique(question_id, student_id)
 );
@@ -149,7 +150,7 @@ create table public.badges (
   name text not null unique,
   description text not null,
   icon_url text,
-  criteria_type text not null,
+  criteria_type text not null check (criteria_type in ('streak_days', 'total_pages', 'books_finished', 'quiz_score', 'personal_book', 'quizzes_answered', 'reflection_score_80', 'avg_score_90_book', 'total_sessions')),
   criteria_value int not null
 );
 
@@ -167,8 +168,22 @@ create table public.classroom_books (
   id uuid primary key default uuid_generate_v4(),
   classroom_id uuid not null references public.classrooms(id) on delete cascade,
   book_id uuid not null references public.books(id) on delete cascade,
-  assigned_by uuid not null references public.teachers(id),
+  assigned_by uuid references public.teachers(id) on delete set null,
   status text not null default 'required' check (status in ('required', 'recommended')),
   created_at timestamptz default now(),
   unique(classroom_id, book_id)
 );
+
+-- Indexes on high-frequency FK columns (PostgreSQL does not auto-index FKs)
+create index on public.reading_sessions(student_id);
+create index on public.reading_sessions(book_id);
+create index on public.reading_sessions(student_id, book_id);
+create index on public.answers(student_id);
+create index on public.questions(chapter_id);
+create index on public.students(classroom_id);
+create index on public.student_books(student_id);
+create index on public.chapter_quiz_status(status) where status = 'failed';
+create index on public.classroom_books(classroom_id);
+create index on public.classroom_teachers(teacher_id);
+create index on public.classroom_teachers(classroom_id);
+create index on public.student_badges(student_id);
