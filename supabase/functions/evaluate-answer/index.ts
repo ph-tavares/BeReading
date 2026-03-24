@@ -22,7 +22,13 @@ Conteúdo do capítulo (contexto): ${chapterContent.substring(0, 2000)}
 Resposta do aluno: ${answerText}
 
 Retorne APENAS um JSON válido:
-{"score": <0-100>, "feedback": "<1-2 frases encorajadoras em português>"}`;
+{"score": <0-100>, "feedback": "<1-2 frases encorajadoras em português>"}
+
+Score 0-100 onde:
+- 80-100: excelente, demonstra compreensão/reflexão profunda
+- 60-79: boa resposta, com algumas lacunas
+- 40-59: resposta parcial
+- 0-39: muito superficial ou fora do contexto`;
 }
 
 function parseEvaluationJson(raw: string): { score: number; feedback: string } {
@@ -124,7 +130,7 @@ Deno.serve(async (req) => {
     const rawResponse = await callAI(prompt);
     const evaluation = parseEvaluationJson(rawResponse);
 
-    await supabase
+    const { error: updateError } = await supabase
       .from('answers')
       .update({
         comprehension_score: evaluation.score,
@@ -133,6 +139,10 @@ Deno.serve(async (req) => {
         evaluation_status: 'completed',
       })
       .eq('id', savedAnswer.id);
+
+    if (updateError) {
+      console.error('Failed to update answer with evaluation:', updateError.message);
+    }
 
     return new Response(JSON.stringify({
       data: { score: evaluation.score, feedback: evaluation.feedback },
