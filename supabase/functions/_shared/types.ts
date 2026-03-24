@@ -9,7 +9,7 @@ export interface ReadingSessionPayload {
 
 export interface CompletedChapter {
   chapter_id: string;
-  chapter_number: number;
+  number: number;
   book_id: string;
 }
 
