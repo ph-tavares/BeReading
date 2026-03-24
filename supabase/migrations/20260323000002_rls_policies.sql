@@ -19,19 +19,22 @@ alter table public.classroom_books enable row level security;
 
 -- Helper: retorna o student_id do usuário logado
 create or replace function public.get_student_id()
-returns uuid language sql security definer stable as $$
+returns uuid language sql security definer stable
+set search_path = public as $$
   select id from public.students where user_id = auth.uid()
 $$;
 
 -- Helper: retorna o teacher_id do usuário logado
 create or replace function public.get_teacher_id()
-returns uuid language sql security definer stable as $$
+returns uuid language sql security definer stable
+set search_path = public as $$
   select id from public.teachers where user_id = auth.uid()
 $$;
 
 -- Helper: verifica se um livro está na grade da turma do aluno
 create or replace function public.is_classroom_book(p_book_id uuid, p_student_id uuid)
-returns boolean language sql security definer stable as $$
+returns boolean language sql security definer stable
+set search_path = public as $$
   select exists (
     select 1
     from public.classroom_books cb
@@ -47,9 +50,6 @@ create policy "books_public_read" on public.books
   for select to authenticated using (true);
 
 create policy "chapters_public_read" on public.chapters
-  for select to authenticated using (true);
-
-create policy "book_contents_public_read" on public.book_contents
   for select to authenticated using (true);
 
 create policy "badges_public_read" on public.badges
@@ -158,7 +158,14 @@ create policy "classrooms_teacher_insert" on public.classrooms
 create policy "classroom_teachers_teacher" on public.classroom_teachers
   for all to authenticated
   using (teacher_id = public.get_teacher_id())
-  with check (teacher_id = public.get_teacher_id());
+  with check (
+    teacher_id = public.get_teacher_id()
+    and exists (
+      select 1 from public.classrooms cl
+      join public.teachers t on t.school_id = cl.school_id
+      where cl.id = classroom_id and t.id = public.get_teacher_id()
+    )
+  );
 
 -- Professor gerencia livros das suas turmas
 create policy "classroom_books_teacher" on public.classroom_books
