@@ -1,3 +1,7 @@
 .env
+.env.*
+*.env
 node_modules/
 .supabase/
+dist/
+build/
