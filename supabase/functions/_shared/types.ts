@@ -9,7 +9,7 @@ export interface ReadingSessionPayload {
 
 export interface CompletedChapter {
   chapter_id: string;
-  chapter_number: number;
+  chapter_number: number; // DB column is 'number' — query sites must alias: chapter_number: ch.number
   book_id: string;
 }
 
