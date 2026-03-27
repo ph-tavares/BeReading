@@ -173,6 +173,7 @@ Deno.serve(async (req) => {
   );
 
   // 7. Para cada capítulo completo, disparar geração de perguntas (se ainda não gerado)
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const completedChapterIds: string[] = [];
   for (const ch of newlyCompleted) {
     const { data: quizStatus } = await supabase
@@ -183,7 +184,6 @@ Deno.serve(async (req) => {
 
     if (!quizStatus || quizStatus.status === 'pending' || quizStatus.status === 'failed') {
       // Disparar generate-questions (fire-and-forget)
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
       if (supabaseUrl) {
         fetch(`${supabaseUrl}/functions/v1/generate-questions`, {
           method: 'POST',
@@ -197,6 +197,18 @@ Deno.serve(async (req) => {
     }
 
     completedChapterIds.push(ch.id);
+  }
+
+  // 8. Disparar award-badges (fire-and-forget)
+  if (supabaseUrl) {
+    fetch(`${supabaseUrl}/functions/v1/award-badges`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+      },
+      body: JSON.stringify({ student_id }),
+    }).catch(() => {});
   }
 
   return new Response(JSON.stringify({
