@@ -5,3 +5,14 @@ node_modules/
 .supabase/
 dist/
 build/
+
+# Claude Code local settings (machine-specific)
+.claude/
+
+# Windows metadata (NTFS Alternate Data Streams via WSL)
+*Zone.Identifier
+
+# Dados sensíveis / pessoais (LGPD)
+docs/*.xlsx
+docs/*.csv
+docs/*.txt
