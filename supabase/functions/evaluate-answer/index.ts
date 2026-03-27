@@ -45,15 +45,34 @@ function parseEvaluationJson(raw: string): { score: number; feedback: string } {
 }
 
 // ---------------------------------------------------------------------------
-// AI PROVIDER — swap this function to use real Claude or OpenAI in production
-// Claude:  POST https://api.anthropic.com/v1/messages  (x-api-key: AI_API_KEY)
-// OpenAI:  POST https://api.openai.com/v1/chat/completions (Authorization: Bearer AI_API_KEY)
-// Set env vars: AI_API_KEY, AI_MODEL (e.g. claude-3-5-haiku-20241022 or gpt-4o-mini)
+// AI PROVIDER — OpenAI (gpt-4o-mini)
+// Env vars required: AI_API_KEY (OpenAI key), AI_MODEL (default: gpt-4o-mini)
 // ---------------------------------------------------------------------------
-async function callAI(_prompt: string): Promise<string> {
-  // MOCK: returns deterministic fake evaluation (no real API call)
-  // Replace with real provider call in Task 10 / production deploy
-  return JSON.stringify({ score: 75, feedback: 'Boa resposta! Você demonstrou compreensão do conteúdo. Continue assim!' });
+async function callAI(prompt: string): Promise<string> {
+  const apiKey = Deno.env.get('AI_API_KEY');
+  const model = Deno.env.get('AI_MODEL') ?? 'gpt-4o-mini';
+  if (!apiKey) throw new Error('AI_API_KEY env var not set');
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 256,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`OpenAI API error ${res.status}: ${err}`);
+  }
+
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content ?? '';
 }
 
 Deno.serve(async (req) => {
