@@ -12,7 +12,7 @@ const mockClassroom: Classroom = {
 };
 
 beforeEach(() => {
-  useAuthStore.setState({ session: null, student: null, classroom: null });
+  useAuthStore.setState({ session: null, student: null, classroom: null, isInitialized: false });
 });
 
 describe('useAuthStore', () => {
@@ -45,5 +45,14 @@ describe('useAuthStore', () => {
     expect(session).toBeNull();
     expect(student).toBeNull();
     expect(classroom).toBeNull();
+  });
+
+  it('isInitialized começa false', () => {
+    expect(useAuthStore.getState().isInitialized).toBe(false);
+  });
+
+  it('setInitialized muda isInitialized para true', () => {
+    useAuthStore.getState().setInitialized();
+    expect(useAuthStore.getState().isInitialized).toBe(true);
   });
 });

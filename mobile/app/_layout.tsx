@@ -5,31 +5,64 @@ import { useAuthStore } from '../src/stores/authStore';
 import { getStudentByUserId } from '../src/api/queries';
 
 export default function RootLayout() {
-  const { session, student, setSession, setStudent, clear } = useAuthStore();
+  const {
+    session,
+    student,
+    isInitialized,
+    setSession,
+    setStudent,
+    setInitialized,
+    clear,
+  } = useAuthStore();
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let cancelled = false;
+
+    // Hidrata sessão persistida e student na abertura do app
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (cancelled) return;
       setSession(session);
+      if (session) {
+        try {
+          const s = await getStudentByUserId(session.user.id);
+          if (!cancelled) setStudent(s);
+        } catch (err) {
+          console.error('Falha ao carregar perfil do aluno:', err);
+        }
+      }
+      if (!cancelled) setInitialized();
     });
 
+    // Reage a login/logout em tempo real
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (cancelled) return;
       setSession(session);
       if (session) {
-        const s = await getStudentByUserId(session.user.id);
-        setStudent(s);
+        try {
+          const s = await getStudentByUserId(session.user.id);
+          if (!cancelled) setStudent(s);
+        } catch (err) {
+          console.error('Falha ao carregar perfil do aluno:', err);
+        }
       } else {
         clear();
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [setSession, setStudent, setInitialized, clear]);
 
   useEffect(() => {
+    // Aguarda resolução da sessão inicial antes de redirecionar
+    if (!isInitialized) return;
+
     const inAuth = segments[0] === '(auth)';
     const inOnboarding = segments[0] === '(onboarding)';
 
@@ -40,7 +73,7 @@ export default function RootLayout() {
     } else if (session && student && (inAuth || inOnboarding)) {
       router.replace('/(tabs)/');
     }
-  }, [session, student, segments]);
+  }, [session, student, segments, isInitialized]);
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }
