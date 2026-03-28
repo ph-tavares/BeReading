@@ -38,6 +38,9 @@ export default function RegisterReadingScreen() {
   const { book } = currentBook;
 
   async function handleSubmit() {
+    // Evita submit duplo via onSubmitEditing enquanto request está em voo
+    if (loading) return;
+
     const start = parseInt(startPage, 10);
     const end = parseInt(endPage, 10);
 
@@ -58,6 +61,7 @@ export default function RegisterReadingScreen() {
 
       if (result.completed_chapter_ids.length > 0) {
         const chapterId = result.completed_chapter_ids[0];
+        // TODO(task-9): rota /quiz/[chapterId] implementada na Task 9
         Alert.alert(
           '🎉 Capítulo completo!',
           `Você completou um capítulo de "${book.title}"!\n\nStreak: ${result.current_streak} dia${result.current_streak !== 1 ? 's' : ''} 🔥\n\nQuer responder as perguntas agora?`,
@@ -65,10 +69,8 @@ export default function RegisterReadingScreen() {
             { text: 'Depois', style: 'cancel', onPress: () => router.back() },
             {
               text: 'Responder agora',
-              onPress: () => {
-                router.back();
-                router.push(`/quiz/${chapterId}`);
-              },
+              // router.replace() em vez de back()+push() — evita race condition de navegação
+              onPress: () => router.replace(`/quiz/${chapterId}`),
             },
           ],
         );
@@ -87,10 +89,14 @@ export default function RegisterReadingScreen() {
     }
   }
 
-  const pagesRead =
-    startPage && endPage && !isNaN(parseInt(startPage)) && !isNaN(parseInt(endPage))
-      ? Math.max(0, parseInt(endPage) - parseInt(startPage) + 1)
-      : null;
+  // Preview só exibe quando as páginas passam na mesma validação que handleSubmit
+  const pagesRead = (() => {
+    const s = parseInt(startPage, 10);
+    const e = parseInt(endPage, 10);
+    if (isNaN(s) || isNaN(e)) return null;
+    if (validatePageRange(s, e, book.total_pages)) return null;
+    return e - s + 1;
+  })();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
