@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   View,
   Text,
+  Alert,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -55,7 +56,7 @@ export default function QuizScreen() {
           // pending ou null — inicia polling
           setScreenState('polling');
         }
-      } catch {
+      } catch (e: unknown) {
         if (!cancelled) setScreenState('failed');
       }
     }
@@ -89,7 +90,7 @@ export default function QuizScreen() {
         } else {
           setPollCount((c) => c + 1);
         }
-      } catch {
+      } catch (e: unknown) {
         // Erro de rede: incrementa contador e tenta novamente
         if (!cancelled) setPollCount((c) => c + 1);
       }
@@ -104,8 +105,13 @@ export default function QuizScreen() {
   async function handleAnswer(answer: string): Promise<void> {
     if (!student) return;
     const q = questions[currentIndex];
-    const result = await evaluateAnswer(q.id, student.id, answer);
-    setResults((prev) => ({ ...prev, [currentIndex]: result }));
+    try {
+      const result = await evaluateAnswer(q.id, student.id, answer);
+      setResults((prev) => ({ ...prev, [currentIndex]: result }));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro ao avaliar resposta';
+      Alert.alert('Erro', msg);
+    }
   }
 
   function handleNext() {
@@ -190,6 +196,7 @@ export default function QuizScreen() {
         showsVerticalScrollIndicator={false}
       >
         <QuizQuestion
+          key={currentIndex}
           questionText={currentQuestion.question_text}
           questionType={currentQuestion.type}
           questionNumber={currentIndex + 1}
