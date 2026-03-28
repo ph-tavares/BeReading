@@ -16,3 +16,6 @@ build/
 docs/*.xlsx
 docs/*.csv
 docs/*.txt
+
+# Git worktrees
+.worktrees/
