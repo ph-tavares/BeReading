@@ -30,16 +30,39 @@
     "@testing-library/react-native": "^13.3.3",
     "@types/jest": "^30.0.0",
     "@types/react": "~19.2.2",
+    "babel-preset-expo": "^55.0.14-canary-20260328-2049187",
     "jest": "^30.3.0",
     "jest-expo": "^55.0.12-canary-20260328-2049187",
     "typescript": "~5.9.2"
   },
   "jest": {
-    "preset": "jest-expo",
-    "transformIgnorePatterns": [
-      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|nativewind)"
-    ],
-    "setupFilesAfterFramework": ["@testing-library/jest-native/extend-expect"]
+    "projects": [
+      {
+        "displayName": "node",
+        "testEnvironment": "node",
+        "testMatch": [
+          "<rootDir>/__tests__/utils/**/*.test.ts",
+          "<rootDir>/__tests__/api/**/*.test.ts",
+          "<rootDir>/__tests__/stores/**/*.test.ts"
+        ],
+        "transform": {
+          "^.+\\.(t|j)sx?$": ["babel-jest", { "configFile": "./babel.config.js" }]
+        }
+      },
+      {
+        "displayName": "react-native",
+        "preset": "jest-expo",
+        "testMatch": [
+          "<rootDir>/__tests__/components/**/*.test.tsx"
+        ],
+        "transformIgnorePatterns": [
+          "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|nativewind)"
+        ],
+        "setupFilesAfterEnv": [
+          "@testing-library/jest-native/extend-expect"
+        ]
+      }
+    ]
   },
   "private": true
 }
