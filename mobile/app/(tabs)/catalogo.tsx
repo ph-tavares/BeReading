@@ -51,16 +51,17 @@ export default function CatalogoScreen() {
   // Busca debounced — 300ms após o usuário parar de digitar
   useEffect(() => {
     if (loading) return; // não dispara durante carga inicial
+    let cancelled = false;
     const timer = setTimeout(async () => {
       try {
         const result = await getBooks(search || undefined);
-        setBooks(result);
+        if (!cancelled) setBooks(result);
       } catch (e: unknown) {
         // Mantém lista atual em caso de erro de rede
       }
     }, 300);
-    return () => clearTimeout(timer);
-  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [search, loading]);
 
   async function handleAdd(book: Book) {
     if (!student || addingId) return;
@@ -86,7 +87,7 @@ export default function CatalogoScreen() {
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar por título ou autor…"
+            placeholder="Buscar por título…"
             placeholderTextColor="rgba(255,255,255,0.45)"
             value={search}
             onChangeText={setSearch}

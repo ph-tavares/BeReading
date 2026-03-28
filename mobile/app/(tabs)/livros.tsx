@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -25,25 +25,33 @@ export default function LivrosScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    if (!student) { setLoading(false); return; }
+    let cancelled = false;
+
+    setError(null);
+    getStudentBooks(student.id)
+      .then((data) => { if (!cancelled) setBooks(data); })
+      .catch((e: unknown) => {
+        if (!cancelled) setError('Não foi possível carregar seus livros.');
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [student]);
+
+  async function handleRefresh() {
     if (!student) return;
+    setRefreshing(true);
     setError(null);
     try {
       const data = await getStudentBooks(student.id);
       setBooks(data);
     } catch (e: unknown) {
       setError('Não foi possível carregar seus livros.');
+    } finally {
+      setRefreshing(false);
     }
-  }, [student]);
-
-  useEffect(() => {
-    load().finally(() => setLoading(false));
-  }, [load]);
-
-  async function handleRefresh() {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
   }
 
   const { reading, finished } = sectionBooksByStatus(books);
