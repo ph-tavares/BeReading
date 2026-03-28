@@ -44,7 +44,8 @@
         "testMatch": [
           "<rootDir>/__tests__/utils/**/*.test.ts",
           "<rootDir>/__tests__/api/**/*.test.ts",
-          "<rootDir>/__tests__/stores/**/*.test.ts"
+          "<rootDir>/__tests__/stores/**/*.test.ts",
+          "<rootDir>/__tests__/screens/**/*.test.ts"
         ],
         "transform": {
           "^.+\\.(t|j)sx?$": [
