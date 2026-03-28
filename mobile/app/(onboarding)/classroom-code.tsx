@@ -27,6 +27,12 @@ export default function ClassroomCodeScreen() {
   }
 
   async function handleJoin() {
+    // Guarda contra race condition: sessão pode expirar enquanto o aluno está nesta tela
+    if (!session) {
+      Alert.alert('Sessão expirada', 'Faça login novamente.');
+      return;
+    }
+
     const validationError = validateClassroomCode(code);
     if (validationError) {
       Alert.alert('Código inválido', validationError);
@@ -41,14 +47,21 @@ export default function ClassroomCodeScreen() {
         return;
       }
 
-      const displayName = session!.user.user_metadata?.display_name ?? 'Aluno';
-      const student = await createStudent(session!.user.id, classroom.id, displayName);
+      const displayName = session.user.user_metadata?.display_name ?? 'Aluno';
+      const student = await createStudent(session.user.id, classroom.id, displayName);
 
       setClassroom(classroom);
       setStudent(student);
       // Root layout detecta student != null e navega automaticamente para (tabs)
-    } catch (e: any) {
-      Alert.alert('Erro ao entrar na turma', e.message ?? 'Tente novamente');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '';
+      const isDuplicate = msg.includes('students_user_id') || msg.includes('23505');
+      Alert.alert(
+        'Erro ao entrar na turma',
+        isDuplicate
+          ? 'Você já está cadastrado nesta turma.'
+          : 'Ocorreu um erro inesperado. Tente novamente.',
+      );
     } finally {
       setLoading(false);
     }
@@ -87,7 +100,7 @@ export default function ClassroomCodeScreen() {
             placeholderTextColor="#C8A84B"
             keyboardType="default"
             returnKeyType="done"
-            onSubmitEditing={handleJoin}
+            onSubmitEditing={() => { if (isComplete) handleJoin(); }}
             autoFocus
           />
 
