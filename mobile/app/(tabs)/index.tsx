@@ -20,7 +20,7 @@ import type { Streak, StudentBook, Book } from '../../src/types/database';
 export default function HomeScreen() {
   const router = useRouter();
   const { student } = useAuthStore();
-  const { setCurrentBook } = useReadingStore();
+  const { currentBook, setCurrentBook } = useReadingStore();
   const [streak, setStreak] = useState<Streak | null>(null);
   const [studentBooks, setStudentBooks] = useState<(StudentBook & { book: Book })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,14 +35,30 @@ export default function HomeScreen() {
       .then(([s, books]) => {
         setStreak(s);
         setStudentBooks(books);
-        const reading = books.find((b) => b.status === 'reading') ?? books[0] ?? null;
-        if (reading) setCurrentBook({ studentBook: reading, book: reading.book });
+        // Encontra o livro em leitura ou o primeiro da lista; sempre atualiza o store
+        const raw = books.find((b) => b.status === 'reading') ?? books[0] ?? null;
+        if (raw) {
+          // Separa explicitamente studentBook de book para evitar nesting redundante
+          const { book, ...sb } = raw;
+          setCurrentBook({ studentBook: sb, book });
+        } else {
+          setCurrentBook(null);
+        }
       })
-      .catch(() => setError('Não foi possível carregar seus dados. Puxe para atualizar.'))
+      .catch(() => {
+        // Limpa dados antigos ao falhar para não mostrar estado inconsistente
+        setError('Não foi possível carregar seus dados. Puxe para atualizar.');
+        setStudentBooks([]);
+        setStreak(null);
+        setCurrentBook(null);
+      })
       .finally(() => setLoading(false));
-  }, [student]);
+  }, [student, setCurrentBook]);
 
-  const currentEntry = studentBooks.find((sb) => sb.status === 'reading') ?? studentBooks[0];
+  // Deriva currentEntry do store — fonte única de verdade
+  const currentEntry = currentBook
+    ? ({ ...currentBook.studentBook, book: currentBook.book } as StudentBook & { book: Book })
+    : undefined;
 
   if (loading) {
     return (
