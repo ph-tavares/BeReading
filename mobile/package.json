@@ -1,0 +1,45 @@
+{
+  "name": "mobile",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^3.0.2",
+    "@supabase/supabase-js": "^2.100.1",
+    "expo": "55.0.10-canary-20260328-2049187",
+    "expo-constants": "55.0.10-canary-20260328-2049187",
+    "expo-linking": "55.0.10-canary-20260328-2049187",
+    "expo-router": "55.0.9-canary-20260328-2049187",
+    "expo-secure-store": "55.0.10-canary-20260328-2049187",
+    "expo-status-bar": "55.0.5-canary-20260328-2049187",
+    "nativewind": "^4.2.3",
+    "react": "19.2.0",
+    "react-native": "0.83.4",
+    "react-native-safe-area-context": "~5.6.2",
+    "react-native-screens": "~4.23.0",
+    "tailwindcss": "^4.2.2",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@testing-library/jest-native": "^5.4.3",
+    "@testing-library/react-native": "^13.3.3",
+    "@types/jest": "^30.0.0",
+    "@types/react": "~19.2.2",
+    "jest": "^30.3.0",
+    "jest-expo": "^55.0.12-canary-20260328-2049187",
+    "typescript": "~5.9.2"
+  },
+  "jest": {
+    "preset": "jest-expo",
+    "transformIgnorePatterns": [
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|nativewind)"
+    ],
+    "setupFilesAfterFramework": ["@testing-library/jest-native/extend-expect"]
+  },
+  "private": true
+}
