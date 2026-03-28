@@ -1,0 +1,147 @@
+export interface School {
+  id: string;
+  name: string;
+  city: string;
+  state: string;
+  invite_code: string;
+  created_at: string;
+}
+
+export interface Classroom {
+  id: string;
+  school_id: string;
+  name: string;
+  grade: string;
+  year: number;
+  class_code: string;
+  created_at: string;
+}
+
+export interface Student {
+  id: string;
+  user_id: string;
+  classroom_id: string;
+  display_name: string;
+  created_at: string;
+}
+
+export interface Book {
+  id: string;
+  title: string;
+  author: string;
+  cover_url: string | null;
+  total_pages: number;
+  genre: string | null;
+  created_at: string;
+}
+
+export interface Chapter {
+  id: string;
+  book_id: string;
+  number: number;
+  title: string | null;
+  start_page: number;
+  end_page: number;
+}
+
+export interface StudentBook {
+  id: string;
+  student_id: string;
+  book_id: string;
+  status: 'reading' | 'finished' | 'dropped';
+  current_page: number;
+  started_at: string;
+  finished_at: string | null;
+}
+
+export interface ReadingSession {
+  id: string;
+  student_id: string;
+  book_id: string;
+  start_page: number;
+  end_page: number;
+  pages_read: number;
+  read_at: string;
+}
+
+export interface Question {
+  id: string;
+  chapter_id: string;
+  type: 'comprehension' | 'reflection';
+  question_text: string;
+  generated_at: string;
+}
+
+export interface Answer {
+  id: string;
+  question_id: string;
+  student_id: string;
+  answer_text: string;
+  comprehension_score: number | null;
+  ai_feedback: string | null;
+  answered_at: string;
+  evaluation_status: 'pending' | 'completed' | 'failed';
+  evaluated_at: string | null;
+}
+
+export interface Streak {
+  id: string;
+  student_id: string;
+  current_streak: number;
+  longest_streak: number;
+  last_read_date: string | null;
+}
+
+export interface Badge {
+  id: string;
+  name: string;
+  description: string;
+  icon_url: string | null;
+  criteria_type: string;
+  criteria_value: number;
+}
+
+export interface StudentBadge {
+  id: string;
+  student_id: string;
+  badge_id: string;
+  earned_at: string;
+}
+
+export interface ClassroomBook {
+  id: string;
+  classroom_id: string;
+  book_id: string;
+  status: 'required' | 'recommended';
+}
+
+export interface ChapterQuizStatus {
+  id: string;
+  chapter_id: string;
+  status: 'pending' | 'generated' | 'failed';
+  attempts: number;
+  last_attempt_at: string | null;
+  error_message: string | null;
+}
+
+// Stub para satisfazer o genérico do createClient
+export interface Database {
+  public: {
+    Tables: {
+      schools: { Row: School };
+      classrooms: { Row: Classroom };
+      students: { Row: Student };
+      books: { Row: Book };
+      chapters: { Row: Chapter };
+      student_books: { Row: StudentBook };
+      reading_sessions: { Row: ReadingSession };
+      questions: { Row: Question };
+      answers: { Row: Answer };
+      streaks: { Row: Streak };
+      badges: { Row: Badge };
+      student_badges: { Row: StudentBadge };
+      classroom_books: { Row: ClassroomBook };
+      chapter_quiz_status: { Row: ChapterQuizStatus };
+    };
+  };
+}
