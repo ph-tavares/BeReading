@@ -17,6 +17,7 @@
     "expo-router": "55.0.9-canary-20260328-2049187",
     "expo-secure-store": "55.0.10-canary-20260328-2049187",
     "expo-status-bar": "55.0.5-canary-20260328-2049187",
+    "lucide-react-native": "^1.7.0",
     "nativewind": "^4.2.3",
     "react": "19.2.0",
     "react-native": "0.83.4",
@@ -46,7 +47,12 @@
           "<rootDir>/__tests__/stores/**/*.test.ts"
         ],
         "transform": {
-          "^.+\\.(t|j)sx?$": ["babel-jest", { "configFile": "./babel.config.js" }]
+          "^.+\\.(t|j)sx?$": [
+            "babel-jest",
+            {
+              "configFile": "./babel.config.js"
+            }
+          ]
         },
         "moduleNameMapper": {
           "^expo-secure-store$": "<rootDir>/__mocks__/expo-secure-store.ts"
