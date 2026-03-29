@@ -71,7 +71,7 @@ export default function RootLayout() {
     } else if (session && !student && !inOnboarding) {
       router.replace('/(onboarding)/classroom-code');
     } else if (session && student && (inAuth || inOnboarding)) {
-      router.replace('/(tabs)/');
+      router.replace('/');
     }
   }, [session, student, segments, isInitialized]);
 

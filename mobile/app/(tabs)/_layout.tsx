@@ -26,28 +26,28 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Início',
-          tabBarIcon: ({ color, size }) => <Home size={size ?? 22} color={color} />,
+          tabBarIcon: ({ color, size }) => <Home size={size ?? 22} stroke={color} />,
         }}
       />
       <Tabs.Screen
         name="livros"
         options={{
           title: 'Meus Livros',
-          tabBarIcon: ({ color, size }) => <BookOpen size={size ?? 22} color={color} />,
+          tabBarIcon: ({ color, size }) => <BookOpen size={size ?? 22} stroke={color} />,
         }}
       />
       <Tabs.Screen
         name="catalogo"
         options={{
           title: 'Catálogo',
-          tabBarIcon: ({ color, size }) => <Search size={size ?? 22} color={color} />,
+          tabBarIcon: ({ color, size }) => <Search size={size ?? 22} stroke={color} />,
         }}
       />
       <Tabs.Screen
         name="perfil"
         options={{
           title: 'Perfil',
-          tabBarIcon: ({ color, size }) => <User size={size ?? 22} color={color} />,
+          tabBarIcon: ({ color, size }) => <User size={size ?? 22} stroke={color} />,
         }}
       />
     </Tabs>

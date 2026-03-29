@@ -128,20 +128,30 @@ export interface ChapterQuizStatus {
 export interface Database {
   public: {
     Tables: {
-      schools: { Row: School };
-      classrooms: { Row: Classroom };
-      students: { Row: Student };
-      books: { Row: Book };
-      chapters: { Row: Chapter };
-      student_books: { Row: StudentBook };
-      reading_sessions: { Row: ReadingSession };
-      questions: { Row: Question };
-      answers: { Row: Answer };
-      streaks: { Row: Streak };
-      badges: { Row: Badge };
-      student_badges: { Row: StudentBadge };
-      classroom_books: { Row: ClassroomBook };
-      chapter_quiz_status: { Row: ChapterQuizStatus };
+      schools: { Row: School; Insert: Omit<School, 'id' | 'created_at'> };
+      classrooms: { Row: Classroom; Insert: Omit<Classroom, 'id' | 'created_at'> };
+      students: {
+        Row: Student;
+        Insert: Omit<Student, 'id' | 'created_at'>;
+      };
+      books: { Row: Book; Insert: Omit<Book, 'id' | 'created_at'> };
+      chapters: { Row: Chapter; Insert: Omit<Chapter, 'id'> };
+      student_books: {
+        Row: StudentBook;
+        Insert: Omit<StudentBook, 'id' | 'started_at' | 'finished_at'> & {
+          started_at?: string;
+          finished_at?: string | null;
+        };
+        Update: Partial<Omit<StudentBook, 'id'>>;
+      };
+      reading_sessions: { Row: ReadingSession; Insert: Omit<ReadingSession, 'id' | 'read_at'> & { read_at?: string } };
+      questions: { Row: Question; Insert: Omit<Question, 'id' | 'generated_at'> };
+      answers: { Row: Answer; Insert: Omit<Answer, 'id' | 'answered_at' | 'evaluated_at'> };
+      streaks: { Row: Streak; Insert: Omit<Streak, 'id'> };
+      badges: { Row: Badge; Insert: Omit<Badge, 'id'> };
+      student_badges: { Row: StudentBadge; Insert: Omit<StudentBadge, 'id' | 'earned_at'> };
+      classroom_books: { Row: ClassroomBook; Insert: Omit<ClassroomBook, 'id'> };
+      chapter_quiz_status: { Row: ChapterQuizStatus; Insert: Omit<ChapterQuizStatus, 'id'> };
     };
   };
 }

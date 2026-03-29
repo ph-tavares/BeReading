@@ -48,7 +48,7 @@ export default function QuizSummaryScreen() {
         {/* CTA */}
         <TouchableOpacity
           style={styles.ctaButton}
-          onPress={() => router.replace('/(tabs)/')}
+          onPress={() => router.replace('/')}
           activeOpacity={0.85}
         >
           <Text style={styles.ctaText}>Voltar ao início</Text>

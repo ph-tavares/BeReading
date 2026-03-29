@@ -38,8 +38,7 @@ export default function RegisterReadingScreen() {
   const { book } = currentBook;
 
   async function handleSubmit() {
-    // Evita submit duplo via onSubmitEditing enquanto request está em voo
-    if (loading) return;
+    if (loading || !student) return;
 
     const start = parseInt(startPage, 10);
     const end = parseInt(endPage, 10);

@@ -40,7 +40,8 @@ export async function createStudent(
 ) {
   const { data, error } = await supabase
     .from('students')
-    .insert({ user_id: userId, classroom_id: classroomId, display_name: displayName })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .insert({ user_id: userId, classroom_id: classroomId, display_name: displayName } as any)
     .select()
     .single();
   if (error) throw error;
@@ -105,7 +106,8 @@ export async function addBookToReadingList(studentId: string, bookId: string) {
   const { error } = await supabase
     .from('student_books')
     .upsert(
-      { student_id: studentId, book_id: bookId, status: 'reading', current_page: 1 },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { student_id: studentId, book_id: bookId, status: 'reading', current_page: 1 } as any,
       { onConflict: 'student_id,book_id' },
     );
   if (error) throw error;
