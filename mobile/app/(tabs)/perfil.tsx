@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Platform,
   RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/stores/authStore';
 import { ClassroomGateModal } from '../../src/components/ClassroomGateModal';
@@ -35,22 +36,24 @@ export default function PerfilScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showGateModal, setShowGateModal] = useState(false);
 
-  useEffect(() => {
-    if (!profile) return;
-    let cancelled = false;
+  useFocusEffect(
+    useCallback(() => {
+      if (!profile) return;
+      let cancelled = false;
 
-    (async () => {
-      try {
-        await loadData(profile.user_id, (fn) => { if (!cancelled) fn(); });
-      } catch (e: unknown) {
-        // Mantém estado vazio em caso de erro de rede no load inicial
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+      (async () => {
+        try {
+          await loadData(profile.user_id, (fn) => { if (!cancelled) fn(); });
+        } catch (e: unknown) {
+          // Mantém estado vazio em caso de erro de rede no load inicial
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
 
-    return () => { cancelled = true; };
-  }, [profile]);
+      return () => { cancelled = true; };
+    }, [profile]),
+  );
 
   async function loadData(
     studentId: string,

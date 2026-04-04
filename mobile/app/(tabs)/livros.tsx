@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/stores/authStore';
 import { getStudentBooks } from '../../src/api/queries';
@@ -25,20 +25,22 @@ export default function LivrosScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!profile) { setLoading(false); return; }
-    let cancelled = false;
+  useFocusEffect(
+    useCallback(() => {
+      if (!profile) { setLoading(false); return; }
+      let cancelled = false;
 
-    setError(null);
-    getStudentBooks(profile.user_id)
-      .then((data) => { if (!cancelled) setBooks(data); })
-      .catch((e: unknown) => {
-        if (!cancelled) setError('Não foi possível carregar seus livros.');
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      setError(null);
+      getStudentBooks(profile.user_id)
+        .then((data) => { if (!cancelled) setBooks(data); })
+        .catch((e: unknown) => {
+          if (!cancelled) setError('Não foi possível carregar seus livros.');
+        })
+        .finally(() => { if (!cancelled) setLoading(false); });
 
-    return () => { cancelled = true; };
-  }, [profile]);
+      return () => { cancelled = true; };
+    }, [profile]),
+  );
 
   async function handleRefresh() {
     if (!profile) return;

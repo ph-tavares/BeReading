@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useReadingStore } from '../../src/stores/readingStore';
@@ -26,34 +26,37 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!profile) return;
-    setLoading(true);
-    setError(null);
+  useFocusEffect(
+    useCallback(() => {
+      if (!profile) return;
+      let cancelled = false;
+      setError(null);
 
-    Promise.all([getStreak(profile.user_id), getStudentBooks(profile.user_id)])
-      .then(([s, books]) => {
-        setStreak(s);
-        setStudentBooks(books);
-        // Encontra o livro em leitura ou o primeiro da lista; sempre atualiza o store
-        const raw = books.find((b) => b.status === 'reading') ?? books[0] ?? null;
-        if (raw) {
-          // Separa explicitamente studentBook de book para evitar nesting redundante
-          const { book, ...sb } = raw;
-          setCurrentBook({ studentBook: sb, book });
-        } else {
+      Promise.all([getStreak(profile.user_id), getStudentBooks(profile.user_id)])
+        .then(([s, books]) => {
+          if (cancelled) return;
+          setStreak(s);
+          setStudentBooks(books);
+          const raw = books.find((b) => b.status === 'reading') ?? books[0] ?? null;
+          if (raw) {
+            const { book, ...sb } = raw;
+            setCurrentBook({ studentBook: sb, book });
+          } else {
+            setCurrentBook(null);
+          }
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setError('Não foi possível carregar seus dados. Puxe para atualizar.');
+          setStudentBooks([]);
+          setStreak(null);
           setCurrentBook(null);
-        }
-      })
-      .catch(() => {
-        // Limpa dados antigos ao falhar para não mostrar estado inconsistente
-        setError('Não foi possível carregar seus dados. Puxe para atualizar.');
-        setStudentBooks([]);
-        setStreak(null);
-        setCurrentBook(null);
-      })
-      .finally(() => setLoading(false));
-  }, [profile, setCurrentBook]);
+        })
+        .finally(() => { if (!cancelled) setLoading(false); });
+
+      return () => { cancelled = true; };
+    }, [profile, setCurrentBook]),
+  );
 
   // Deriva currentEntry do store — fonte única de verdade
   const currentEntry = currentBook
