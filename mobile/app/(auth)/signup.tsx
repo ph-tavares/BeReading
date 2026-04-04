@@ -10,7 +10,7 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { supabase } from '../../src/lib/supabase';
 
 export default function SignupScreen() {
@@ -19,6 +19,7 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const router = useRouter();
 
   async function handleSignup() {
     if (!name.trim() || !email.trim() || !password) {
@@ -36,7 +37,14 @@ export default function SignupScreen() {
       options: { data: { display_name: name.trim() } },
     });
     setLoading(false);
-    if (error) Alert.alert('Não foi possível criar conta', error.message);
+    if (error) {
+      Alert.alert('Não foi possível criar conta', error.message);
+    } else {
+      router.push({
+        pathname: '/(auth)/confirm-email',
+        params: { email: email.trim() },
+      });
+    }
   }
 
   return (
