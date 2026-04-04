@@ -21,12 +21,27 @@ export default function ConfirmEmailScreen() {
     const { data, error } = await supabase.auth.refreshSession();
     setChecking(false);
 
-    const confirmed = !error && !!data?.session?.user.email_confirmed_at;
-    if (!confirmed) {
-      Alert.alert('Email ainda não confirmado', 'Verifique sua caixa de entrada e tente novamente.');
+    // Sessão válida e email confirmado → onAuthStateChange no root layout navega automaticamente
+    if (!error && data?.session?.user.email_confirmed_at) {
       return;
     }
-    // Se confirmado, onAuthStateChange no root layout detecta e navega automaticamente
+
+    // Sem sessão ou token inválido: o Supabase revoga a sessão original quando o email é
+    // confirmado via browser. Isso significa que o email provavelmente foi confirmado.
+    if (error || !data?.session) {
+      Alert.alert(
+        'Email confirmado?',
+        'Se você já confirmou, faça login para entrar no app.',
+        [
+          { text: 'Ainda não confirmei', style: 'cancel' },
+          { text: 'Fazer Login', onPress: () => router.replace('/(auth)/login') },
+        ],
+      );
+      return;
+    }
+
+    // Sessão válida mas email ainda não confirmado
+    Alert.alert('Email ainda não confirmado', 'Verifique sua caixa de entrada e tente novamente.');
   }
 
   async function handleResend() {
