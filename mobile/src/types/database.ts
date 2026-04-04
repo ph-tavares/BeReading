@@ -142,16 +142,18 @@ export interface Database {
           started_at?: string;
           finished_at?: string | null;
         };
-        Update: Partial<Omit<StudentBook, 'id'>>;
+        Update: Partial<Omit<StudentBook, 'id' | 'user_id' | 'book_id'>>;
       };
       reading_sessions: {
         Row: ReadingSession;
         Insert: Omit<ReadingSession, 'id' | 'read_at'> & { read_at?: string };
+        Update: Partial<Omit<ReadingSession, 'id' | 'user_id' | 'book_id' | 'read_at'>>;
       };
       questions: { Row: Question; Insert: Omit<Question, 'id' | 'generated_at'> };
       answers: {
         Row: Answer;
         Insert: Omit<Answer, 'id' | 'answered_at' | 'evaluated_at'>;
+        Update: Partial<Omit<Answer, 'id' | 'question_id' | 'user_id' | 'answered_at'>>;
       };
       streaks: { Row: Streak; Insert: Omit<Streak, 'id'> };
       badges: { Row: Badge; Insert: Omit<Badge, 'id'> };
