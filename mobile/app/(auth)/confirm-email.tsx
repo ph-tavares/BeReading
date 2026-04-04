@@ -18,10 +18,13 @@ export default function ConfirmEmailScreen() {
 
   async function handleAlreadyConfirmed() {
     setChecking(true);
-    const { error } = await supabase.auth.refreshSession();
+    const { data, error } = await supabase.auth.refreshSession();
     setChecking(false);
-    if (error) {
+
+    const confirmed = !error && !!data?.session?.user.email_confirmed_at;
+    if (!confirmed) {
       Alert.alert('Email ainda não confirmado', 'Verifique sua caixa de entrada e tente novamente.');
+      return;
     }
     // Se confirmado, onAuthStateChange no root layout detecta e navega automaticamente
   }
