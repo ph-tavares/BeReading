@@ -6,7 +6,7 @@ const TODAY = new Date('2026-03-28T12:00:00Z');
 function session(dateStr: string, pages: number): ReadingSession {
   return {
     id: Math.random().toString(),
-    student_id: 's1',
+    user_id: 'u1',
     book_id: 'b1',
     start_page: 1,
     end_page: pages,

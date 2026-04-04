@@ -25,7 +25,7 @@ import { supabase } from '../../src/lib/supabase';
 import type { Streak, Badge, StudentBadge, StudentBook, ReadingSession } from '../../src/types/database';
 
 export default function PerfilScreen() {
-  const { profile, clear, setProfile } = useAuthStore();
+  const { profile, clear } = useAuthStore();
   const [streak, setStreak] = useState<Streak | null>(null);
   const [studentBadges, setStudentBadges] = useState<(StudentBadge & { badge: Badge })[]>([]);
   const [allBadges, setAllBadges] = useState<Badge[]>([]);
@@ -166,7 +166,7 @@ export default function PerfilScreen() {
           )}
         </View>
 
-        {!profile.classroom_id && (
+        {!profile?.classroom_id && (
           <TouchableOpacity
             style={styles.classroomButton}
             onPress={() => setShowGateModal(true)}

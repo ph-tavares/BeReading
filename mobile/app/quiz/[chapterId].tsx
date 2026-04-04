@@ -27,7 +27,7 @@ const POLL_INTERVAL_MS = 4000;
 export default function QuizScreen() {
   const { chapterId } = useLocalSearchParams<{ chapterId: string }>();
   const router = useRouter();
-  const { student } = useAuthStore();
+  const { profile } = useAuthStore();
 
   const [screenState, setScreenState] = useState<ScreenState>('loading');
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -103,10 +103,10 @@ export default function QuizScreen() {
   }, [screenState, pollCount, chapterId]);
 
   async function handleAnswer(answer: string): Promise<void> {
-    if (!student) return;
+    if (!profile) return;
     const q = questions[currentIndex];
     try {
-      const result = await evaluateAnswer(q.id, student.id, answer);
+      const result = await evaluateAnswer(q.id, profile.user_id, answer);
       setResults((prev) => ({ ...prev, [currentIndex]: result }));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erro ao avaliar resposta';

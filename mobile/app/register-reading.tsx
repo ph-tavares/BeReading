@@ -20,14 +20,14 @@ import { validatePageRange } from '../src/utils/validation';
 
 export default function RegisterReadingScreen() {
   const router = useRouter();
-  const { student } = useAuthStore();
+  const { profile } = useAuthStore();
   const { currentBook } = useReadingStore();
   const [startPage, setStartPage] = useState('');
   const [endPage, setEndPage] = useState('');
   const [loading, setLoading] = useState(false);
   const endRef = useRef<TextInputType>(null);
 
-  if (!currentBook || !student) {
+  if (!currentBook || !profile) {
     return (
       <SafeAreaView style={styles.centered}>
         <Text style={styles.emptyText}>Nenhum livro selecionado</Text>
@@ -38,7 +38,7 @@ export default function RegisterReadingScreen() {
   const { book } = currentBook;
 
   async function handleSubmit() {
-    if (loading || !student) return;
+    if (loading || !profile) return;
 
     const start = parseInt(startPage, 10);
     const end = parseInt(endPage, 10);
@@ -56,7 +56,7 @@ export default function RegisterReadingScreen() {
 
     setLoading(true);
     try {
-      const result = await registerReadingSession(student.id, book.id, start, end);
+      const result = await registerReadingSession(profile.user_id, book.id, start, end);
 
       if (result.completed_chapter_ids.length > 0) {
         const chapterId = result.completed_chapter_ids[0];

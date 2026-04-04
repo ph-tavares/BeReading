@@ -7,7 +7,7 @@ function makeEntry(
 ): StudentBook & { book: Book } {
   return {
     id: `sb-${id}`,
-    student_id: 's1',
+    user_id: 'u1',
     book_id: id,
     status,
     current_page: 1,
