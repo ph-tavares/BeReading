@@ -177,6 +177,7 @@ export async function getPendingQuizChapterIds(userId: string): Promise<string[]
   const { data, error } = await supabase
     .from('questions')
     .select('chapter_id, answers!left(id, user_id)')
+    .eq('answers.user_id', userId)
     .is('answers.id', null);
   if (error) throw error;
   return [...new Set((data ?? []).map((r: any) => r.chapter_id as string))];

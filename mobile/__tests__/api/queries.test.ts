@@ -82,6 +82,15 @@ describe('createProfile', () => {
 });
 
 describe('joinClassroom', () => {
+  it('atualiza classroom_id do profile e retorna', async () => {
+    chain.single
+      .mockResolvedValueOnce({ data: mockClassroom, error: null })
+      .mockResolvedValueOnce({ data: { ...mockProfile, classroom_id: 'c1' }, error: null });
+    const result = await joinClassroom('u1', 'ABCD1234');
+    expect(result.classroom_id).toBe('c1');
+    expect(chain.update).toHaveBeenCalledWith({ classroom_id: 'c1' });
+  });
+
   it('lança erro se classroom não encontrada', async () => {
     chain.single.mockResolvedValueOnce({ data: null, error: { code: 'PGRST116' } });
     await expect(joinClassroom('u1', 'INVALIDO1')).rejects.toThrow('Turma não encontrada');
