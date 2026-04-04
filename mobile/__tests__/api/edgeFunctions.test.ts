@@ -6,10 +6,10 @@ jest.mock('../../src/lib/supabase', () => ({
 import { buildRegisterReadingPayload, buildEvaluateAnswerPayload } from '../../src/api/edgeFunctions';
 
 describe('buildRegisterReadingPayload', () => {
-  it('monta payload correto', () => {
-    const result = buildRegisterReadingPayload('student-1', 'book-1', 5, 25);
+  it('monta payload com user_id', () => {
+    const result = buildRegisterReadingPayload('user-1', 'book-1', 5, 25);
     expect(result).toEqual({
-      student_id: 'student-1',
+      user_id: 'user-1',
       book_id: 'book-1',
       start_page: 5,
       end_page: 25,
@@ -18,17 +18,17 @@ describe('buildRegisterReadingPayload', () => {
 });
 
 describe('buildEvaluateAnswerPayload', () => {
-  it('monta payload com answer trimado', () => {
-    const result = buildEvaluateAnswerPayload('q-1', 'student-1', '  minha resposta  ');
+  it('monta payload com user_id e answer trimada', () => {
+    const result = buildEvaluateAnswerPayload('q-1', 'user-1', '  minha resposta  ');
     expect(result).toEqual({
       question_id: 'q-1',
-      student_id: 'student-1',
+      user_id: 'user-1',
       answer_text: 'minha resposta',
     });
   });
 
   it('retorna null para answer vazia após trim', () => {
-    const result = buildEvaluateAnswerPayload('q-1', 'student-1', '   ');
+    const result = buildEvaluateAnswerPayload('q-1', 'user-1', '   ');
     expect(result).toBeNull();
   });
 });

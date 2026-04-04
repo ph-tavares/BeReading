@@ -14,32 +14,32 @@ export interface EvaluateAnswerResponse {
 }
 
 export function buildRegisterReadingPayload(
-  studentId: string,
+  userId: string,
   bookId: string,
   startPage: number,
   endPage: number,
 ) {
-  return { student_id: studentId, book_id: bookId, start_page: startPage, end_page: endPage };
+  return { user_id: userId, book_id: bookId, start_page: startPage, end_page: endPage };
 }
 
 export function buildEvaluateAnswerPayload(
   questionId: string,
-  studentId: string,
+  userId: string,
   answerText: string,
 ) {
   const trimmed = answerText.trim();
   if (!trimmed) return null;
-  return { question_id: questionId, student_id: studentId, answer_text: trimmed };
+  return { question_id: questionId, user_id: userId, answer_text: trimmed };
 }
 
 export async function registerReadingSession(
-  studentId: string,
+  userId: string,
   bookId: string,
   startPage: number,
   endPage: number,
 ): Promise<RegisterReadingResponse> {
   const { data, error } = await supabase.functions.invoke('register-reading-session', {
-    body: buildRegisterReadingPayload(studentId, bookId, startPage, endPage),
+    body: buildRegisterReadingPayload(userId, bookId, startPage, endPage),
   });
   if (error) throw error;
   if (data.error) throw new Error(data.error);
@@ -48,10 +48,10 @@ export async function registerReadingSession(
 
 export async function evaluateAnswer(
   questionId: string,
-  studentId: string,
+  userId: string,
   answerText: string,
 ): Promise<EvaluateAnswerResponse> {
-  const payload = buildEvaluateAnswerPayload(questionId, studentId, answerText);
+  const payload = buildEvaluateAnswerPayload(questionId, userId, answerText);
   if (!payload) throw new Error('Resposta não pode estar vazia');
 
   const { data, error } = await supabase.functions.invoke('evaluate-answer', {
