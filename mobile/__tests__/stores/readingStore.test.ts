@@ -7,7 +7,7 @@ const mockBook: Book = {
   total_pages: 328, genre: 'Distopia', created_at: '2026-01-01',
 };
 const mockStudentBook: StudentBook = {
-  id: 'sb1', student_id: 's1', book_id: 'b1', status: 'reading',
+  id: 'sb1', user_id: 'u1', book_id: 'b1', status: 'reading',
   current_page: 50, started_at: '2026-01-01', finished_at: null,
 };
 const mockCurrentBook: CurrentBook = { studentBook: mockStudentBook, book: mockBook };

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/stores/authStore';
+import { ClassroomGateModal } from '../../src/components/ClassroomGateModal';
 import {
   getStreak,
   getStudentBadges,
@@ -24,7 +25,7 @@ import { supabase } from '../../src/lib/supabase';
 import type { Streak, Badge, StudentBadge, StudentBook, ReadingSession } from '../../src/types/database';
 
 export default function PerfilScreen() {
-  const { student, clear } = useAuthStore();
+  const { profile, clear, setProfile } = useAuthStore();
   const [streak, setStreak] = useState<Streak | null>(null);
   const [studentBadges, setStudentBadges] = useState<(StudentBadge & { badge: Badge })[]>([]);
   const [allBadges, setAllBadges] = useState<Badge[]>([]);
@@ -32,14 +33,15 @@ export default function PerfilScreen() {
   const [sessions, setSessions] = useState<ReadingSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showGateModal, setShowGateModal] = useState(false);
 
   useEffect(() => {
-    if (!student) return;
+    if (!profile) return;
     let cancelled = false;
 
     (async () => {
       try {
-        await loadData(student.id, (fn) => { if (!cancelled) fn(); });
+        await loadData(profile.user_id, (fn) => { if (!cancelled) fn(); });
       } catch (e: unknown) {
         // Mantém estado vazio em caso de erro de rede no load inicial
       } finally {
@@ -48,7 +50,7 @@ export default function PerfilScreen() {
     })();
 
     return () => { cancelled = true; };
-  }, [student]);
+  }, [profile]);
 
   async function loadData(
     studentId: string,
@@ -71,10 +73,10 @@ export default function PerfilScreen() {
   }
 
   async function handleRefresh() {
-    if (!student) return;
+    if (!profile) return;
     setRefreshing(true);
     try {
-      await loadData(student.id);
+      await loadData(profile.user_id);
     } catch (e: unknown) {
       // Mantém dados atuais em caso de erro de rede
     } finally {
@@ -103,7 +105,7 @@ export default function PerfilScreen() {
       {/* Header índigo */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.headerName}>{student?.display_name}</Text>
+          <Text style={styles.headerName}>{profile?.display_name}</Text>
           <Text style={styles.headerSub}>Leitor BeReading</Text>
         </View>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.8}>
@@ -163,6 +165,22 @@ export default function PerfilScreen() {
             <BadgeGrid allBadges={allBadges} earnedBadges={studentBadges} />
           )}
         </View>
+
+        {!profile.classroom_id && (
+          <TouchableOpacity
+            style={styles.classroomButton}
+            onPress={() => setShowGateModal(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.classroomButtonText}>Entrar em uma turma</Text>
+          </TouchableOpacity>
+        )}
+
+        <ClassroomGateModal
+          visible={showGateModal}
+          onDismiss={() => setShowGateModal(false)}
+          onSuccess={() => setShowGateModal(false)}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -315,5 +333,19 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     textAlign: 'center',
     paddingVertical: 12,
+  },
+  classroomButton: {
+    width: '100%',
+    height: 48,
+    backgroundColor: '#F59E0B',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  classroomButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

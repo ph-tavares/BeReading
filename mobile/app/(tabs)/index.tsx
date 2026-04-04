@@ -19,7 +19,7 @@ import type { Streak, StudentBook, Book } from '../../src/types/database';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { student } = useAuthStore();
+  const { profile } = useAuthStore();
   const { currentBook, setCurrentBook } = useReadingStore();
   const [streak, setStreak] = useState<Streak | null>(null);
   const [studentBooks, setStudentBooks] = useState<(StudentBook & { book: Book })[]>([]);
@@ -27,11 +27,11 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!student) return;
+    if (!profile) return;
     setLoading(true);
     setError(null);
 
-    Promise.all([getStreak(student.id), getStudentBooks(student.id)])
+    Promise.all([getStreak(profile.user_id), getStudentBooks(profile.user_id)])
       .then(([s, books]) => {
         setStreak(s);
         setStudentBooks(books);
@@ -53,7 +53,7 @@ export default function HomeScreen() {
         setCurrentBook(null);
       })
       .finally(() => setLoading(false));
-  }, [student, setCurrentBook]);
+  }, [profile, setCurrentBook]);
 
   // Deriva currentEntry do store — fonte única de verdade
   const currentEntry = currentBook
@@ -75,7 +75,7 @@ export default function HomeScreen() {
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.greeting}>Olá,</Text>
-            <Text style={styles.name}>{student?.display_name ?? 'Leitor'} 👋</Text>
+            <Text style={styles.name}>{profile?.display_name ?? 'Leitor'} 👋</Text>
           </View>
           {streak && streak.current_streak > 0 && (
             <StreakBadge streak={streak.current_streak} dark />

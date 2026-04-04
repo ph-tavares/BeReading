@@ -19,18 +19,18 @@ import type { StudentBook, Book } from '../../src/types/database';
 
 export default function LivrosScreen() {
   const router = useRouter();
-  const { student } = useAuthStore();
+  const { profile } = useAuthStore();
   const [books, setBooks] = useState<(StudentBook & { book: Book })[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!student) { setLoading(false); return; }
+    if (!profile) { setLoading(false); return; }
     let cancelled = false;
 
     setError(null);
-    getStudentBooks(student.id)
+    getStudentBooks(profile.user_id)
       .then((data) => { if (!cancelled) setBooks(data); })
       .catch((e: unknown) => {
         if (!cancelled) setError('Não foi possível carregar seus livros.');
@@ -38,14 +38,14 @@ export default function LivrosScreen() {
       .finally(() => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
-  }, [student]);
+  }, [profile]);
 
   async function handleRefresh() {
-    if (!student) return;
+    if (!profile) return;
     setRefreshing(true);
     setError(null);
     try {
-      const data = await getStudentBooks(student.id);
+      const data = await getStudentBooks(profile.user_id);
       setBooks(data);
     } catch (e: unknown) {
       setError('Não foi possível carregar seus livros.');

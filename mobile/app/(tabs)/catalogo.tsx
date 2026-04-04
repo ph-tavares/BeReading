@@ -16,7 +16,7 @@ import { getBooks, addBookToReadingList, getStudentBooks } from '../../src/api/q
 import type { Book } from '../../src/types/database';
 
 export default function CatalogoScreen() {
-  const { student } = useAuthStore();
+  const { profile } = useAuthStore();
   const [search, setSearch] = useState('');
   const [books, setBooks] = useState<Book[]>([]);
   const [myBookIds, setMyBookIds] = useState<Set<string>>(new Set());
@@ -25,14 +25,14 @@ export default function CatalogoScreen() {
 
   // Carga inicial: todos os livros + livros já na lista do aluno
   useEffect(() => {
-    if (!student) return;
+    if (!profile) return;
     let cancelled = false;
 
     async function loadInitial() {
       try {
         const [allBooks, myBooks] = await Promise.all([
           getBooks(),
-          getStudentBooks(student!.id),
+          getStudentBooks(profile!.user_id),
         ]);
         if (cancelled) return;
         setBooks(allBooks);
@@ -46,7 +46,7 @@ export default function CatalogoScreen() {
 
     loadInitial();
     return () => { cancelled = true; };
-  }, [student]);
+  }, [profile]);
 
   // Busca debounced — 300ms após o usuário parar de digitar
   useEffect(() => {
@@ -64,10 +64,10 @@ export default function CatalogoScreen() {
   }, [search, loading]);
 
   async function handleAdd(book: Book) {
-    if (!student || addingId) return;
+    if (!profile || addingId) return;
     setAddingId(book.id);
     try {
-      await addBookToReadingList(student.id, book.id);
+      await addBookToReadingList(profile.user_id, book.id);
       setMyBookIds((prev) => new Set([...prev, book.id]));
       Alert.alert('✅ Adicionado!', `"${book.title}" está na sua lista de leitura.`);
     } catch (e: unknown) {
