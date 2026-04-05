@@ -57,3 +57,36 @@ describe('classifyRefreshResult', () => {
     });
   });
 });
+
+// ── classifySignInResult ──────────────────────────────────────────────────────
+// Replica a lógica de confirm-email.tsx para classificar resultado de signInWithPassword
+
+type SignInOutcome = 'auto_login_success' | 'email_not_confirmed' | 'login_error';
+
+function classifySignInResult(error: { message: string } | null): SignInOutcome {
+  if (!error) return 'auto_login_success';
+  if (error.message.toLowerCase().includes('email not confirmed')) return 'email_not_confirmed';
+  return 'login_error';
+}
+
+describe('classifySignInResult', () => {
+  it('retorna auto_login_success quando não há erro', () => {
+    expect(classifySignInResult(null)).toBe('auto_login_success');
+  });
+
+  it('retorna email_not_confirmed para erro "Email not confirmed"', () => {
+    expect(classifySignInResult({ message: 'Email not confirmed' })).toBe('email_not_confirmed');
+  });
+
+  it('email not confirmed é case-insensitive', () => {
+    expect(classifySignInResult({ message: 'email not confirmed' })).toBe('email_not_confirmed');
+  });
+
+  it('retorna login_error para credenciais inválidas', () => {
+    expect(classifySignInResult({ message: 'Invalid login credentials' })).toBe('login_error');
+  });
+
+  it('retorna login_error para rate limit', () => {
+    expect(classifySignInResult({ message: 'Email rate limit exceeded' })).toBe('login_error');
+  });
+});

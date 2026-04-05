@@ -9,34 +9,50 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../src/lib/supabase';
+import { usePendingAuthStore } from '../../src/stores/pendingAuthStore';
 
 export default function ConfirmEmailScreen() {
   const { email } = useLocalSearchParams<{ email?: string }>();
   const router = useRouter();
   const [checking, setChecking] = useState(false);
   const [resending, setResending] = useState(false);
+  const { pendingPassword, clearPendingPassword } = usePendingAuthStore();
 
   async function handleAlreadyConfirmed() {
     setChecking(true);
+
+    // Caminho primário: senha disponível → login automático
+    if (email && pendingPassword) {
+      clearPendingPassword();
+      const { error } = await supabase.auth.signInWithPassword({ email, password: pendingPassword });
+      setChecking(false);
+
+      if (!error) {
+        // onAuthStateChange em _layout.tsx detecta a sessão e navega para home
+        return;
+      }
+
+      if (error.message.toLowerCase().includes('email not confirmed')) {
+        Alert.alert('Email ainda não confirmado', 'Verifique sua caixa de entrada e tente novamente.');
+        return;
+      }
+
+      Alert.alert('Erro ao fazer login', error.message);
+      return;
+    }
+
+    // Fallback: sem senha (app reiniciado ou navegação direta para esta tela)
     const { data, error } = await supabase.auth.refreshSession();
     setChecking(false);
 
-    // Sessão válida e email confirmado → onAuthStateChange no root layout navega automaticamente
+    // Sessão válida e email confirmado → onAuthStateChange navega automaticamente
     if (!error && data?.session?.user.email_confirmed_at) {
       return;
     }
 
-    // Sem sessão ou token inválido: o Supabase revoga a sessão original quando o email é
-    // confirmado via browser. Isso significa que o email provavelmente foi confirmado.
+    // Token revogado: Supabase invalida a sessão ao confirmar email pelo browser
     if (error || !data?.session) {
-      Alert.alert(
-        'Email confirmado?',
-        'Se você já confirmou, faça login para entrar no app.',
-        [
-          { text: 'Ainda não confirmei', style: 'cancel' },
-          { text: 'Fazer Login', onPress: () => router.replace('/(auth)/login') },
-        ],
-      );
+      router.replace('/(auth)/login');
       return;
     }
 
