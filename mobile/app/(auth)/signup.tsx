@@ -33,7 +33,7 @@ export default function SignupScreen() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: { data: { display_name: name.trim() } },
@@ -41,6 +41,8 @@ export default function SignupScreen() {
     setLoading(false);
     if (error) {
       Alert.alert('Não foi possível criar conta', error.message);
+    } else if (Array.isArray(data.user?.identities) && data.user!.identities.length === 0) {
+      Alert.alert('Email já cadastrado', 'Este email já possui uma conta. Faça login para entrar.');
     } else {
       setPendingPassword(password);
       router.push({
