@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { supabase } from '../../src/lib/supabase';
+import { usePendingAuthStore } from '../../src/stores/pendingAuthStore';
 
 export default function SignupScreen() {
   const [name, setName] = useState('');
@@ -20,6 +21,7 @@ export default function SignupScreen() {
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const router = useRouter();
+  const setPendingPassword = usePendingAuthStore((s) => s.setPendingPassword);
 
   async function handleSignup() {
     if (!name.trim() || !email.trim() || !password) {
@@ -40,6 +42,7 @@ export default function SignupScreen() {
     if (error) {
       Alert.alert('Não foi possível criar conta', error.message);
     } else {
+      setPendingPassword(password);
       router.push({
         pathname: '/(auth)/confirm-email',
         params: { email: email.trim() },
