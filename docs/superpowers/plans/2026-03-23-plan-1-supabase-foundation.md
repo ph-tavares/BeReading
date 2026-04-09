@@ -1652,6 +1652,13 @@ git commit -m "chore: supabase foundation complete and deployed"
 | Edge Function: retry-pending-quizzes (via pg_cron) | Task 9 |
 | Deploy no Supabase Cloud | Task 10 |
 
+## Gaps Resolvidos (2026-03-27)
+
+| Gap | Solução | Arquivo |
+|---|---|---|
+| `book_contents` vazio | Migration com resumos/paráfrases originais dos 25 capítulos dos 3 livros piloto | `migrations/20260323000005_book_contents_pilot.sql` |
+| Badge engine ausente | Edge Function `award-badges` com 9 critérios + integração fire-and-forget em `register-reading-session` | `functions/award-badges/index.ts` |
+
 ## Próximos Planos
 
 - **Plano 2:** App Mobile React Native (auth, leitura, streaks, gamificação)
