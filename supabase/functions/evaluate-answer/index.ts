@@ -93,9 +93,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { question_id, student_id, answer_text } = payload;
+  const { question_id, user_id, answer_text } = payload;
 
-  if (!question_id || !student_id || !answer_text?.trim()) {
+  if (!question_id || !user_id || !answer_text?.trim()) {
     return new Response(JSON.stringify({ error: 'Missing required fields' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
@@ -123,10 +123,10 @@ Deno.serve(async (req) => {
     .from('answers')
     .upsert({
       question_id,
-      student_id,
+      user_id,
       answer_text: answer_text.trim(),
       evaluation_status: 'pending',
-    }, { onConflict: 'question_id,student_id' })
+    }, { onConflict: 'question_id,user_id' })
     .select('id')
     .single();
 
