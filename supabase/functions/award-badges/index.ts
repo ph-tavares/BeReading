@@ -69,20 +69,20 @@ export function evaluateBadges(
 
 async function fetchStudentStats(
   supabase: ReturnType<typeof createServiceClient>,
-  student_id: string
+  user_id: string
 ): Promise<StudentStats> {
   const [sessionsResult, streakResult, answersResult, booksResult, classroomStudentResult] =
     await Promise.all([
-      supabase.from('reading_sessions').select('pages_read').eq('student_id', student_id),
-      supabase.from('streaks').select('current_streak').eq('student_id', student_id).single(),
+      supabase.from('reading_sessions').select('pages_read').eq('user_id', user_id),
+      supabase.from('streaks').select('current_streak').eq('user_id', user_id).single(),
       supabase
         .from('answers')
         .select('comprehension_score, questions(type, chapters(book_id))')
-        .eq('student_id', student_id)
+        .eq('user_id', user_id)
         .eq('evaluation_status', 'completed')
         .not('comprehension_score', 'is', null),
-      supabase.from('student_books').select('book_id, status').eq('student_id', student_id),
-      supabase.from('students').select('classroom_id').eq('id', student_id).single(),
+      supabase.from('student_books').select('book_id, status').eq('user_id', user_id),
+      supabase.from('profiles').select('classroom_id').eq('user_id', user_id).single(),
     ]);
 
   const sessions = sessionsResult.data ?? [];
@@ -154,10 +154,10 @@ if (import.meta.main) Deno.serve(async (req) => {
     });
   }
 
-  let student_id: string;
+  let user_id: string;
   try {
     const body = await req.json();
-    student_id = body.student_id;
+    user_id = body.user_id;
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
       status: 400,
@@ -165,8 +165,8 @@ if (import.meta.main) Deno.serve(async (req) => {
     });
   }
 
-  if (!student_id) {
-    return new Response(JSON.stringify({ error: 'student_id required' }), {
+  if (!user_id) {
+    return new Response(JSON.stringify({ error: 'user_id required' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -176,7 +176,7 @@ if (import.meta.main) Deno.serve(async (req) => {
 
   const [{ data: allBadges }, { data: earnedBadges }] = await Promise.all([
     supabase.from('badges').select('id, name, criteria_type, criteria_value'),
-    supabase.from('student_badges').select('badge_id').eq('student_id', student_id),
+    supabase.from('student_badges').select('badge_id').eq('user_id', user_id),
   ]);
 
   if (!allBadges) {
@@ -186,7 +186,7 @@ if (import.meta.main) Deno.serve(async (req) => {
   }
 
   const alreadyEarnedIds = (earnedBadges ?? []).map((b: { badge_id: string }) => b.badge_id);
-  const stats = await fetchStudentStats(supabase, student_id);
+  const stats = await fetchStudentStats(supabase, user_id);
   const newBadgeIds = evaluateBadges(allBadges, stats, alreadyEarnedIds);
 
   if (newBadgeIds.length === 0) {
@@ -196,7 +196,7 @@ if (import.meta.main) Deno.serve(async (req) => {
   }
 
   const { error: insertError } = await supabase.from('student_badges').insert(
-    newBadgeIds.map(badge_id => ({ student_id, badge_id }))
+    newBadgeIds.map(badge_id => ({ user_id, badge_id }))
   );
 
   if (insertError) {

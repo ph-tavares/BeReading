@@ -44,10 +44,10 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { student_id, book_id, start_page, end_page } = payload;
+  const { user_id, book_id, start_page, end_page } = payload;
 
   // Validação básica
-  if (!student_id || !book_id || !start_page || !end_page) {
+  if (!user_id || !book_id || !start_page || !end_page) {
     return new Response(JSON.stringify({ error: 'Missing required fields' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
   const { data: prevSessions } = await supabase
     .from('reading_sessions')
     .select('end_page')
-    .eq('student_id', student_id)
+    .eq('user_id', user_id)
     .eq('book_id', book_id);
 
   const previousMaxPage = getMaxPageReached(prevSessions ?? []);
@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
   // 3. Criar ReadingSession
   const { error: sessionError } = await supabase
     .from('reading_sessions')
-    .insert({ student_id, book_id, start_page, end_page });
+    .insert({ user_id, book_id, start_page, end_page });
 
   if (sessionError) {
     return new Response(JSON.stringify({ error: 'Failed to create session' }), {
@@ -110,12 +110,12 @@ Deno.serve(async (req) => {
   const { error: studentBookError } = await supabase
     .from('student_books')
     .upsert({
-      student_id,
+      user_id,
       book_id,
       current_page: newMaxPage,
       status: newMaxPage >= book.total_pages ? 'finished' : 'reading',
       ...(newMaxPage >= book.total_pages ? { finished_at: new Date().toISOString() } : {})
-    }, { onConflict: 'student_id,book_id' });
+    }, { onConflict: 'user_id,book_id' });
 
   if (studentBookError) {
     console.error('Failed to upsert student_book:', studentBookError.message);
@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
   const { data: streak } = await supabase
     .from('streaks')
     .select('current_streak, longest_streak, last_read_date')
-    .eq('student_id', student_id)
+    .eq('user_id', user_id)
     .single();
 
   let newCurrentStreak = 1;
@@ -149,11 +149,11 @@ Deno.serve(async (req) => {
   const { error: streakUpsertError } = await supabase
     .from('streaks')
     .upsert({
-      student_id,
+      user_id,
       current_streak: newCurrentStreak,
       longest_streak: newLongestStreak,
       last_read_date: today
-    }, { onConflict: 'student_id' });
+    }, { onConflict: 'user_id' });
 
   if (streakUpsertError) {
     console.error('Failed to upsert streak:', streakUpsertError.message);
@@ -207,7 +207,7 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
       },
-      body: JSON.stringify({ student_id }),
+      body: JSON.stringify({ user_id }),
     }).catch(() => {});
   }
 

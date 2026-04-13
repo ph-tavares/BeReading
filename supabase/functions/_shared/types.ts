@@ -1,7 +1,7 @@
 // supabase/functions/_shared/types.ts
 
 export interface ReadingSessionPayload {
-  student_id: string;
+  user_id: string;
   book_id: string;
   start_page: number;
   end_page: number;
@@ -25,6 +25,6 @@ export interface QuestionData {
 
 export interface AnswerPayload {
   question_id: string;
-  student_id: string;
+  user_id: string;
   answer_text: string;
 }
