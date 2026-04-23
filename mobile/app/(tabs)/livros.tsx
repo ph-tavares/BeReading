@@ -4,21 +4,25 @@ import {
   Text,
   ScrollView,
   RefreshControl,
-  TouchableOpacity,
   ActivityIndicator,
-  StyleSheet,
-  Platform,
+  Image,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Compass, CheckCheck } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
 import { getStudentBooks } from '../../src/api/queries';
 import { BookCard } from '../../src/components/BookCard';
+import { BookCover } from '../../src/components/BookCover';
+import { Press3DButton } from '../../src/components/Press3DButton';
+import { SectionLabel } from '../../src/components/SectionLabel';
 import { sectionBooksByStatus } from '../../src/utils/bookUtils';
+import { colors, fonts } from '../../src/theme/tokens';
 import type { StudentBook, Book } from '../../src/types/database';
 
 export default function LivrosScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { profile } = useAuthStore();
   const [books, setBooks] = useState<(StudentBook & { book: Book })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,11 +33,11 @@ export default function LivrosScreen() {
     useCallback(() => {
       if (!profile) { setLoading(false); return; }
       let cancelled = false;
-
       setError(null);
+
       getStudentBooks(profile.user_id)
         .then((data) => { if (!cancelled) setBooks(data); })
-        .catch((e: unknown) => {
+        .catch(() => {
           if (!cancelled) setError('Não foi possível carregar seus livros.');
         })
         .finally(() => { if (!cancelled) setLoading(false); });
@@ -49,7 +53,7 @@ export default function LivrosScreen() {
     try {
       const data = await getStudentBooks(profile.user_id);
       setBooks(data);
-    } catch (e: unknown) {
+    } catch {
       setError('Não foi possível carregar seus livros.');
     } finally {
       setRefreshing(false);
@@ -61,233 +65,177 @@ export default function LivrosScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#4F46E5" />
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={colors.green} />
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header índigo — mesmo padrão da Home */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Meus Livros</Text>
-        {hasBooks && (
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>{books.length}</Text>
-          </View>
-        )}
-      </View>
-
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={{
+          paddingTop: insets.top + 8,
+          paddingBottom: 120,
+        }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#4F46E5"
+            tintColor={colors.green}
           />
         }
       >
-        {error && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        )}
+        {/* Header */}
+        <View style={{
+          paddingHorizontal: 20,
+          paddingBottom: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.hairline,
+        }}>
+          <Text style={{
+            fontFamily: fonts.black,
+            fontSize: 28,
+            color: colors.text,
+            letterSpacing: -0.5,
+          }}>Estante</Text>
+          <Text style={{
+            fontFamily: fonts.semi,
+            fontSize: 13,
+            color: colors.textMute,
+            marginTop: 2,
+          }}>
+            {reading.length} em leitura · {finished.length} finalizado{finished.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
 
-        {!hasBooks ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>📚</Text>
-            <Text style={styles.emptyTitle}>Sua estante está vazia</Text>
-            <Text style={styles.emptySubtitle}>
-              Explore o Catálogo e adicione livros para começar
-            </Text>
-            <TouchableOpacity
-              style={styles.catalogButton}
-              onPress={() => router.push('/(tabs)/catalogo')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.catalogButtonText}>Ver Catálogo</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            {reading.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionLabel}>Lendo agora</Text>
-                  <View style={styles.sectionBadge}>
-                    <Text style={styles.sectionBadgeText}>{reading.length}</Text>
+        <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+          {error && (
+            <View style={{
+              backgroundColor: 'rgba(244,63,94,0.1)',
+              borderWidth: 1,
+              borderColor: 'rgba(244,63,94,0.3)',
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 16,
+            }}>
+              <Text style={{ fontFamily: fonts.medium, color: colors.rose, fontSize: 13, textAlign: 'center' }}>
+                {error}
+              </Text>
+            </View>
+          )}
+
+          {!hasBooks ? (
+            <View style={{ alignItems: 'center', paddingVertical: 48, gap: 12 }}>
+              <Image
+                source={require('../../assets/images/mascot1.png')}
+                style={{ width: 140, height: 140 }}
+                resizeMode="contain"
+              />
+              <Text style={{
+                fontFamily: fonts.black,
+                fontSize: 18,
+                color: colors.text,
+              }}>Sua estante está vazia</Text>
+              <Text style={{
+                fontFamily: fonts.medium,
+                fontSize: 14,
+                color: colors.textMute,
+                textAlign: 'center',
+                lineHeight: 21,
+                paddingHorizontal: 20,
+                marginBottom: 8,
+              }}>
+                Explore o Catálogo e adicione livros para começar
+              </Text>
+              <View style={{ width: '70%' }}>
+                <Press3DButton
+                  onPress={() => router.push('/(tabs)/catalogo')}
+                  Icon={Compass}
+                >
+                  Ver Catálogo
+                </Press3DButton>
+              </View>
+            </View>
+          ) : (
+            <>
+              {reading.length > 0 && (
+                <View style={{ marginBottom: 26 }}>
+                  <SectionLabel
+                    right={
+                      <Text style={{
+                        fontFamily: fonts.black,
+                        fontSize: 11,
+                        color: colors.green,
+                      }}>{reading.length}</Text>
+                    }
+                  >
+                    Lendo agora
+                  </SectionLabel>
+                  <View style={{ gap: 12 }}>
+                    {reading.map((sb) => (
+                      <BookCard key={sb.id} studentBook={sb} book={sb.book} />
+                    ))}
                   </View>
                 </View>
-                {reading.map((sb) => (
-                  <View key={sb.id} style={styles.cardWrap}>
-                    <BookCard studentBook={sb} book={sb.book} />
-                  </View>
-                ))}
-              </View>
-            )}
+              )}
 
-            {finished.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionLabel}>Finalizados</Text>
-                  <View style={[styles.sectionBadge, styles.sectionBadgeGreen]}>
-                    <Text style={[styles.sectionBadgeText, { color: '#059669' }]}>
-                      {finished.length}
-                    </Text>
-                  </View>
+              {finished.length > 0 && (
+                <View style={{ marginBottom: 16 }}>
+                  <SectionLabel
+                    right={
+                      <Text style={{
+                        fontFamily: fonts.black,
+                        fontSize: 11,
+                        color: colors.gold,
+                      }}>{finished.length}</Text>
+                    }
+                  >
+                    Troféus
+                  </SectionLabel>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 14, paddingBottom: 6 }}
+                  >
+                    {finished.map((sb) => (
+                      <View key={sb.id} style={{ width: 120, alignItems: 'center' }}>
+                        <View style={{ position: 'relative' }}>
+                          <BookCover book={sb.book} size="md" glow />
+                          <View style={{
+                            position: 'absolute',
+                            top: -8,
+                            right: -8,
+                            width: 32,
+                            height: 32,
+                            borderRadius: 12,
+                            backgroundColor: colors.gold,
+                            borderBottomWidth: 3,
+                            borderBottomColor: colors.goldDeep,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}>
+                            <CheckCheck size={16} color="#fff" strokeWidth={3} />
+                          </View>
+                        </View>
+                        <Text numberOfLines={2} style={{
+                          fontFamily: fonts.bold,
+                          fontSize: 12,
+                          color: colors.text,
+                          marginTop: 8,
+                          textAlign: 'center',
+                          lineHeight: 15,
+                        }}>{sb.book.title}</Text>
+                      </View>
+                    ))}
+                  </ScrollView>
                 </View>
-                {finished.map((sb) => (
-                  <View key={sb.id} style={styles.cardWrap}>
-                    <BookCard studentBook={sb} book={sb.book} />
-                  </View>
-                ))}
-              </View>
-            )}
-          </>
-        )}
+              )}
+            </>
+          )}
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#4F46E5',
-  },
-  centered: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Header
-  header: {
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    letterSpacing: -0.3,
-  },
-  countBadge: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  countText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  // Scroll body
-  scroll: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    marginTop: -2,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-
-  // Error
-  errorBox: {
-    backgroundColor: '#FEE2E2',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-  },
-  errorText: {
-    fontSize: 13,
-    color: '#991B1B',
-    textAlign: 'center',
-  },
-
-  // Sections
-  section: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#9CA3AF',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-  sectionBadge: {
-    backgroundColor: '#EEF2FF',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
-  sectionBadgeGreen: {
-    backgroundColor: '#ECFDF5',
-  },
-  sectionBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#4F46E5',
-  },
-  cardWrap: {
-    marginBottom: 12,
-  },
-
-  // Empty state
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 48,
-    gap: 8,
-  },
-  emptyEmoji: {
-    fontSize: 48,
-    marginBottom: 8,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#374151',
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    lineHeight: 21,
-    paddingHorizontal: 20,
-  },
-  catalogButton: {
-    marginTop: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 12,
-  },
-  catalogButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#4F46E5',
-  },
-});
