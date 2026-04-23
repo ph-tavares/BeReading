@@ -3,10 +3,8 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   Alert,
   Modal,
-  StyleSheet,
   Platform,
   KeyboardAvoidingView,
   Pressable,
@@ -14,6 +12,9 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { joinClassroom } from '../api/queries';
 import { validateClassroomCode } from '../utils/validation';
+import { Press3DButton } from './Press3DButton';
+import { GhostButton } from './GhostButton';
+import { colors, fonts, radii } from '../theme/tokens';
 import type { Profile } from '../types/database';
 
 const CODE_LENGTH = 8;
@@ -58,175 +59,107 @@ export function ClassroomGateModal({ visible, onDismiss, onSuccess }: ClassroomG
   }
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onDismiss}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
       <KeyboardAvoidingView
-        style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1, justifyContent: 'flex-end' }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Pressable style={styles.backdrop} onPress={onDismiss} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+        <Pressable
+          onPress={onDismiss}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)' }}
+        />
+        <View style={{
+          backgroundColor: colors.bgRaise,
+          borderTopLeftRadius: radii.lg,
+          borderTopRightRadius: radii.lg,
+          borderWidth: 1,
+          borderColor: colors.hairline,
+          paddingHorizontal: 24,
+          paddingTop: 18,
+          paddingBottom: 36,
+          alignItems: 'center',
+        }}>
+          <View style={{
+            width: 40,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: colors.surface,
+            marginBottom: 20,
+          }} />
 
-          <Text style={styles.title}>Entrar em uma turma</Text>
-          <View style={styles.accentLine} />
-          <Text style={styles.subtitle}>
+          <Text style={{
+            fontFamily: fonts.black,
+            fontSize: 22,
+            color: colors.text,
+            letterSpacing: -0.3,
+            textAlign: 'center',
+            marginBottom: 6,
+          }}>Entrar em uma turma</Text>
+          <Text style={{
+            fontFamily: fonts.medium,
+            fontSize: 13,
+            color: colors.textMute,
+            textAlign: 'center',
+            marginBottom: 22,
+          }}>
             Peça o código de 8 caracteres ao seu professor
           </Text>
 
           <TextInput
-            style={[styles.codeInput, isComplete && styles.codeInputComplete]}
             value={code}
             onChangeText={handleChangeText}
             autoCapitalize="characters"
             autoCorrect={false}
             maxLength={CODE_LENGTH}
             placeholder="XXXXXXXX"
-            placeholderTextColor="#C8A84B"
-            keyboardType="default"
+            placeholderTextColor={colors.textDim}
             returnKeyType="done"
             onSubmitEditing={() => { if (isComplete) handleJoin(); }}
             autoFocus
+            style={{
+              width: '100%',
+              height: 64,
+              backgroundColor: colors.bgSunk,
+              borderWidth: 2,
+              borderColor: isComplete ? colors.gold : colors.hairline,
+              borderRadius: radii.md,
+              textAlign: 'center',
+              fontSize: 26,
+              fontFamily: fonts.black,
+              letterSpacing: 10,
+              color: colors.gold,
+              paddingHorizontal: 16,
+            }}
           />
 
-          <View style={styles.dotsRow}>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, marginBottom: 22 }}>
             {Array.from({ length: CODE_LENGTH }).map((_, i) => (
               <View
                 key={i}
-                style={[styles.dot, i < code.length ? styles.dotFilled : styles.dotEmpty]}
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: i < code.length ? colors.gold : colors.surface,
+                }}
               />
             ))}
           </View>
 
-          <TouchableOpacity
-            style={[styles.button, !isComplete && styles.buttonDim, loading && styles.buttonLoading]}
+          <Press3DButton
             onPress={handleJoin}
             disabled={loading || !isComplete}
-            activeOpacity={0.82}
+            size="md"
+            color="gold"
           >
-            <Text style={styles.buttonText}>
-              {loading ? 'Entrando…' : 'Entrar na turma'}
-            </Text>
-          </TouchableOpacity>
+            {loading ? 'Entrando…' : 'Entrar na turma'}
+          </Press3DButton>
 
-          <TouchableOpacity style={styles.cancelButton} onPress={onDismiss} activeOpacity={0.7}>
-            <Text style={styles.cancelText}>Cancelar</Text>
-          </TouchableOpacity>
+          <View style={{ marginTop: 12, width: '100%' }}>
+            <GhostButton onPress={onDismiss}>Cancelar</GhostButton>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  sheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 32,
-    paddingTop: 16,
-    paddingBottom: 40,
-    alignItems: 'center',
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#E5E7EB',
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#111827',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    letterSpacing: -0.3,
-    textAlign: 'center',
-  },
-  accentLine: {
-    width: 32,
-    height: 3,
-    backgroundColor: '#F59E0B',
-    borderRadius: 2,
-    marginTop: 6,
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  codeInput: {
-    width: '100%',
-    height: 64,
-    backgroundColor: '#FFFBEB',
-    borderWidth: 2,
-    borderColor: '#FCD34D',
-    borderRadius: 14,
-    textAlign: 'center',
-    fontSize: 26,
-    fontWeight: '700',
-    letterSpacing: 10,
-    color: '#92400E',
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    paddingHorizontal: 16,
-  },
-  codeInputComplete: {
-    borderColor: '#F59E0B',
-    backgroundColor: '#FEF3C7',
-  },
-  dotsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-    marginBottom: 28,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  dotFilled: { backgroundColor: '#F59E0B' },
-  dotEmpty: { backgroundColor: '#E5E7EB' },
-  button: {
-    width: '100%',
-    height: 52,
-    backgroundColor: '#4F46E5',
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
-    marginBottom: 12,
-  },
-  buttonDim: { opacity: 0.45, shadowOpacity: 0, elevation: 0 },
-  buttonLoading: { opacity: 0.65 },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  cancelButton: {
-    paddingVertical: 10,
-  },
-  cancelText: {
-    fontSize: 15,
-    color: '#9CA3AF',
-  },
-});

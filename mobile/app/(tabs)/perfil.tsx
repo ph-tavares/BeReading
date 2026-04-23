@@ -3,16 +3,22 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
-  StyleSheet,
-  Platform,
   RefreshControl,
+  Pressable,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BookOpen, Trophy, Award } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
 import { ClassroomGateModal } from '../../src/components/ClassroomGateModal';
+import { BadgeGrid } from '../../src/components/BadgeGrid';
+import { PagesChart } from '../../src/components/PagesChart';
+import { Card } from '../../src/components/Card';
+import { Press3DButton } from '../../src/components/Press3DButton';
+import { SectionLabel } from '../../src/components/SectionLabel';
+import { LottieSlot } from '../../src/components/LottieSlot';
+import { Flame } from 'lucide-react-native';
 import {
   getStreak,
   getStudentBadges,
@@ -20,12 +26,12 @@ import {
   getStudentBooks,
   getReadingSessions,
 } from '../../src/api/queries';
-import { BadgeGrid } from '../../src/components/BadgeGrid';
-import { PagesChart } from '../../src/components/PagesChart';
 import { supabase } from '../../src/lib/supabase';
+import { colors, fonts, radii } from '../../src/theme/tokens';
 import type { Streak, Badge, StudentBadge, StudentBook, ReadingSession } from '../../src/types/database';
 
 export default function PerfilScreen() {
+  const insets = useSafeAreaInsets();
   const { profile, clear } = useAuthStore();
   const [streak, setStreak] = useState<Streak | null>(null);
   const [studentBadges, setStudentBadges] = useState<(StudentBadge & { badge: Badge })[]>([]);
@@ -44,8 +50,8 @@ export default function PerfilScreen() {
       (async () => {
         try {
           await loadData(profile.user_id, (fn) => { if (!cancelled) fn(); });
-        } catch (e: unknown) {
-          // Mantém estado vazio em caso de erro de rede no load inicial
+        } catch {
+          // mantém estado vazio em erro de rede
         } finally {
           if (!cancelled) setLoading(false);
         }
@@ -80,8 +86,8 @@ export default function PerfilScreen() {
     setRefreshing(true);
     try {
       await loadData(profile.user_id);
-    } catch (e: unknown) {
-      // Mantém dados atuais em caso de erro de rede
+    } catch {
+      // mantém dados atuais
     } finally {
       setRefreshing(false);
     }
@@ -93,262 +99,230 @@ export default function PerfilScreen() {
   }
 
   const totalPages = sessions.reduce((sum, s) => sum + s.pages_read, 0);
-  const booksFinished = studentBooks.filter(b => b.status === 'finished').length;
+  const booksFinished = studentBooks.filter((b) => b.status === 'finished').length;
+  const earnedCount = studentBadges.length;
+  const totalSession = sessions.reduce((s, v) => s + v.pages_read, 0);
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#4F46E5" />
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={colors.green} />
       </View>
     );
   }
 
-  return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header índigo */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.headerName}>{profile?.display_name}</Text>
-          <Text style={styles.headerSub}>Leitor BeReading</Text>
-        </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.8}>
-          <Text style={styles.logoutText}>Sair</Text>
-        </TouchableOpacity>
-      </View>
+  const initial = profile?.display_name?.charAt(0).toUpperCase() ?? '?';
 
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={{
+          paddingTop: insets.top + 8,
+          paddingBottom: 120,
+        }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#4F46E5" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.green} />
         }
       >
-        {/* Stats */}
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statEmoji}>🔥</Text>
-            <Text style={styles.statValue}>{streak?.current_streak ?? 0}</Text>
-            <Text style={styles.statLabel}>dias streak</Text>
-            {(streak?.longest_streak ?? 0) > 0 && (
-              <Text style={styles.statSub}>máx {streak?.longest_streak}</Text>
-            )}
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statEmoji}>📄</Text>
-            <Text style={styles.statValue}>{totalPages}</Text>
-            <Text style={styles.statLabel}>páginas lidas</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statEmoji}>📚</Text>
-            <Text style={styles.statValue}>{booksFinished}</Text>
-            <Text style={styles.statLabel}>finalizados</Text>
-          </View>
-        </View>
-
-        {/* Gráfico de leitura */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Últimos 14 dias</Text>
-          <PagesChart sessions={sessions} />
-        </View>
-
-        {/* Conquistas */}
-        <View style={styles.card}>
-          <View style={styles.cardTitleRow}>
-            <Text style={styles.cardTitle}>Conquistas</Text>
-            <View style={styles.badgeCount}>
-              <Text style={styles.badgeCountText}>
-                {studentBadges.length}/{allBadges.length}
-              </Text>
+        {/* Header com avatar + stats */}
+        <View style={{ paddingHorizontal: 20, paddingBottom: 24 }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 14,
+            marginBottom: 18,
+          }}>
+            <View style={{
+              width: 64,
+              height: 64,
+              borderRadius: 22,
+              backgroundColor: colors.purple,
+              borderBottomWidth: 6,
+              borderBottomColor: colors.purpleDeep,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Text style={{
+                fontFamily: fonts.black,
+                fontSize: 26,
+                color: '#fff',
+              }}>{initial}</Text>
             </View>
+            <View style={{ flex: 1 }}>
+              <Text numberOfLines={1} style={{
+                fontFamily: fonts.black,
+                fontSize: 22,
+                color: colors.text,
+                letterSpacing: -0.3,
+              }}>{profile?.display_name ?? 'Leitor'}</Text>
+              <Text style={{
+                fontFamily: fonts.semi,
+                fontSize: 12,
+                color: colors.textMute,
+                marginTop: 2,
+              }}>Leitor BeReading</Text>
+            </View>
+            <Pressable
+              onPress={handleLogout}
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.hairline,
+              }}
+            >
+              <Text style={{
+                fontFamily: fonts.bold,
+                fontSize: 13,
+                color: colors.textSoft,
+              }}>Sair</Text>
+            </Pressable>
           </View>
-          {allBadges.length === 0 ? (
-            <Text style={styles.emptyBadges}>Nenhuma conquista disponível ainda</Text>
-          ) : (
-            <BadgeGrid allBadges={allBadges} earnedBadges={studentBadges} />
-          )}
+
+          {/* Streak banner */}
+          <Card style={{
+            padding: 14,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 14,
+          }}>
+            <LottieSlot
+              name="flame-streak"
+              size={48}
+              fallback={<Flame size={48} color={colors.flame} fill={colors.flame} strokeWidth={2} />}
+            />
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                <Text style={{
+                  fontFamily: fonts.black,
+                  fontSize: 32,
+                  color: colors.flame,
+                  letterSpacing: -1,
+                }}>{streak?.current_streak ?? 0}</Text>
+                <Text style={{
+                  fontFamily: fonts.bold,
+                  fontSize: 14,
+                  color: colors.text,
+                }}>dias em chama</Text>
+              </View>
+              {(streak?.longest_streak ?? 0) > 0 && (
+                <Text style={{
+                  fontFamily: fonts.semi,
+                  fontSize: 11,
+                  color: colors.textMute,
+                  marginTop: 2,
+                }}>recorde pessoal: {streak?.longest_streak} dias</Text>
+              )}
+            </View>
+          </Card>
         </View>
 
-        {!profile?.classroom_id && (
-          <TouchableOpacity
-            style={styles.classroomButton}
-            onPress={() => setShowGateModal(true)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.classroomButtonText}>Entrar em uma turma</Text>
-          </TouchableOpacity>
-        )}
+        <View style={{ paddingHorizontal: 20, gap: 20 }}>
+          {/* Heroic stats */}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <HeroicStat value={totalPages} label="páginas" Icon={BookOpen} color={colors.green} />
+            <HeroicStat value={booksFinished} label="livros" Icon={Trophy} color={colors.gold} />
+            <HeroicStat value={earnedCount} label="badges" Icon={Award} color={colors.purple} />
+          </View>
 
-        <ClassroomGateModal
-          visible={showGateModal}
-          onDismiss={() => setShowGateModal(false)}
-          onSuccess={() => setShowGateModal(false)}
-        />
+          {/* Reading chart */}
+          <Card style={{ padding: 16 }}>
+            <SectionLabel
+              right={
+                <Text style={{
+                  fontFamily: fonts.black,
+                  fontSize: 11,
+                  color: colors.green,
+                }}>{totalSession} pág.</Text>
+              }
+            >
+              Últimos 14 dias
+            </SectionLabel>
+            <PagesChart sessions={sessions} />
+          </Card>
+
+          {/* Badges */}
+          <Card style={{ padding: 16 }}>
+            <SectionLabel
+              right={
+                <Text style={{
+                  fontFamily: fonts.black,
+                  fontSize: 11,
+                  color: colors.textMute,
+                }}>{earnedCount}/{allBadges.length}</Text>
+              }
+            >
+              Conquistas
+            </SectionLabel>
+            {allBadges.length === 0 ? (
+              <Text style={{
+                fontFamily: fonts.medium,
+                fontSize: 13,
+                color: colors.textMute,
+                textAlign: 'center',
+                paddingVertical: 12,
+              }}>Nenhuma conquista disponível ainda</Text>
+            ) : (
+              <BadgeGrid allBadges={allBadges} earnedBadges={studentBadges} />
+            )}
+          </Card>
+
+          {!profile?.classroom_id && (
+            <Press3DButton onPress={() => setShowGateModal(true)} color="gold">
+              Entrar em uma turma
+            </Press3DButton>
+          )}
+
+          <ClassroomGateModal
+            visible={showGateModal}
+            onDismiss={() => setShowGateModal(false)}
+            onSuccess={() => setShowGateModal(false)}
+          />
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#4F46E5',
-  },
-  centered: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Header
-  header: {
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerLeft: {
-    gap: 2,
-  },
-  headerName: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    letterSpacing: -0.3,
-  },
-  headerSub: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.55)',
-    fontWeight: '500',
-  },
-  logoutButton: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  logoutText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.85)',
-  },
-
-  // Scroll body
-  scroll: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    marginTop: -2,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-    gap: 16,
-  },
-
-  // Stats
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    gap: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  statEmoji: {
-    fontSize: 20,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#4F46E5',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    letterSpacing: -0.5,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#9CA3AF',
-    textAlign: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  statSub: {
-    fontSize: 10,
-    color: '#C4B5FD',
-    fontWeight: '500',
-  },
-
-  // Cards
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 1,
-    gap: 14,
-  },
-  cardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  cardTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#374151',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  badgeCount: {
-    backgroundColor: '#EEF2FF',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  badgeCountText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#4F46E5',
-  },
-  emptyBadges: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    paddingVertical: 12,
-  },
-  classroomButton: {
-    width: '100%',
-    height: 48,
-    backgroundColor: '#F59E0B',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  classroomButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-});
+function HeroicStat({
+  value,
+  label,
+  Icon,
+  color,
+}: {
+  value: number;
+  label: string;
+  Icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>;
+  color: string;
+}) {
+  return (
+    <View style={{
+      flex: 1,
+      paddingVertical: 14,
+      paddingHorizontal: 8,
+      backgroundColor: colors.bgRaise,
+      borderRadius: radii.md,
+      borderWidth: 1,
+      borderColor: colors.hairline,
+      alignItems: 'center',
+      gap: 4,
+    }}>
+      <Icon size={18} color={color} strokeWidth={2.2} />
+      <Text style={{
+        fontFamily: fonts.black,
+        fontSize: 22,
+        color: colors.text,
+        letterSpacing: -0.5,
+      }}>{value}</Text>
+      <Text style={{
+        fontFamily: fonts.bold,
+        fontSize: 10,
+        color: colors.textMute,
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
+      }}>{label}</Text>
+    </View>
+  );
+}

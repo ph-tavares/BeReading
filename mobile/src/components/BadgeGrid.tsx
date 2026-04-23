@@ -1,4 +1,7 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from 'react-native';
+import { BookOpen, Flame, Trophy, PenLine, MessageSquare, Target, Lock } from 'lucide-react-native';
+import type { ComponentType } from 'react';
+import { colors, fonts, radii } from '../theme/tokens';
 import type { Badge, StudentBadge } from '../types/database';
 
 interface Props {
@@ -6,84 +9,64 @@ interface Props {
   earnedBadges: (StudentBadge & { badge: Badge })[];
 }
 
-const CRITERIA_EMOJI: Record<string, string> = {
-  pages_read: '📖',
-  streak_days: '🔥',
-  books_finished: '🏆',
-  quizzes_completed: '✍️',
-  answers_submitted: '💬',
+const ICON_MAP: Record<string, ComponentType<{ size: number; color: string; strokeWidth?: number }>> = {
+  pages_read: BookOpen,
+  streak_days: Flame,
+  books_finished: Trophy,
+  quizzes_completed: PenLine,
+  answers_submitted: MessageSquare,
 };
 
-function getBadgeEmoji(criteriaType: string): string {
-  return CRITERIA_EMOJI[criteriaType] ?? '🎯';
+function iconFor(criteriaType: string): ComponentType<{ size: number; color: string; strokeWidth?: number }> {
+  return ICON_MAP[criteriaType] ?? Target;
 }
 
 export function BadgeGrid({ allBadges, earnedBadges }: Props) {
-  const earnedIds = new Set(earnedBadges.map(sb => sb.badge_id));
+  const earnedIds = new Set(earnedBadges.map((sb) => sb.badge_id));
 
   return (
-    <View style={styles.grid}>
-      {allBadges.map(badge => {
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      {allBadges.map((badge) => {
         const earned = earnedIds.has(badge.id);
+        const Icon = earned ? iconFor(badge.criteria_type) : Lock;
         return (
           <View
             key={badge.id}
-            style={[styles.cell, earned ? styles.cellEarned : styles.cellLocked]}
+            style={{
+              width: '31.5%',
+              padding: 12,
+              borderRadius: radii.md,
+              backgroundColor: earned ? 'rgba(250,204,21,0.08)' : colors.bgSunk,
+              borderWidth: 1,
+              borderStyle: earned ? 'solid' : 'dashed',
+              borderColor: earned ? 'rgba(250,204,21,0.33)' : colors.hairline,
+              alignItems: 'center',
+              gap: 6,
+              opacity: earned ? 1 : 0.5,
+            }}
           >
-            <Text style={styles.emoji}>
-              {earned ? getBadgeEmoji(badge.criteria_type) : '🔒'}
-            </Text>
-            <Text
-              style={[styles.name, earned ? styles.nameEarned : styles.nameLocked]}
-              numberOfLines={2}
-            >
-              {badge.name}
-            </Text>
+            <View style={{
+              width: 36,
+              height: 36,
+              borderRadius: 12,
+              backgroundColor: earned ? colors.gold : colors.surface,
+              borderBottomWidth: earned ? 3 : 0,
+              borderBottomColor: colors.goldDeep,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Icon size={16} color={earned ? '#fff' : colors.textMute} strokeWidth={2.2} />
+            </View>
+            <Text numberOfLines={2} style={{
+              fontFamily: fonts.bold,
+              fontSize: 9.5,
+              color: earned ? colors.text : colors.textMute,
+              textAlign: 'center',
+              lineHeight: 11,
+            }}>{badge.name}</Text>
           </View>
         );
       })}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  cell: {
-    width: '30%',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    gap: 6,
-  },
-  cellEarned: {
-    backgroundColor: '#EEF2FF',
-    borderWidth: 1,
-    borderColor: '#C7D2FE',
-  },
-  cellLocked: {
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  emoji: {
-    fontSize: 24,
-  },
-  name: {
-    fontSize: 10,
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 14,
-    letterSpacing: 0.2,
-  },
-  nameEarned: {
-    color: '#4338CA',
-  },
-  nameLocked: {
-    color: '#D1D5DB',
-  },
-});
