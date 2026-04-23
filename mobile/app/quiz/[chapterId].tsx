@@ -399,7 +399,7 @@ export default function QuizScreen() {
               backgroundColor: colors.bgRaise,
               borderRadius: radii.lg,
               borderWidth: 1,
-              borderColor: `${currentResult!.score >= 85 ? colors.green : colors.gold}44`,
+              borderColor: `${(currentResult?.score ?? 0) >= 85 ? colors.green : colors.gold}44`,
               flexDirection: 'row',
               alignItems: 'center',
               gap: 16,
@@ -408,10 +408,10 @@ export default function QuizScreen() {
                 <Text style={{
                   fontFamily: fonts.black,
                   fontSize: 56,
-                  color: currentResult!.score >= 85 ? colors.green : colors.gold,
+                  color: (currentResult?.score ?? 0) >= 85 ? colors.green : colors.gold,
                   lineHeight: 56,
                   letterSpacing: -2,
-                }}>{currentResult!.score}</Text>
+                }}>{(currentResult?.score ?? 0)}</Text>
                 <Text style={{
                   fontFamily: fonts.bold,
                   fontSize: 18,
@@ -422,14 +422,14 @@ export default function QuizScreen() {
                 <Text style={{
                   fontFamily: fonts.black,
                   fontSize: 11,
-                  color: currentResult!.score >= 85 ? colors.green : colors.gold,
+                  color: (currentResult?.score ?? 0) >= 85 ? colors.green : colors.gold,
                   letterSpacing: 1.5,
                   textTransform: 'uppercase',
                   marginBottom: 4,
                 }}>
-                  {currentResult!.score >= 90 ? 'PERFEITO' : currentResult!.score >= 85 ? 'EXCELENTE' : currentResult!.score >= 70 ? 'MUITO BOM' : 'SEGUE ASSIM'}
+                  {(currentResult?.score ?? 0) >= 90 ? 'PERFEITO' : (currentResult?.score ?? 0) >= 85 ? 'EXCELENTE' : (currentResult?.score ?? 0) >= 70 ? 'MUITO BOM' : 'SEGUE ASSIM'}
                 </Text>
-                <XPPill xp={Math.round(currentResult!.score / 5)} />
+                <XPPill xp={Math.round((currentResult?.score ?? 0) / 5)} />
               </View>
             </View>
 
