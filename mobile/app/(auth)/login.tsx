@@ -2,22 +2,28 @@ import { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  StyleSheet,
   ScrollView,
+  Image,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Compass, Lock, ArrowRight, Plus } from 'lucide-react-native';
 import { supabase } from '../../src/lib/supabase';
+import { BrandHeader } from '../../src/components/BrandHeader';
+import { AuthField } from '../../src/components/AuthField';
+import { Press3DButton } from '../../src/components/Press3DButton';
+import { GhostButton } from '../../src/components/GhostButton';
+import { colors, fonts } from '../../src/theme/tokens';
 
 export default function LoginScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   async function handleLogin() {
     if (!email.trim() || !password) {
@@ -35,206 +41,109 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom + 280,
+        }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Marca */}
-        <View style={styles.brandArea}>
-          <View style={styles.logoMark}>
-            <Text style={styles.logoLetter}>B</Text>
-          </View>
-          <Text style={styles.brandName}>BeReading</Text>
-          <View style={styles.accentLine} />
-          <Text style={styles.tagline}>Sua jornada de leitura começa aqui</Text>
+        <View style={{ padding: 24, paddingTop: 24 }}>
+          <BrandHeader />
         </View>
 
-        {/* Formulário */}
-        <View style={styles.form}>
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={[styles.input, focusedField === 'email' && styles.inputFocused]}
-              placeholder="seu@email.com"
-              placeholderTextColor="#9CA3AF"
-              value={email}
-              onChangeText={setEmail}
-              onFocus={() => setFocusedField('email')}
-              onBlur={() => setFocusedField(null)}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoComplete="email"
-              returnKeyType="next"
-            />
-          </View>
+        <View style={{ paddingHorizontal: 24, paddingTop: 14 }}>
+          <Text style={{
+            fontFamily: fonts.black,
+            fontSize: 28,
+            color: colors.text,
+            letterSpacing: -0.5,
+            textAlign: 'center',
+            marginBottom: 6,
+          }}>Bem-vindo de volta!</Text>
+          <Text style={{
+            fontFamily: fonts.semi,
+            fontSize: 13.5,
+            color: colors.textMute,
+            textAlign: 'center',
+            marginBottom: 26,
+          }}>A saga continua de onde você parou.</Text>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Senha</Text>
-            <TextInput
-              style={[styles.input, focusedField === 'password' && styles.inputFocused]}
-              placeholder="••••••••"
-              placeholderTextColor="#9CA3AF"
-              value={password}
-              onChangeText={setPassword}
-              onFocus={() => setFocusedField('password')}
-              onBlur={() => setFocusedField(null)}
-              secureTextEntry
-              autoComplete="password"
-              returnKeyType="done"
-              onSubmitEditing={handleLogin}
-            />
-          </View>
+          <AuthField
+            label="E-mail"
+            Icon={Compass}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="seu@email.com"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+            returnKeyType="next"
+          />
+          <AuthField
+            label="Senha"
+            Icon={Lock}
+            value={password}
+            onChangeText={setPassword}
+            placeholder="••••••••"
+            secureTextEntry
+            autoComplete="password"
+            returnKeyType="done"
+            onSubmitEditing={handleLogin}
+          />
 
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
-            activeOpacity={0.82}
-          >
-            <Text style={styles.buttonText}>
+          <View style={{ marginTop: 8 }}>
+            <Press3DButton
+              onPress={handleLogin}
+              disabled={loading || !email.trim() || !password}
+              Icon={ArrowRight}
+              size="lg"
+            >
               {loading ? 'Entrando…' : 'Entrar'}
-            </Text>
-          </TouchableOpacity>
+            </Press3DButton>
+          </View>
 
-          <Link href="/(auth)/signup" asChild>
-            <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.7}>
-              <Text style={styles.secondaryText}>
-                Não tem conta?{' '}
-                <Text style={styles.secondaryLink}>Criar conta</Text>
-              </Text>
-            </TouchableOpacity>
-          </Link>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            marginVertical: 20,
+          }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: colors.hairline }} />
+            <Text style={{
+              fontFamily: fonts.bold,
+              fontSize: 10.5,
+              color: colors.textMute,
+              letterSpacing: 1.2,
+            }}>OU</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: colors.hairline }} />
+          </View>
+
+          <GhostButton onPress={() => router.push('/(auth)/signup')} Icon={Plus}>
+            Criar conta nova
+          </GhostButton>
         </View>
       </ScrollView>
+
+      {/* Mascote — bottom-left */}
+      <View pointerEvents="none" style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        width: 260,
+        height: 260,
+      }}>
+        <Image
+          source={require('../../assets/images/mascot1.png')}
+          style={{ width: '100%', height: '100%' }}
+          resizeMode="contain"
+        />
+      </View>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 48,
-  },
-  brandArea: {
-    alignItems: 'flex-start',
-    marginBottom: 48,
-  },
-  logoMark: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: '#4F46E5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  logoLetter: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    lineHeight: 34,
-  },
-  brandName: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: '#111827',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    letterSpacing: -0.5,
-  },
-  accentLine: {
-    width: 48,
-    height: 3,
-    backgroundColor: '#F59E0B',
-    borderRadius: 2,
-    marginTop: 6,
-    marginBottom: 12,
-  },
-  tagline: {
-    fontSize: 15,
-    color: '#6B7280',
-    lineHeight: 22,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
-  },
-  form: {
-    gap: 16,
-  },
-  fieldGroup: {
-    gap: 6,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  input: {
-    height: 52,
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#F9FAFB',
-  },
-  inputFocused: {
-    borderColor: '#4F46E5',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  button: {
-    height: 56,
-    backgroundColor: '#4F46E5',
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  buttonDisabled: {
-    opacity: 0.65,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  secondaryAction: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  secondaryText: {
-    fontSize: 15,
-    color: '#6B7280',
-  },
-  secondaryLink: {
-    color: '#4F46E5',
-    fontWeight: '600',
-  },
-});

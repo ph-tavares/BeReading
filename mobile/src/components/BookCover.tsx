@@ -1,4 +1,4 @@
-import { View, Text, Image, type ViewStyle } from 'react-native';
+import { View, Text, Image, type ViewStyle, type ImageStyle, type StyleProp } from 'react-native';
 import { Sword, Star, Compass, Target, Crown, Zap } from 'lucide-react-native';
 import { fonts } from '../theme/tokens';
 import { coverFromId, type Emblem } from '../theme/bookCover';
@@ -20,7 +20,7 @@ const EMBLEM_ICON: Record<Emblem, any> = {
 interface Props {
   book: Book;
   size?: Size;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   glow?: boolean;
 }
 
@@ -28,11 +28,12 @@ export function BookCover({ book, size = 'md', style, glow = false }: Props) {
   const d = DIMS[size];
 
   if (book.cover_url) {
+    const imgStyle: StyleProp<ImageStyle> = { width: d.w, height: d.h, borderRadius: d.radius };
     return (
       <Image
         testID="book-cover-image"
         source={{ uri: book.cover_url }}
-        style={[{ width: d.w, height: d.h, borderRadius: d.radius }, style]}
+        style={[imgStyle, style as StyleProp<ImageStyle>]}
         resizeMode="cover"
       />
     );

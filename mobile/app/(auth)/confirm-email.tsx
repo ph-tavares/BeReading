@@ -1,62 +1,84 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   Alert,
-  StyleSheet,
-  Platform,
+  Animated,
+  Easing,
+  Pressable,
+  ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ArrowLeft, Mail, Info, CheckCircle, RefreshCw } from 'lucide-react-native';
 import { supabase } from '../../src/lib/supabase';
 import { usePendingAuthStore } from '../../src/stores/pendingAuthStore';
+import { Press3DButton } from '../../src/components/Press3DButton';
+import { GhostButton } from '../../src/components/GhostButton';
+import { colors, fonts, radii } from '../../src/theme/tokens';
 
 export default function ConfirmEmailScreen() {
+  const insets = useSafeAreaInsets();
   const { email } = useLocalSearchParams<{ email?: string }>();
   const router = useRouter();
   const [checking, setChecking] = useState(false);
   const [resending, setResending] = useState(false);
   const { pendingPassword, clearPendingPassword } = usePendingAuthStore();
 
+  // Animação ping do envelope (2 camadas defasadas)
+  const ping1 = useRef(new Animated.Value(0)).current;
+  const ping2 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const make = (v: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(v, {
+            toValue: 1,
+            duration: 2000,
+            easing: Easing.bezier(0, 0, 0.2, 1),
+            useNativeDriver: true,
+          }),
+          Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
+        ]),
+      );
+    const a = make(ping1, 0);
+    const b = make(ping2, 400);
+    a.start();
+    b.start();
+    return () => {
+      a.stop();
+      b.stop();
+    };
+  }, [ping1, ping2]);
+
   async function handleAlreadyConfirmed() {
     setChecking(true);
 
-    // Caminho primário: senha disponível → login automático
     if (email && pendingPassword) {
       clearPendingPassword();
       const { error } = await supabase.auth.signInWithPassword({ email, password: pendingPassword });
       setChecking(false);
 
-      if (!error) {
-        // onAuthStateChange em _layout.tsx detecta a sessão e navega para home
-        return;
-      }
+      if (!error) return;
 
       if (error.message.toLowerCase().includes('email not confirmed')) {
         Alert.alert('Email ainda não confirmado', 'Verifique sua caixa de entrada e tente novamente.');
         return;
       }
-
       Alert.alert('Erro ao fazer login', error.message);
       return;
     }
 
-    // Fallback: sem senha (app reiniciado ou navegação direta para esta tela)
     const { data, error } = await supabase.auth.refreshSession();
     setChecking(false);
 
-    // Sessão válida e email confirmado → onAuthStateChange navega automaticamente
-    if (!error && data?.session?.user.email_confirmed_at) {
-      return;
-    }
-
-    // Token revogado: Supabase invalida a sessão ao confirmar email pelo browser
+    if (!error && data?.session?.user.email_confirmed_at) return;
     if (error || !data?.session) {
       router.replace('/(auth)/login');
       return;
     }
-
-    // Sessão válida mas email ainda não confirmado
     Alert.alert('Email ainda não confirmado', 'Verifique sua caixa de entrada e tente novamente.');
   }
 
@@ -75,153 +97,141 @@ export default function ConfirmEmailScreen() {
     }
   }
 
+  const ringStyle = (v: Animated.Value) => ({
+    position: 'absolute' as const,
+    inset: 0 as any,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 36,
+    backgroundColor: colors.sky,
+    transform: [{
+      scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 1.9] }),
+    }],
+    opacity: v.interpolate({ inputRange: [0, 0.8, 1], outputRange: [0.55, 0, 0] }),
+  });
+
   return (
-    <View style={styles.container}>
-      <View style={styles.inner}>
-        {/* Ícone decorativo */}
-        <View style={styles.iconWrap}>
-          <View style={styles.iconOuter}>
-            <Text style={styles.iconText}>✉</Text>
-          </View>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <ScrollView
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom + 30,
+          paddingHorizontal: 24,
+        }}
+      >
+        <View style={{ paddingVertical: 20 }}>
+          <Pressable
+            onPress={() => router.back()}
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 12,
+              backgroundColor: colors.bgRaise,
+              borderWidth: 1,
+              borderColor: colors.hairline,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <ArrowLeft size={16} color={colors.text} strokeWidth={2.2} />
+          </Pressable>
         </View>
 
-        {/* Cabeçalho */}
-        <Text style={styles.title}>Confirme seu email</Text>
-        <View style={styles.accentLine} />
-        <Text style={styles.subtitle}>
-          Enviamos um link de confirmação para{'\n'}
-          <Text style={styles.emailText}>{email ?? 'seu email'}</Text>
-          {'\n'}Clique no link para ativar sua conta.
-        </Text>
+        <View style={{ flex: 1, alignItems: 'stretch', paddingTop: 20 }}>
+          {/* Envelope with ping */}
+          <View style={{ alignItems: 'center', marginBottom: 28 }}>
+            <View style={{ width: 130, height: 130 }}>
+              <Animated.View style={ringStyle(ping1)} />
+              <Animated.View style={ringStyle(ping2)} />
+              <View style={{
+                width: 130,
+                height: 130,
+                borderRadius: 36,
+                backgroundColor: colors.sky,
+                borderBottomWidth: 4,
+                borderBottomColor: colors.skyDeep,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <Mail size={58} color="#fff" strokeWidth={2} />
+              </View>
+            </View>
+          </View>
 
-        {/* Ação principal */}
-        <TouchableOpacity
-          style={[styles.button, checking && styles.buttonDisabled]}
-          onPress={handleAlreadyConfirmed}
-          disabled={checking}
-          activeOpacity={0.82}
-        >
-          <Text style={styles.buttonText}>
-            {checking ? 'Verificando…' : 'Já confirmei meu email'}
+          <Text style={{
+            fontFamily: fonts.black,
+            fontSize: 24,
+            color: colors.text,
+            letterSpacing: -0.5,
+            textAlign: 'center',
+            marginBottom: 10,
+            lineHeight: 29,
+          }}>Confirme seu e-mail</Text>
+
+          <Text style={{
+            fontFamily: fonts.medium,
+            fontSize: 14,
+            color: colors.textSoft,
+            lineHeight: 21,
+            textAlign: 'center',
+            marginBottom: 18,
+          }}>
+            Enviamos um link mágico pro seu e-mail.{'\n'}
+            Abre e clica pra ativar sua conta.
           </Text>
-        </TouchableOpacity>
 
-        {/* Ação secundária */}
-        <TouchableOpacity
-          style={styles.secondaryAction}
-          onPress={handleResend}
-          disabled={resending}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.secondaryText}>
-            {resending ? 'Reenviando…' : 'Reenviar email de confirmação'}
-          </Text>
-        </TouchableOpacity>
+          {email && (
+            <Text style={{
+              fontFamily: fonts.bold,
+              fontSize: 13,
+              color: colors.text,
+              textAlign: 'center',
+              marginBottom: 18,
+            }}>{email}</Text>
+          )}
 
-        {/* Voltar */}
-        <TouchableOpacity
-          style={styles.secondaryAction}
-          onPress={() => router.replace('/(auth)/login')}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.secondaryText, styles.linkText]}>Voltar para o login</Text>
-        </TouchableOpacity>
-      </View>
+          <View style={{
+            backgroundColor: colors.bgRaise,
+            borderWidth: 1,
+            borderColor: colors.hairline,
+            borderRadius: radii.md,
+            padding: 14,
+            marginBottom: 28,
+            flexDirection: 'row',
+            gap: 10,
+            alignItems: 'flex-start',
+          }}>
+            <Info size={16} color={colors.sky} strokeWidth={2} style={{ marginTop: 2 }} />
+            <Text style={{
+              fontFamily: fonts.medium,
+              fontSize: 12.5,
+              color: colors.textMute,
+              lineHeight: 18,
+              flex: 1,
+            }}>
+              Não chegou em alguns minutos? Dá uma olhada na caixa de <Text style={{ color: colors.text, fontFamily: fonts.bold }}>spam</Text> ou promoções.
+            </Text>
+          </View>
+
+          <View style={{ gap: 10 }}>
+            <Press3DButton
+              onPress={handleAlreadyConfirmed}
+              disabled={checking}
+              Icon={CheckCircle}
+              size="lg"
+              color="sky"
+            >
+              {checking ? 'Verificando…' : 'Já confirmei'}
+            </Press3DButton>
+            <GhostButton onPress={handleResend} Icon={RefreshCw}>
+              {resending ? 'Reenviando…' : 'Reenviar e-mail'}
+            </GhostButton>
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  inner: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 48,
-  },
-  iconWrap: {
-    marginBottom: 32,
-  },
-  iconOuter: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: '#EEF2FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  iconText: {
-    fontSize: 32,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#111827',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    letterSpacing: -0.5,
-    textAlign: 'center',
-  },
-  accentLine: {
-    width: 40,
-    height: 3,
-    backgroundColor: '#4F46E5',
-    borderRadius: 2,
-    marginTop: 8,
-    marginBottom: 14,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 40,
-  },
-  emailText: {
-    fontWeight: '600',
-    color: '#374151',
-  },
-  button: {
-    width: '100%',
-    height: 56,
-    backgroundColor: '#4F46E5',
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
-    marginBottom: 16,
-  },
-  buttonDisabled: {
-    opacity: 0.65,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  secondaryAction: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  secondaryText: {
-    fontSize: 15,
-    color: '#6B7280',
-  },
-  linkText: {
-    color: '#4F46E5',
-    fontWeight: '600',
-  },
-});
