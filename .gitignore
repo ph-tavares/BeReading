@@ -19,3 +19,6 @@ docs/*.txt
 
 # Git worktrees
 .worktrees/
+
+# Claude Design mockups (web JSX preview, referência local para UI refresh)
+BeReading-ui/
