@@ -8,7 +8,8 @@ import { colors, fonts } from '../theme/tokens';
 const BAR_H = 72;
 const NOTCH_W = 92;
 const NOTCH_D = 30;
-const FAB = 64;
+const FAB = 52;
+const FAB_TOP = 4;
 
 interface TabDef {
   name: string;
@@ -93,29 +94,14 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           </View>
         </View>
 
-        {/* Label "Registrar" */}
-        <Text
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            left: 0, right: 0,
-            textAlign: 'center',
-            top: BAR_H - 18,
-            color: colors.green,
-            fontFamily: fonts.black,
-            fontSize: 10.5,
-            letterSpacing: 0.3,
-          }}
-        >Registrar</Text>
-
-        {/* View de posicionamento: define exatamente onde o FAB vive (64×64) e
-          * delimita a hitbox. Sem este wrapper, o Pressable absoluto expande
-          * para a largura do pai. */}
+        {/* View de posicionamento: delimita a hitbox a exatamente 52×52.
+          * top=FAB_TOP mantém o FAB dentro dos bounds do container,
+          * evitando clipping do react-navigation. */}
         <View
           style={{
             position: 'absolute',
             left: cx - FAB / 2,
-            top: -FAB / 2 + 8,
+            top: FAB_TOP,
             width: FAB,
             height: FAB,
           }}
@@ -124,32 +110,40 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
             testID="fab-registrar"
             onPress={() => router.push('/register-reading')}
             style={({ pressed }) => ({
-              flex: 1,
+              width: FAB,
+              height: FAB,
               borderRadius: FAB / 2,
               backgroundColor: colors.green,
-              borderTopWidth: 4,
-              borderLeftWidth: 4,
-              borderRightWidth: 4,
-              borderBottomWidth: pressed ? 4 : 10,
-              borderTopColor: colors.bgSunk,
-              borderLeftColor: colors.bgSunk,
-              borderRightColor: colors.bgSunk,
+              borderBottomWidth: pressed ? 0 : 5,
               borderBottomColor: colors.greenDeep,
               shadowColor: colors.greenDeep,
-              shadowOffset: { width: 0, height: pressed ? 0 : 6 },
+              shadowOffset: { width: 0, height: pressed ? 0 : 5 },
               shadowOpacity: 1,
               shadowRadius: 0,
-              elevation: pressed ? 0 : 6,
+              elevation: pressed ? 0 : 5,
               transform: [{ translateY: pressed ? 5 : 0 }],
             })}
           >
-            {/* View plain sem pointerEvents: não consome toque (propaga ao Pressable
-              * pai) e garante centralização via flex independente de quirks do Pressable. */}
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <BookOpen size={28} color="#fff" strokeWidth={2.2} />
+              <BookOpen size={22} color="#fff" strokeWidth={2.2} />
             </View>
           </Pressable>
         </View>
+
+        {/* Label "Registrar" — abaixo do círculo FAB (y = FAB_TOP + FAB + 2 = 58) */}
+        <Text
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: 0, right: 0,
+            textAlign: 'center',
+            top: FAB_TOP + FAB + 2,
+            color: colors.green,
+            fontFamily: fonts.black,
+            fontSize: 9.5,
+            letterSpacing: 0.3,
+          }}
+        >Registrar</Text>
       </View>
 
       {/* Safe area fill */}
