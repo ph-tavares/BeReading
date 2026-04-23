@@ -70,16 +70,8 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     );
   };
 
-  // pointerEvents="box-none": o container em si não captura toques — apenas os
-  // Pressable filhos capturam as suas próprias áreas. Isso faz com que a área
-  // transparente (onde o FAB protrude acima da barra) não bloqueie a tela de
-  // conteúdo. A altura é BAR_H + 28 (o que o framework de navegação espera).
-  // O fundo transparente + tabBarStyle no layout remove o branco padrão do framework.
   return (
-    <View
-      style={{ backgroundColor: 'transparent' }}
-      pointerEvents="box-none"
-    >
+    <View style={{ backgroundColor: 'transparent' }}>
       <View style={{ position: 'relative', height: BAR_H }}>
         <Svg width={W} height={BAR_H} style={{ position: 'absolute', top: 0, left: 0 }}>
           <Path d={barPath} fill={colors.bgSunk} stroke={colors.hairline} strokeWidth={1} />
@@ -116,51 +108,48 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           }}
         >Registrar</Text>
 
-        {/* FAB central.
-          * top: -FAB/2+8 faz o círculo protudir visualmente acima da barra.
-          * O container pai tem pointerEvents="box-none", portanto apenas o
-          * próprio Pressable captura toques — não o espaço transparente ao redor.
-          * O ícone fica em View absolutamente posicionada para garantir
-          * centralização independente do comportamento do Pressable em cada RN. */}
-        <Pressable
-          testID="fab-registrar"
-          onPress={() => router.push('/register-reading')}
-          style={({ pressed }) => ({
+        {/* View de posicionamento: define exatamente onde o FAB vive (64×64) e
+          * delimita a hitbox. Sem este wrapper, o Pressable absoluto expande
+          * para a largura do pai. */}
+        <View
+          style={{
             position: 'absolute',
             left: cx - FAB / 2,
             top: -FAB / 2 + 8,
             width: FAB,
             height: FAB,
-            borderRadius: FAB / 2,
-            backgroundColor: colors.green,
-            borderTopWidth: 4,
-            borderLeftWidth: 4,
-            borderRightWidth: 4,
-            borderBottomWidth: pressed ? 4 : 10,
-            borderTopColor: colors.bgSunk,
-            borderLeftColor: colors.bgSunk,
-            borderRightColor: colors.bgSunk,
-            borderBottomColor: colors.greenDeep,
-            shadowColor: colors.greenDeep,
-            shadowOffset: { width: 0, height: pressed ? 0 : 6 },
-            shadowOpacity: 1,
-            shadowRadius: 0,
-            elevation: pressed ? 0 : 6,
-            transform: [{ translateY: pressed ? 5 : 0 }],
-          })}
+          }}
         >
-          <View
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              top: 0, left: 0, right: 0, bottom: 0,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+          <Pressable
+            testID="fab-registrar"
+            onPress={() => router.push('/register-reading')}
+            style={({ pressed }) => ({
+              flex: 1,
+              borderRadius: FAB / 2,
+              backgroundColor: colors.green,
+              borderTopWidth: 4,
+              borderLeftWidth: 4,
+              borderRightWidth: 4,
+              borderBottomWidth: pressed ? 4 : 10,
+              borderTopColor: colors.bgSunk,
+              borderLeftColor: colors.bgSunk,
+              borderRightColor: colors.bgSunk,
+              borderBottomColor: colors.greenDeep,
+              shadowColor: colors.greenDeep,
+              shadowOffset: { width: 0, height: pressed ? 0 : 6 },
+              shadowOpacity: 1,
+              shadowRadius: 0,
+              elevation: pressed ? 0 : 6,
+              transform: [{ translateY: pressed ? 5 : 0 }],
+            })}
           >
-            <BookOpen size={28} color="#fff" strokeWidth={2.2} />
-          </View>
-        </Pressable>
+            {/* View plain sem pointerEvents: não consome toque (propaga ao Pressable
+              * pai) e garante centralização via flex independente de quirks do Pressable. */}
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <BookOpen size={28} color="#fff" strokeWidth={2.2} />
+            </View>
+          </Pressable>
+        </View>
       </View>
 
       {/* Safe area fill */}

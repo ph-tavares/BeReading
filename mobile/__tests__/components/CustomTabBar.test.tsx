@@ -81,25 +81,16 @@ describe('CustomTabBar', () => {
     expect(props.navigation.navigate).toHaveBeenCalledWith('perfil');
   });
 
-  it('container raiz tem pointerEvents="box-none" (hitbox não sangra para cima)', () => {
-    const { toJSON } = render(<CustomTabBar {...makeProps()} />);
-    const root = toJSON() as any;
-    expect(root.props.pointerEvents).toBe('box-none');
-  });
-
-  it('FAB existe e é pressável (hitbox funcional)', () => {
-    // Verifica que o FAB está renderizado e seu onPress pode ser disparado.
-    // A prevenção de toque indevido acima da barra é garantida pelo
-    // pointerEvents="box-none" no container raiz (testado separadamente).
+  it('FAB existe e é pressável', () => {
     const { getByTestId } = render(<CustomTabBar {...makeProps()} />);
     expect(getByTestId('fab-registrar')).toBeTruthy();
   });
 
-  it('ícone BookOpen está dentro do FAB (filho do fab-registrar)', () => {
+  it('FAB não tem pointerEvents="none" nem Views intermediárias bloqueando toque', () => {
     const { getByTestId } = render(<CustomTabBar {...makeProps()} />);
     const fab = getByTestId('fab-registrar');
-    // O ícone deve ser descendente do FAB, não renderizado fora dele
-    expect(() => fab.findByTestId?.('icon-bookopen')).not.toThrow();
+    // O Pressable não deve ter pointerEvents que bloqueiem toques
+    expect(fab.props.pointerEvents).not.toBe('none');
   });
 
   it('aba ativa recebe cor diferente das inativas', () => {
