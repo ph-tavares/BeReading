@@ -72,7 +72,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   };
 
   return (
-    <View style={{ backgroundColor: 'transparent' }}>
+    <View style={{ backgroundColor: colors.bg }}>
       <View style={{ position: 'relative', height: BAR_H }}>
         <Svg width={W} height={BAR_H} style={{ position: 'absolute', top: 0, left: 0 }}>
           <Path d={barPath} fill={colors.bgSunk} stroke={colors.hairline} strokeWidth={1} />
