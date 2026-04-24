@@ -9,7 +9,7 @@ const BAR_H = 72;
 const NOTCH_W = 92;
 const NOTCH_D = 30;
 const FAB = 52;
-const FAB_TOP = 4;
+const FAB_TOP = 0;
 
 interface TabDef {
   name: string;
