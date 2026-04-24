@@ -8,8 +8,8 @@ import { colors, fonts } from '../theme/tokens';
 const BAR_H = 72;
 const NOTCH_W = 92;
 const NOTCH_D = 30;
-const FAB = 52;
-const FAB_TOP = 0;
+const FAB = 62;
+const FAB_TOP = -12;
 
 interface TabDef {
   name: string;
@@ -133,20 +133,6 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           </Pressable>
         </View>
 
-        {/* Label "Registrar" — abaixo do círculo FAB (y = FAB_TOP + FAB + 2 = 58) */}
-        <Text
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            left: 0, right: 0,
-            textAlign: 'center',
-            top: FAB_TOP + FAB + 2,
-            color: colors.green,
-            fontFamily: fonts.black,
-            fontSize: 9.5,
-            letterSpacing: 0.3,
-          }}
-        >Registrar</Text>
       </View>
 
       {/* Safe area fill */}

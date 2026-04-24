@@ -56,11 +56,6 @@ describe('CustomTabBar', () => {
     expect(getByText('Perfil')).toBeTruthy();
   });
 
-  it('renderiza o label "Registrar" do FAB', () => {
-    const { getByText } = render(<CustomTabBar {...makeProps()} />);
-    expect(getByText('Registrar')).toBeTruthy();
-  });
-
   it('FAB navega para /register-reading ao pressionar', () => {
     const { getByTestId } = render(<CustomTabBar {...makeProps()} />);
     fireEvent.press(getByTestId('fab-registrar'));
