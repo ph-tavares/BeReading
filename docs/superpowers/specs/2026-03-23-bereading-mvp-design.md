@@ -38,7 +38,13 @@ O menor conjunto de funcionalidades que valida a hipotese para um piloto com a e
 
 | Componente | Tecnologia |
 |---|---|
-| App Mobile (aluno) | React Native + Expo |
+| App Mobile (aluno) | React Native 0.81 + Expo SDK 54 + Expo Router 6 + TypeScript |
+| Styling (mobile) | NativeWind v4 (Tailwind 3) + tokens centralizados em `src/theme/tokens.ts` |
+| Tipografia | Plus Jakarta Sans via `@expo-google-fonts/plus-jakarta-sans` |
+| Animações | `lottie-react-native` (victory states) + `react-native-reanimated` (press interactions) |
+| Glow / Sombra 3D | `react-native-shadow-2` — halo colorido cross-platform (Android `elevation` é monocromático) |
+| Haptics | `expo-haptics` — feedback tátil em ações primárias |
+| Ícones | `lucide-react-native` |
 | Dashboard Web (professor) | Next.js (React) |
 | Backend | Supabase (Auth + PostgreSQL + Storage + Edge Functions) |
 | IA | Claude API ou OpenAI API (via Edge Functions) |
