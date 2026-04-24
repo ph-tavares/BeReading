@@ -94,9 +94,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           </View>
         </View>
 
-        {/* View de posicionamento: delimita a hitbox a exatamente 52×52.
-          * top=FAB_TOP mantém o FAB dentro dos bounds do container,
-          * evitando clipping do react-navigation. */}
+        {/* Hitbox wrapper: delimita a área de toque a 52×52px. */}
         <View
           style={{
             position: 'absolute',
@@ -106,23 +104,28 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
             height: FAB,
           }}
         >
+          {/* Círculo verde — View puro garante que backgroundColor
+            * é pintado independente de como o renderer trata o Pressable. */}
+          <View
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              borderRadius: FAB / 2,
+              backgroundColor: colors.green,
+              borderBottomWidth: 5,
+              borderBottomColor: colors.greenDeep,
+              shadowColor: colors.greenDeep,
+              shadowOffset: { width: 0, height: 5 },
+              shadowOpacity: 1,
+              shadowRadius: 0,
+              elevation: 5,
+            }}
+          />
+          {/* Pressable transparente: captura toques e centraliza ícone. */}
           <Pressable
             testID="fab-registrar"
             onPress={() => router.push('/register-reading')}
-            style={({ pressed }) => ({
-              width: FAB,
-              height: FAB,
-              borderRadius: FAB / 2,
-              backgroundColor: colors.green,
-              borderBottomWidth: pressed ? 0 : 5,
-              borderBottomColor: colors.greenDeep,
-              shadowColor: colors.greenDeep,
-              shadowOffset: { width: 0, height: pressed ? 0 : 5 },
-              shadowOpacity: 1,
-              shadowRadius: 0,
-              elevation: pressed ? 0 : 5,
-              transform: [{ translateY: pressed ? 5 : 0 }],
-            })}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
           >
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
               <BookOpen size={22} color="#fff" strokeWidth={2.2} />
