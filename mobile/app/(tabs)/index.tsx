@@ -3,26 +3,29 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
-  StyleSheet,
-  Platform,
+  Image,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Zap, Clock, Compass } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useReadingStore } from '../../src/stores/readingStore';
 import { getStudentBooks, getStreak } from '../../src/api/queries';
-import { StreakBadge } from '../../src/components/StreakBadge';
-import { BookCard } from '../../src/components/BookCard';
+import { Card } from '../../src/components/Card';
+import { StreakPill } from '../../src/components/StreakPill';
+import { BookCover } from '../../src/components/BookCover';
+import { ProgressBar } from '../../src/components/ProgressBar';
+import { Press3DButton } from '../../src/components/Press3DButton';
+import { colors, fonts, radii } from '../../src/theme/tokens';
 import type { Streak, StudentBook, Book } from '../../src/types/database';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { profile } = useAuthStore();
   const { currentBook, setCurrentBook } = useReadingStore();
   const [streak, setStreak] = useState<Streak | null>(null);
-  const [studentBooks, setStudentBooks] = useState<(StudentBook & { book: Book })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,7 +39,6 @@ export default function HomeScreen() {
         .then(([s, books]) => {
           if (cancelled) return;
           setStreak(s);
-          setStudentBooks(books);
           const raw = books.find((b) => b.status === 'reading') ?? books[0] ?? null;
           if (raw) {
             const { book, ...sb } = raw;
@@ -48,7 +50,6 @@ export default function HomeScreen() {
         .catch(() => {
           if (cancelled) return;
           setError('Não foi possível carregar seus dados. Puxe para atualizar.');
-          setStudentBooks([]);
           setStreak(null);
           setCurrentBook(null);
         })
@@ -58,227 +59,247 @@ export default function HomeScreen() {
     }, [profile, setCurrentBook]),
   );
 
-  // Deriva currentEntry do store — fonte única de verdade
   const currentEntry = currentBook
     ? ({ ...currentBook.studentBook, book: currentBook.book } as StudentBook & { book: Book })
     : undefined;
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#4F46E5" />
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={colors.green} />
       </View>
     );
   }
 
-  return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header índigo */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.greeting}>Olá,</Text>
-            <Text style={styles.name}>{profile?.display_name ?? 'Leitor'} 👋</Text>
-          </View>
-          {streak && streak.current_streak > 0 && (
-            <StreakBadge streak={streak.current_streak} dark />
-          )}
-        </View>
-      </View>
+  const progress =
+    currentEntry && currentEntry.book.total_pages > 0
+      ? currentEntry.current_page / currentEntry.book.total_pages
+      : 0;
 
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={{
+          paddingTop: insets.top + 8,
+          paddingBottom: 120,
+        }}
         showsVerticalScrollIndicator={false}
       >
-        {error && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
+        {/* Header saudação + streak */}
+        <View style={{
+          paddingHorizontal: 20,
+          paddingBottom: 18,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
+          <View>
+            <Text style={{ fontFamily: fonts.semi, fontSize: 13, color: colors.textMute }}>
+              Salve,
+            </Text>
+            <Text style={{
+              fontFamily: fonts.black,
+              fontSize: 26,
+              color: colors.text,
+              letterSpacing: -0.4,
+            }}>{profile?.display_name ?? 'Leitor'} ✦</Text>
           </View>
-        )}
-
-        {/* Livro atual */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Lendo agora</Text>
-
-          {currentEntry ? (
-            <BookCard studentBook={currentEntry} book={currentEntry.book} />
-          ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyEmoji}>📚</Text>
-              <Text style={styles.emptyTitle}>Nenhum livro ainda</Text>
-              <Text style={styles.emptySubtitle}>
-                Visite o Catálogo e adicione um livro para começar
-              </Text>
-              <TouchableOpacity
-                style={styles.catalogButton}
-                onPress={() => router.push('/(tabs)/catalogo')}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.catalogButtonText}>Ver Catálogo</Text>
-              </TouchableOpacity>
-            </View>
+          {streak && streak.current_streak > 0 && (
+            <StreakPill count={streak.current_streak} size="lg" />
           )}
         </View>
 
-        {/* CTA principal */}
-        {currentEntry && (
-          <TouchableOpacity
-            style={styles.ctaButton}
-            onPress={() => router.push('/register-reading')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.ctaEmoji}>📖</Text>
-            <Text style={styles.ctaText}>Registrar Leitura</Text>
-          </TouchableOpacity>
-        )}
+        <View style={{ paddingHorizontal: 20, gap: 16 }}>
+          {error && (
+            <View style={{
+              backgroundColor: 'rgba(244,63,94,0.1)',
+              borderWidth: 1,
+              borderColor: 'rgba(244,63,94,0.3)',
+              borderRadius: radii.md,
+              padding: 12,
+            }}>
+              <Text style={{
+                fontFamily: fonts.medium,
+                fontSize: 13,
+                color: colors.rose,
+                textAlign: 'center',
+              }}>{error}</Text>
+            </View>
+          )}
+
+          {/* Hype-Man card */}
+          <Card style={{ padding: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <View style={{
+                width: 64,
+                height: 64,
+                borderRadius: 18,
+                backgroundColor: 'rgba(250,204,21,0.1)',
+                borderWidth: 1,
+                borderColor: colors.hairline,
+                overflow: 'hidden',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <Image
+                  source={require('../../assets/images/mascot.png')}
+                  style={{ width: '110%', height: '110%' }}
+                  resizeMode="contain"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{
+                  fontFamily: fonts.black,
+                  fontSize: 10.5,
+                  letterSpacing: 1.5,
+                  color: colors.gold,
+                  textTransform: 'uppercase',
+                }}>Do dia</Text>
+                <Text style={{
+                  fontFamily: fonts.semi,
+                  fontSize: 13.5,
+                  color: colors.text,
+                  lineHeight: 19,
+                  marginTop: 3,
+                }}>
+                  "Quem lê atravessa mundos sem sair do sofá. Bora pra próxima página?"
+                </Text>
+              </View>
+            </View>
+          </Card>
+
+          {/* Current book hero ou empty */}
+          {currentEntry ? (
+            <Card onPress={() => router.push(`/book/${currentEntry.book.id}`)} style={{ padding: 18 }}>
+              <View style={{ flexDirection: 'row', gap: 14 }}>
+                <BookCover book={currentEntry.book} size="md" glow />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{
+                    fontFamily: fonts.black,
+                    fontSize: 10.5,
+                    letterSpacing: 1.5,
+                    color: colors.green,
+                    textTransform: 'uppercase',
+                  }}>Lendo agora</Text>
+                  <Text numberOfLines={2} style={{
+                    fontFamily: fonts.black,
+                    fontSize: 18,
+                    color: colors.text,
+                    marginTop: 4,
+                    letterSpacing: -0.2,
+                    lineHeight: 21,
+                  }}>{currentEntry.book.title}</Text>
+                  <Text numberOfLines={1} style={{
+                    fontFamily: fonts.medium,
+                    fontSize: 12,
+                    color: colors.textMute,
+                    marginTop: 2,
+                  }}>{currentEntry.book.author}</Text>
+                  <View style={{ marginTop: 14 }}>
+                    <View style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      marginBottom: 6,
+                    }}>
+                      <Text style={{
+                        fontFamily: fonts.semi,
+                        fontSize: 11,
+                        color: colors.textMute,
+                      }}>
+                        pág. {currentEntry.current_page}/{currentEntry.book.total_pages}
+                      </Text>
+                      <Text style={{
+                        fontFamily: fonts.black,
+                        fontSize: 14,
+                        color: colors.green,
+                      }}>{Math.round(progress * 100)}%</Text>
+                    </View>
+                    <ProgressBar progress={progress} height={10} />
+                  </View>
+                </View>
+              </View>
+            </Card>
+          ) : (
+            <Card style={{ padding: 28, alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 36 }}>📚</Text>
+              <Text style={{
+                fontFamily: fonts.black,
+                fontSize: 16,
+                color: colors.text,
+              }}>Nenhum livro ainda</Text>
+              <Text style={{
+                fontFamily: fonts.medium,
+                fontSize: 13,
+                color: colors.textMute,
+                textAlign: 'center',
+              }}>
+                Visite o Catálogo e adicione um livro para começar
+              </Text>
+              <View style={{ marginTop: 8, width: '70%' }}>
+                <Press3DButton onPress={() => router.push('/(tabs)/catalogo')} Icon={Compass}>
+                  Ver Catálogo
+                </Press3DButton>
+              </View>
+            </Card>
+          )}
+
+          {/* Mini stats */}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <MiniStat Icon={Zap} iconColor={colors.purple} value="+0" label="XP hoje" tint={colors.purple} />
+            <MiniStat Icon={Clock} iconColor={colors.sky} value="0min" label="Tempo lendo" tint={colors.sky} />
+          </View>
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#4F46E5',
-  },
-  centered: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Header índigo
-  header: {
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 20,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  greeting: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.65)',
-    letterSpacing: 0.3,
-  },
-  name: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    letterSpacing: -0.3,
-    marginTop: 2,
-  },
-
-  // Scroll body
-  scroll: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    marginTop: -2,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-    gap: 8,
-  },
-
-  // Error
-  errorBox: {
-    backgroundColor: '#FEE2E2',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 4,
-  },
-  errorText: {
-    fontSize: 13,
-    color: '#991B1B',
-    textAlign: 'center',
-  },
-
-  // Section
-  section: {
-    gap: 12,
-    marginBottom: 8,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#9CA3AF',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-
-  // Empty state
-  emptyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 28,
-    alignItems: 'center',
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  emptyEmoji: {
-    fontSize: 36,
-    marginBottom: 4,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#374151',
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    lineHeight: 19,
-  },
-  catalogButton: {
-    marginTop: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 10,
-  },
-  catalogButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#4F46E5',
-  },
-
-  // CTA
-  ctaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#4F46E5',
-    borderRadius: 16,
-    height: 56,
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
-    marginTop: 4,
-  },
-  ctaEmoji: {
-    fontSize: 18,
-  },
-  ctaText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.2,
-  },
-});
+function MiniStat({
+  Icon,
+  iconColor,
+  value,
+  label,
+  tint,
+}: {
+  Icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>;
+  iconColor: string;
+  value: string;
+  label: string;
+  tint: string;
+}) {
+  return (
+    <View style={{
+      flex: 1,
+      padding: 12,
+      backgroundColor: colors.bgRaise,
+      borderRadius: radii.md,
+      borderWidth: 1,
+      borderColor: colors.hairline,
+    }}>
+      <View style={{
+        width: 28,
+        height: 28,
+        borderRadius: 10,
+        backgroundColor: `${tint}22`,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 8,
+      }}>
+        <Icon size={15} color={iconColor} strokeWidth={2.4} />
+      </View>
+      <Text style={{
+        fontFamily: fonts.black,
+        fontSize: 17,
+        color: colors.text,
+        letterSpacing: -0.3,
+      }}>{value}</Text>
+      <Text style={{
+        fontFamily: fonts.semi,
+        fontSize: 10,
+        color: colors.textMute,
+        letterSpacing: 0.3,
+        marginTop: 1,
+      }}>{label}</Text>
+    </View>
+  );
+}

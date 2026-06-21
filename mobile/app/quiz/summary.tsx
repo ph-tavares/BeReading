@@ -1,189 +1,178 @@
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Medal } from 'lucide-react-native';
 import { getScoreConfig } from '../../src/utils/quizUtils';
+import { Press3DButton } from '../../src/components/Press3DButton';
+import { XPPill } from '../../src/components/XPPill';
+import { Card } from '../../src/components/Card';
+import { LottieSlot } from '../../src/components/LottieSlot';
+import { colors, fonts, radii } from '../../src/theme/tokens';
+
+const R = 68;
+const CIRCUM = 2 * Math.PI * R;
 
 export default function QuizSummaryScreen() {
   const { avgScore, total } = useLocalSearchParams<{ avgScore: string; total: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
-  const score = parseInt(avgScore ?? '0', 10);
+  const avg = parseInt(avgScore ?? '0', 10);
   const totalN = parseInt(total ?? '1', 10);
-  const config = getScoreConfig(score);
+  const config = getScoreConfig(avg);
+  const totalXP = Math.round((avg / 5) * totalN);
+  const isExcellent = avg >= 85;
+  const ringColor = isExcellent ? colors.green : colors.gold;
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        {/* Score principal */}
-        <View style={styles.scoreCard}>
-          <Text style={styles.emoji}>{config.emoji}</Text>
-          <Text style={[styles.scoreNumber, { color: config.color }]}>{score}</Text>
-          <Text style={styles.scoreMax}>pontos / 100</Text>
-          <View style={[styles.labelPill, { backgroundColor: config.color + '1A' }]}>
-            <Text style={[styles.labelText, { color: config.color }]}>{config.label}</Text>
-          </View>
-        </View>
-
-        {/* Stats */}
-        <View style={styles.statsRow}>
-          <View style={styles.stat}>
-            <Text style={styles.statValue}>{totalN}</Text>
-            <Text style={styles.statLabel}>
-              {totalN === 1 ? 'pergunta' : 'perguntas'}
-            </Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.stat}>
-            <Text style={styles.statValue}>{score}</Text>
-            <Text style={styles.statLabel}>média</Text>
-          </View>
-        </View>
-
-        {/* Mensagem — estilo nota do professor */}
-        <View style={styles.messageCard}>
-          <View style={styles.messageAccent} />
-          <Text style={styles.messageText}>{config.message}</Text>
-        </View>
-
-        {/* CTA */}
-        <TouchableOpacity
-          style={styles.ctaButton}
-          onPress={() => router.replace('/')}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.ctaText}>Voltar ao início</Text>
-        </TouchableOpacity>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: 40,
+          left: 0,
+          right: 0,
+          alignItems: 'center',
+        }}
+      >
+        <LottieSlot name="confetti" size={280} loop={false} autoplay={false} fallback={null} />
       </View>
-    </SafeAreaView>
+
+      <View style={{
+        paddingTop: insets.top + 40,
+        paddingHorizontal: 22,
+        paddingBottom: 20,
+        alignItems: 'center',
+      }}>
+        <Text style={{
+          fontFamily: fonts.black,
+          fontSize: 10.5,
+          letterSpacing: 2.5,
+          color: colors.textMute,
+          marginBottom: 14,
+        }}>QUEST COMPLETA</Text>
+
+        <View style={{ width: 168, height: 168, marginBottom: 20 }}>
+          <Svg width={168} height={168} viewBox="0 0 168 168" rotation={-90} originX={84} originY={84}>
+            <Circle cx={84} cy={84} r={R} fill="none" stroke={colors.surface} strokeWidth={10} />
+            <Circle
+              cx={84}
+              cy={84}
+              r={R}
+              fill="none"
+              stroke={ringColor}
+              strokeWidth={10}
+              strokeLinecap="round"
+              strokeDasharray={`${(CIRCUM * avg) / 100} ${CIRCUM}`}
+            />
+          </Svg>
+          <View style={{
+            position: 'absolute',
+            left: 0, right: 0, top: 0, bottom: 0,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <Text style={{
+              fontFamily: fonts.black,
+              fontSize: 56,
+              color: colors.text,
+              lineHeight: 56,
+              letterSpacing: -2,
+            }}>{avg}</Text>
+            <Text style={{
+              fontFamily: fonts.bold,
+              fontSize: 11,
+              color: colors.textMute,
+              letterSpacing: 1.5,
+              marginTop: 4,
+            }}>/100 MÉDIA</Text>
+          </View>
+        </View>
+
+        <Text style={{
+          fontFamily: fonts.black,
+          fontSize: 24,
+          color: colors.text,
+          letterSpacing: -0.4,
+          marginBottom: 8,
+        }}>{config.label}</Text>
+        <Text style={{
+          fontFamily: fonts.medium,
+          fontSize: 13.5,
+          color: colors.textSoft,
+          lineHeight: 20,
+          textAlign: 'center',
+          maxWidth: 280,
+          marginBottom: 18,
+        }}>{totalN} de {totalN} respondidas. Sua compreensão subiu.</Text>
+
+        <XPPill xp={totalXP} />
+      </View>
+
+      <View style={{ paddingHorizontal: 22, paddingBottom: insets.bottom + 30, gap: 16 }}>
+        {/* Badge unlocked (quando avg >= 85) */}
+        {isExcellent && (
+          <Card glow style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <View style={{
+              width: 50,
+              height: 50,
+              borderRadius: 16,
+              backgroundColor: colors.gold,
+              borderBottomWidth: 4,
+              borderBottomColor: colors.goldDeep,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Medal size={26} color="#fff" strokeWidth={2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{
+                fontFamily: fonts.black,
+                fontSize: 10.5,
+                letterSpacing: 1.5,
+                color: colors.gold,
+                textTransform: 'uppercase',
+                marginBottom: 2,
+              }}>Quest vencida</Text>
+              <Text style={{
+                fontFamily: fonts.black,
+                fontSize: 15,
+                color: colors.text,
+              }}>Capítulo dominado</Text>
+            </View>
+          </Card>
+        )}
+
+        {/* Mensagem estilo "feedback do mestre" */}
+        <View style={{
+          backgroundColor: colors.bgRaise,
+          borderRadius: radii.md,
+          padding: 16,
+          borderLeftWidth: 3,
+          borderLeftColor: colors.purple,
+        }}>
+          <Text style={{
+            fontFamily: fonts.black,
+            fontSize: 10.5,
+            letterSpacing: 1.5,
+            color: colors.purple,
+            textTransform: 'uppercase',
+            marginBottom: 6,
+          }}>Feedback do mestre</Text>
+          <Text style={{
+            fontFamily: fonts.medium,
+            fontSize: 14,
+            color: colors.textSoft,
+            lineHeight: 21,
+          }}>{config.message}</Text>
+        </View>
+
+        <Press3DButton onPress={() => router.replace('/')} size="lg">
+          Continuar a saga
+        </Press3DButton>
+      </View>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 28,
-    gap: 20,
-  },
-
-  // Score card
-  scoreCard: {
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
-  },
-  emoji: {
-    fontSize: 52,
-    marginBottom: 8,
-  },
-  scoreNumber: {
-    fontSize: 72,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    lineHeight: 76,
-    letterSpacing: -2,
-  },
-  scoreMax: {
-    fontSize: 15,
-    color: '#9CA3AF',
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  labelPill: {
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    marginTop: 10,
-  },
-  labelText: {
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-
-  // Stats
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 16,
-    padding: 16,
-    alignSelf: 'stretch',
-    justifyContent: 'space-around',
-  },
-  stat: {
-    alignItems: 'center',
-    gap: 2,
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  statDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: '#E5E7EB',
-  },
-
-  // Mensagem
-  messageCard: {
-    backgroundColor: '#FFFBEB',
-    borderRadius: 14,
-    padding: 18,
-    paddingLeft: 22,
-    alignSelf: 'stretch',
-  },
-  messageAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-    backgroundColor: '#F59E0B',
-    borderTopLeftRadius: 14,
-    borderBottomLeftRadius: 14,
-  },
-  messageText: {
-    fontSize: 15,
-    color: '#374151',
-    lineHeight: 24,
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    fontStyle: 'italic',
-  },
-
-  // CTA
-  ctaButton: {
-    height: 56,
-    backgroundColor: '#4F46E5',
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'stretch',
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
-    marginTop: 4,
-  },
-  ctaText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-});

@@ -4,18 +4,21 @@ import {
   Text,
   Alert,
   ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
-  StyleSheet,
+  Pressable,
+  TextInput,
   Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { X, Target, Wand, Sparkles, ArrowRight, Trophy, CheckCheck } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
 import { getQuestionsForChapter, getChapterQuizStatus } from '../../src/api/queries';
 import { evaluateAnswer } from '../../src/api/edgeFunctions';
-import { QuizQuestion } from '../../src/components/QuizQuestion';
 import { calcAverageScore } from '../../src/utils/quizUtils';
+import { Press3DButton } from '../../src/components/Press3DButton';
+import { XPPill } from '../../src/components/XPPill';
+import { colors, fonts, radii } from '../../src/theme/tokens';
 import type { Question } from '../../src/types/database';
 import type { QuestionResult } from '../../src/utils/quizUtils';
 
@@ -27,6 +30,7 @@ const POLL_INTERVAL_MS = 4000;
 export default function QuizScreen() {
   const { chapterId } = useLocalSearchParams<{ chapterId: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { profile } = useAuthStore();
 
   const [screenState, setScreenState] = useState<ScreenState>('loading');
@@ -34,8 +38,9 @@ export default function QuizScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [results, setResults] = useState<Record<number, QuestionResult>>({});
   const [pollCount, setPollCount] = useState(0);
+  const [answer, setAnswer] = useState('');
+  const [evaluating, setEvaluating] = useState(false);
 
-  // Carga inicial: verifica status do quiz e carrega perguntas se disponíveis
   useEffect(() => {
     if (!chapterId) return;
     let cancelled = false;
@@ -53,10 +58,9 @@ export default function QuizScreen() {
         } else if (status?.status === 'failed') {
           setScreenState('failed');
         } else {
-          // pending ou null — inicia polling
           setScreenState('polling');
         }
-      } catch (e: unknown) {
+      } catch {
         if (!cancelled) setScreenState('failed');
       }
     }
@@ -65,7 +69,6 @@ export default function QuizScreen() {
     return () => { cancelled = true; };
   }, [chapterId]);
 
-  // Polling: aguarda IA gerar perguntas (max 10 tentativas × 4s = 40s)
   useEffect(() => {
     if (screenState !== 'polling') return;
     if (pollCount >= MAX_POLLS) {
@@ -90,8 +93,7 @@ export default function QuizScreen() {
         } else {
           setPollCount((c) => c + 1);
         }
-      } catch (e: unknown) {
-        // Erro de rede: incrementa contador e tenta novamente
+      } catch {
         if (!cancelled) setPollCount((c) => c + 1);
       }
     }, POLL_INTERVAL_MS);
@@ -102,21 +104,25 @@ export default function QuizScreen() {
     };
   }, [screenState, pollCount, chapterId]);
 
-  async function handleAnswer(answer: string): Promise<void> {
-    if (!profile) return;
+  async function handleSubmit() {
+    if (!profile || !answer.trim() || evaluating) return;
     const q = questions[currentIndex];
+    setEvaluating(true);
     try {
-      const result = await evaluateAnswer(q.id, profile.user_id, answer);
+      const result = await evaluateAnswer(q.id, profile.user_id, answer.trim());
       setResults((prev) => ({ ...prev, [currentIndex]: result }));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erro ao avaliar resposta';
       Alert.alert('Erro', msg);
+    } finally {
+      setEvaluating(false);
     }
   }
 
   function handleNext() {
     if (currentIndex < questions.length - 1) {
       setCurrentIndex((i) => i + 1);
+      setAnswer('');
     } else {
       const avg = calcAverageScore(Object.values(results));
       router.replace({
@@ -126,244 +132,340 @@ export default function QuizScreen() {
     }
   }
 
-  // --- Estados da tela ---
+  // States
 
   if (screenState === 'loading') {
     return (
-      <SafeAreaView style={styles.centeredScreen}>
-        <ActivityIndicator size="large" color="#4F46E5" />
-      </SafeAreaView>
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={colors.green} />
+      </View>
     );
   }
 
   if (screenState === 'polling') {
     return (
-      <SafeAreaView style={styles.pollingScreen}>
-        <View style={styles.pollingContent}>
-          <View style={styles.pollingIconWrap}>
-            <Text style={styles.pollingEmoji}>✨</Text>
+      <View style={{
+        flex: 1,
+        backgroundColor: colors.bg,
+        paddingTop: insets.top + 60,
+        paddingBottom: insets.bottom + 40,
+        paddingHorizontal: 32,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <View style={{ alignItems: 'center' }}>
+          <View style={{
+            width: 72,
+            height: 72,
+            borderRadius: 20,
+            backgroundColor: colors.purple,
+            borderBottomWidth: 4,
+            borderBottomColor: colors.purpleDeep,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 24,
+          }}>
+            <Sparkles size={32} color="#fff" strokeWidth={2.2} />
           </View>
-          <Text style={styles.pollingTitle}>Preparando seu quiz</Text>
-          <Text style={styles.pollingSubtitle}>
-            {'A IA está gerando perguntas\nsobre o capítulo que você leu'}
+          <Text style={{
+            fontFamily: fonts.black,
+            fontSize: 22,
+            color: colors.text,
+            marginBottom: 12,
+            textAlign: 'center',
+            letterSpacing: -0.3,
+          }}>Preparando seu quiz</Text>
+          <Text style={{
+            fontFamily: fonts.medium,
+            fontSize: 15,
+            color: colors.textSoft,
+            textAlign: 'center',
+            lineHeight: 22,
+          }}>
+            A IA está gerando perguntas{'\n'}sobre o capítulo que você leu
           </Text>
-          <ActivityIndicator color="#4F46E5" style={{ marginTop: 28 }} />
-          <Text style={styles.pollingHint}>
+          <ActivityIndicator color={colors.purple} style={{ marginTop: 28 }} />
+          <Text style={{
+            fontFamily: fonts.medium,
+            fontSize: 12,
+            color: colors.textMute,
+            marginTop: 12,
+          }}>
             {pollCount > 3 ? 'Quase lá…' : 'Isso pode levar alguns instantes…'}
           </Text>
         </View>
-        <TouchableOpacity style={styles.laterButton} onPress={() => router.back()} activeOpacity={0.7}>
-          <Text style={styles.laterText}>Responder depois</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
+        <Pressable onPress={() => router.back()} style={{ paddingVertical: 12, paddingHorizontal: 24 }}>
+          <Text style={{ fontFamily: fonts.medium, fontSize: 14, color: colors.textMute }}>
+            Responder depois
+          </Text>
+        </Pressable>
+      </View>
     );
   }
 
   if (screenState === 'failed' || questions.length === 0) {
     return (
-      <SafeAreaView style={styles.centeredScreen}>
-        <Text style={styles.failEmoji}>😔</Text>
-        <Text style={styles.failTitle}>Perguntas indisponíveis</Text>
-        <Text style={styles.failSubtitle}>
-          {'Tente novamente mais tarde —\nestamos preparando seu quiz.'}
+      <View style={{
+        flex: 1,
+        backgroundColor: colors.bg,
+        padding: 32,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <Text style={{ fontSize: 48, marginBottom: 16 }}>😔</Text>
+        <Text style={{
+          fontFamily: fonts.black,
+          fontSize: 20,
+          color: colors.text,
+          marginBottom: 8,
+          textAlign: 'center',
+        }}>Perguntas indisponíveis</Text>
+        <Text style={{
+          fontFamily: fonts.medium,
+          fontSize: 14,
+          color: colors.textMute,
+          textAlign: 'center',
+          lineHeight: 22,
+          marginBottom: 32,
+        }}>
+          Tente novamente mais tarde —{'\n'}estamos preparando seu quiz.
         </Text>
-        <TouchableOpacity style={styles.failButton} onPress={() => router.back()} activeOpacity={0.85}>
-          <Text style={styles.failButtonText}>Voltar</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
+        <View style={{ width: '70%' }}>
+          <Press3DButton onPress={() => router.back()}>Voltar</Press3DButton>
+        </View>
+      </View>
     );
   }
 
-  const currentQuestion = questions[currentIndex];
+  const q = questions[currentIndex];
   const currentResult = results[currentIndex] ?? null;
+  const submitted = currentResult != null;
   const isLast = currentIndex === questions.length - 1;
+  const totalQ = questions.length;
+  const isComprehension = q.type === 'comprehension';
+  const typeColor = isComprehension ? colors.sky : colors.purple;
+  const TypeIcon = isComprehension ? Target : Wand;
+  const typeLabel = isComprehension ? 'Compreensão' : 'Reflexão';
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={styles.exitWrap}>
-          <Text style={styles.exitLink}>← Sair</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Quiz do capítulo</Text>
-        <View style={styles.exitWrap} />
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      {/* Header com HP bar */}
+      <View style={{
+        paddingTop: insets.top + 10,
+        paddingHorizontal: 20,
+        paddingBottom: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.hairline,
+      }}>
+        <Pressable
+          onPress={() => router.back()}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 14,
+            backgroundColor: colors.bgRaise,
+            borderWidth: 1,
+            borderColor: colors.hairline,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <X size={18} color={colors.text} strokeWidth={2.2} />
+        </Pressable>
+        <View style={{ flex: 1, flexDirection: 'row', gap: 5, alignItems: 'center' }}>
+          {Array.from({ length: totalQ }).map((_, i) => (
+            <View
+              key={i}
+              style={{
+                flex: 1,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor:
+                  i < currentIndex ? colors.green : i === currentIndex ? colors.text : colors.surface,
+              }}
+            />
+          ))}
+        </View>
+        <Text style={{
+          fontFamily: fonts.black,
+          fontSize: 12,
+          color: colors.textMute,
+          minWidth: 30,
+          textAlign: 'right',
+        }}>{currentIndex + 1}/{totalQ}</Text>
       </View>
 
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 32 }}
+        contentContainerStyle={{ padding: 22, paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
       >
-        <QuizQuestion
-          key={currentIndex}
-          questionText={currentQuestion.question_text}
-          questionType={currentQuestion.type}
-          questionNumber={currentIndex + 1}
-          totalQuestions={questions.length}
-          onSubmit={handleAnswer}
-          score={currentResult?.score ?? null}
-          feedback={currentResult?.feedback ?? null}
-        />
+        {/* Type pill */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          alignSelf: 'flex-start',
+          paddingHorizontal: 12,
+          paddingVertical: 5,
+          borderRadius: 999,
+          backgroundColor: `${typeColor}22`,
+          borderWidth: 1.5,
+          borderColor: `${typeColor}55`,
+          marginBottom: 22,
+        }}>
+          <TypeIcon size={14} color={typeColor} strokeWidth={2.4} />
+          <Text style={{
+            fontFamily: fonts.black,
+            fontSize: 11,
+            color: typeColor,
+            letterSpacing: 1.2,
+            textTransform: 'uppercase',
+          }}>{typeLabel}</Text>
+        </View>
 
-        {/* Botão "Próxima" — aparece após o resultado chegar */}
-        {currentResult && (
-          <View style={styles.nextWrap}>
-            <TouchableOpacity style={styles.nextButton} onPress={handleNext} activeOpacity={0.85}>
-              <Text style={styles.nextButtonText}>
-                {isLast ? 'Ver resultado 🏆' : 'Próxima pergunta →'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        <Text style={{
+          fontFamily: fonts.black,
+          fontSize: 22,
+          color: colors.text,
+          lineHeight: 29,
+          letterSpacing: -0.3,
+          marginBottom: 28,
+        }}>{q.question_text}</Text>
+
+        {!submitted ? (
+          <>
+            <View style={{
+              padding: 16,
+              minHeight: 160,
+              backgroundColor: colors.bgRaise,
+              borderWidth: 1.5,
+              borderColor: colors.hairline,
+              borderRadius: radii.lg,
+              marginBottom: 20,
+            }}>
+              <TextInput
+                value={answer}
+                onChangeText={setAnswer}
+                placeholder="Escreve com suas palavras…"
+                placeholderTextColor={colors.textMute}
+                multiline
+                style={{
+                  minHeight: 128,
+                  color: colors.text,
+                  fontFamily: fonts.medium,
+                  fontSize: 15,
+                  lineHeight: 22,
+                  textAlignVertical: 'top',
+                }}
+              />
+            </View>
+            <Press3DButton
+              onPress={handleSubmit}
+              disabled={!answer.trim() || evaluating}
+              Icon={CheckCheck}
+              size="lg"
+              color="purple"
+            >
+              {evaluating ? 'Avaliando…' : 'Enviar resposta'}
+            </Press3DButton>
+          </>
+        ) : (
+          <>
+            {/* Sua resposta */}
+            <View style={{
+              padding: 14,
+              marginBottom: 18,
+              backgroundColor: colors.bgRaise,
+              borderRadius: radii.md,
+              borderLeftWidth: 3,
+              borderLeftColor: colors.textDim,
+            }}>
+              <Text style={{
+                fontFamily: fonts.medium,
+                fontSize: 13.5,
+                color: colors.textSoft,
+                fontStyle: 'italic',
+                lineHeight: 20,
+              }}>"{answer || q.question_text}"</Text>
+            </View>
+
+            {/* Score grande */}
+            <View style={{
+              padding: 20,
+              marginBottom: 16,
+              backgroundColor: colors.bgRaise,
+              borderRadius: radii.lg,
+              borderWidth: 1,
+              borderColor: `${(currentResult?.score ?? 0) >= 85 ? colors.green : colors.gold}44`,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 16,
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                <Text style={{
+                  fontFamily: fonts.black,
+                  fontSize: 56,
+                  color: (currentResult?.score ?? 0) >= 85 ? colors.green : colors.gold,
+                  lineHeight: 56,
+                  letterSpacing: -2,
+                }}>{(currentResult?.score ?? 0)}</Text>
+                <Text style={{
+                  fontFamily: fonts.bold,
+                  fontSize: 18,
+                  color: colors.textMute,
+                }}>/100</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{
+                  fontFamily: fonts.black,
+                  fontSize: 11,
+                  color: (currentResult?.score ?? 0) >= 85 ? colors.green : colors.gold,
+                  letterSpacing: 1.5,
+                  textTransform: 'uppercase',
+                  marginBottom: 4,
+                }}>
+                  {(currentResult?.score ?? 0) >= 90 ? 'PERFEITO' : (currentResult?.score ?? 0) >= 85 ? 'EXCELENTE' : (currentResult?.score ?? 0) >= 70 ? 'MUITO BOM' : 'SEGUE ASSIM'}
+                </Text>
+                <XPPill xp={Math.round((currentResult?.score ?? 0) / 5)} />
+              </View>
+            </View>
+
+            {/* Feedback */}
+            <View style={{
+              padding: 16,
+              marginBottom: 24,
+              backgroundColor: colors.bgRaise,
+              borderRadius: radii.md,
+              borderWidth: 1,
+              borderColor: colors.hairline,
+              borderLeftWidth: 3,
+              borderLeftColor: colors.purple,
+            }}>
+              <Text style={{
+                fontFamily: fonts.black,
+                fontSize: 10.5,
+                color: colors.purple,
+                letterSpacing: 1.5,
+                textTransform: 'uppercase',
+                marginBottom: 6,
+              }}>Feedback do mestre</Text>
+              <Text style={{
+                fontFamily: fonts.medium,
+                fontSize: 14,
+                color: colors.textSoft,
+                lineHeight: 21,
+              }}>{currentResult!.feedback}</Text>
+            </View>
+
+            <Press3DButton onPress={handleNext} Icon={isLast ? Trophy : ArrowRight} size="lg">
+              {isLast ? 'Ver recompensas' : 'Próxima'}
+            </Press3DButton>
+          </>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  centeredScreen: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  pollingScreen: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 32,
-    paddingTop: 80,
-    paddingBottom: 48,
-  },
-  pollingContent: {
-    alignItems: 'center',
-  },
-  pollingIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: '#EEF2FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  pollingEmoji: {
-    fontSize: 32,
-  },
-  pollingTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#111827',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    marginBottom: 12,
-    textAlign: 'center',
-    letterSpacing: -0.3,
-  },
-  pollingSubtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  pollingHint: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 12,
-  },
-  laterButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  laterText: {
-    fontSize: 14,
-    color: '#9CA3AF',
-  },
-
-  // Estado de falha
-  failEmoji: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  failTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  failSubtitle: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32,
-  },
-  failButton: {
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    backgroundColor: '#4F46E5',
-    borderRadius: 14,
-  },
-  failButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  // Header do quiz ativo
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  exitWrap: {
-    width: 52,
-  },
-  exitLink: {
-    fontSize: 15,
-    color: '#4F46E5',
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-    letterSpacing: 0.3,
-  },
-
-  // Botão próxima/resultado
-  nextWrap: {
-    paddingHorizontal: 28,
-    marginTop: 8,
-  },
-  nextButton: {
-    height: 56,
-    backgroundColor: '#4F46E5',
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  nextButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-});

@@ -1,29 +1,35 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   ScrollView,
-  TouchableOpacity,
   Alert,
   ActivityIndicator,
-  StyleSheet,
-  Platform,
+  Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Search, X, Plus, CheckCheck } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
 import { getBooks, addBookToReadingList, getStudentBooks } from '../../src/api/queries';
+import { BookCover } from '../../src/components/BookCover';
+import { Chip } from '../../src/components/Chip';
+import { SectionLabel } from '../../src/components/SectionLabel';
+import { CATEGORIES, categoryOf } from '../../src/theme/categories';
+import { coverFromId } from '../../src/theme/bookCover';
+import { colors, fonts, radii } from '../../src/theme/tokens';
 import type { Book } from '../../src/types/database';
 
 export default function CatalogoScreen() {
+  const insets = useSafeAreaInsets();
   const { profile } = useAuthStore();
   const [search, setSearch] = useState('');
+  const [cat, setCat] = useState<string>('all');
   const [books, setBooks] = useState<Book[]>([]);
   const [myBookIds, setMyBookIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [addingId, setAddingId] = useState<string | null>(null);
 
-  // Carga inicial: todos os livros + livros já na lista do aluno
   useEffect(() => {
     if (!profile) return;
     let cancelled = false;
@@ -37,8 +43,8 @@ export default function CatalogoScreen() {
         if (cancelled) return;
         setBooks(allBooks);
         setMyBookIds(new Set(myBooks.map((sb) => sb.book_id)));
-      } catch (e: unknown) {
-        // Lista vazia em caso de erro — usuário pode puxar para atualizar
+      } catch {
+        // lista vazia
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -48,16 +54,15 @@ export default function CatalogoScreen() {
     return () => { cancelled = true; };
   }, [profile]);
 
-  // Busca debounced — 300ms após o usuário parar de digitar
   useEffect(() => {
-    if (loading) return; // não dispara durante carga inicial
+    if (loading) return;
     let cancelled = false;
     const timer = setTimeout(async () => {
       try {
         const result = await getBooks(search || undefined);
         if (!cancelled) setBooks(result);
-      } catch (e: unknown) {
-        // Mantém lista atual em caso de erro de rede
+      } catch {
+        // mantém lista atual em caso de erro
       }
     }, 300);
     return () => { cancelled = true; clearTimeout(timer); };
@@ -69,7 +74,7 @@ export default function CatalogoScreen() {
     try {
       await addBookToReadingList(profile.user_id, book.id);
       setMyBookIds((prev) => new Set([...prev, book.id]));
-      Alert.alert('✅ Adicionado!', `"${book.title}" está na sua lista de leitura.`);
+      Alert.alert('Adicionado!', `"${book.title}" está na sua lista de leitura.`);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Tente novamente';
       Alert.alert('Erro', msg);
@@ -78,275 +83,204 @@ export default function CatalogoScreen() {
     }
   }
 
-  return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header índigo com campo de busca integrado */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Catálogo</Text>
-        <View style={styles.searchWrap}>
-          <Text style={styles.searchIcon}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Buscar por título…"
-            placeholderTextColor="rgba(255,255,255,0.45)"
-            value={search}
-            onChangeText={setSearch}
-            returnKeyType="search"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={styles.clearIcon}>✕</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+  const filtered = books.filter((b) => {
+    if (cat === 'all') return true;
+    const c = categoryOf(b.genre);
+    return c?.id === cat;
+  });
 
-      {loading ? (
-        <View style={styles.centeredBody}>
-          <ActivityIndicator size="large" color="#4F46E5" />
+  const selectedCat = CATEGORIES.find((c) => c.id === cat);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingTop: insets.top + 8,
+          paddingBottom: 120,
+        }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={{
+          paddingHorizontal: 20,
+          paddingBottom: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.hairline,
+        }}>
+          <Text style={{
+            fontFamily: fonts.black,
+            fontSize: 28,
+            color: colors.text,
+            letterSpacing: -0.5,
+          }}>Explorar</Text>
+          <Text style={{
+            fontFamily: fonts.semi,
+            fontSize: 13,
+            color: colors.textMute,
+            marginTop: 2,
+          }}>Encontre sua próxima aventura</Text>
+
+          {/* Search */}
+          <View style={{
+            marginTop: 18,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            paddingHorizontal: 16,
+            height: 52,
+            backgroundColor: colors.bgRaise,
+            borderRadius: radii.md,
+            borderWidth: 1,
+            borderColor: colors.hairline,
+          }}>
+            <Search size={18} color={colors.textMute} />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Busque por título ou autor…"
+              placeholderTextColor={colors.textMute}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={{
+                flex: 1,
+                color: colors.text,
+                fontFamily: fonts.medium,
+                fontSize: 14,
+              }}
+            />
+            {search.length > 0 && (
+              <Pressable
+                onPress={() => setSearch('')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={16} color={colors.textMute} />
+              </Pressable>
+            )}
+          </View>
         </View>
-      ) : (
+
+        {/* Categorias */}
         <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingVertical: 16,
+            gap: 8,
+          }}
         >
-          {books.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>🔍</Text>
-              <Text style={styles.emptyTitle}>Nenhum livro encontrado</Text>
+          <Chip active={cat === 'all'} onPress={() => setCat('all')} color={colors.text}>
+            Todos
+          </Chip>
+          {CATEGORIES.map((c) => (
+            <Chip
+              key={c.id}
+              active={cat === c.id}
+              onPress={() => setCat(c.id)}
+              color={c.color}
+              Icon={c.Icon}
+            >
+              {c.label}
+            </Chip>
+          ))}
+        </ScrollView>
+
+        <View style={{ paddingHorizontal: 20 }}>
+          <SectionLabel>
+            {cat === 'all' ? 'Todos os livros' : selectedCat?.label ?? 'Livros'}
+          </SectionLabel>
+
+          {loading ? (
+            <View style={{ paddingVertical: 60, alignItems: 'center' }}>
+              <ActivityIndicator size="large" color={colors.green} />
+            </View>
+          ) : filtered.length === 0 ? (
+            <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+              <Text style={{ fontSize: 40 }}>🔍</Text>
+              <Text style={{
+                fontFamily: fonts.bold,
+                fontSize: 15,
+                color: colors.textSoft,
+                marginTop: 12,
+              }}>Nenhum livro encontrado</Text>
               {search.length > 0 && (
-                <Text style={styles.emptySubtitle}>
-                  Tente outro termo de busca
-                </Text>
+                <Text style={{
+                  fontFamily: fonts.medium,
+                  fontSize: 13,
+                  color: colors.textMute,
+                  marginTop: 4,
+                }}>Tente outro termo de busca</Text>
               )}
             </View>
           ) : (
-            books.map((book) => {
-              const added = myBookIds.has(book.id);
-              const isAdding = addingId === book.id;
-              return (
-                <View key={book.id} style={styles.bookRow}>
-                  {/* Capa placeholder */}
-                  <View style={styles.coverPlaceholder}>
-                    <Text style={styles.coverEmoji}>📖</Text>
-                  </View>
-
-                  {/* Informações */}
-                  <View style={styles.bookInfo}>
-                    <Text style={styles.bookTitle} numberOfLines={2}>
-                      {book.title}
-                    </Text>
-                    <Text style={styles.bookAuthor} numberOfLines={1}>
-                      {book.author}
-                    </Text>
-                    {book.genre && (
-                      <View style={styles.genreTag}>
-                        <Text style={styles.genreText}>{book.genre}</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Ação */}
-                  {added ? (
-                    <View style={styles.addedBadge}>
-                      <Text style={styles.addedText}>✓</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+              {filtered.map((b) => {
+                const added = myBookIds.has(b.id);
+                const { color, deep } = coverFromId(b.id);
+                return (
+                  <View key={b.id} style={{ width: '47%', marginBottom: 10 }}>
+                    <View style={{ aspectRatio: 0.7, marginBottom: 10 }}>
+                      <BookCover
+                        book={b}
+                        size="md"
+                        style={{ width: '100%', height: '100%' }}
+                      />
                     </View>
-                  ) : (
-                    <TouchableOpacity
-                      style={[styles.addButton, isAdding && styles.addButtonLoading]}
-                      onPress={() => handleAdd(book)}
-                      disabled={!!addingId}
-                      activeOpacity={0.8}
+                    <Text numberOfLines={2} style={{
+                      fontFamily: fonts.black,
+                      fontSize: 13,
+                      color: colors.text,
+                      lineHeight: 16,
+                    }}>{b.title}</Text>
+                    <Text numberOfLines={1} style={{
+                      fontFamily: fonts.semi,
+                      fontSize: 11,
+                      color: colors.textMute,
+                      marginTop: 2,
+                    }}>{b.author}</Text>
+                    <Pressable
+                      onPress={() => handleAdd(b)}
+                      disabled={added || addingId === b.id}
+                      style={({ pressed }) => ({
+                        marginTop: 10,
+                        height: 38,
+                        borderRadius: 14,
+                        backgroundColor: added ? `${color}22` : color,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        gap: 6,
+                        borderBottomWidth: added ? 0 : 3,
+                        borderBottomColor: deep,
+                        opacity: pressed && !added ? 0.85 : 1,
+                      })}
                     >
-                      {isAdding ? (
-                        <ActivityIndicator size="small" color="#4F46E5" />
+                      {addingId === b.id ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : added ? (
+                        <>
+                          <CheckCheck size={13} color={color} strokeWidth={3} />
+                          <Text style={{ fontFamily: fonts.black, fontSize: 12, color }}>
+                            Na estante
+                          </Text>
+                        </>
                       ) : (
-                        <Text style={styles.addButtonText}>+ Ler</Text>
+                        <>
+                          <Plus size={14} color="#fff" strokeWidth={2.6} />
+                          <Text style={{ fontFamily: fonts.black, fontSize: 12, color: '#fff' }}>
+                            Começar
+                          </Text>
+                        </>
                       )}
-                    </TouchableOpacity>
-                  )}
-                </View>
-              );
-            })
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
           )}
-        </ScrollView>
-      )}
-    </SafeAreaView>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#4F46E5',
-  },
-  centeredBody: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Header
-  header: {
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 16,
-    gap: 12,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    letterSpacing: -0.3,
-  },
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 44,
-    gap: 8,
-  },
-  searchIcon: {
-    fontSize: 14,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#FFFFFF',
-  },
-  clearIcon: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
-    fontWeight: '700',
-  },
-
-  // Scroll body
-  scroll: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    marginTop: -2,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-
-  // Book row
-  bookRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 14,
-    marginBottom: 8,
-    borderRadius: 16,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  coverPlaceholder: {
-    width: 44,
-    height: 60,
-    borderRadius: 8,
-    backgroundColor: '#EEF2FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  coverEmoji: {
-    fontSize: 20,
-  },
-  bookInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  bookTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#111827',
-    lineHeight: 20,
-  },
-  bookAuthor: {
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
-  genreTag: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginTop: 2,
-  },
-  genreText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#92400E',
-    letterSpacing: 0.3,
-  },
-
-  // Add/added state
-  addedBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#ECFDF5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  addedText: {
-    fontSize: 14,
-    color: '#059669',
-    fontWeight: '700',
-  },
-  addButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 10,
-    flexShrink: 0,
-    minWidth: 60,
-    alignItems: 'center',
-  },
-  addButtonLoading: {
-    opacity: 0.6,
-  },
-  addButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#4F46E5',
-  },
-
-  // Empty state
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 60,
-    gap: 8,
-  },
-  emptyEmoji: {
-    fontSize: 40,
-  },
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: '#9CA3AF',
-  },
-});

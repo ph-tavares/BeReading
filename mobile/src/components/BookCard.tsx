@@ -1,6 +1,10 @@
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Card } from './Card';
+import { BookCover } from './BookCover';
 import { ProgressBar } from './ProgressBar';
+import { colors, fonts } from '../theme/tokens';
+import { coverFromId } from '../theme/bookCover';
 import type { StudentBook, Book } from '../types/database';
 
 interface Props {
@@ -12,107 +16,48 @@ export function BookCard({ studentBook, book }: Props) {
   const router = useRouter();
   const progress = book.total_pages > 0 ? studentBook.current_page / book.total_pages : 0;
   const pct = Math.round(progress * 100);
+  const { color, deep } = coverFromId(book.id);
 
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => router.push(`/book/${book.id}`)}
-      activeOpacity={0.85}
-    >
-      <View style={styles.row}>
-        {/* Capa */}
-        {book.cover_url ? (
-          <Image source={{ uri: book.cover_url }} style={styles.cover} resizeMode="cover" />
-        ) : (
-          <View style={styles.coverPlaceholder}>
-            <Text style={styles.coverEmoji}>📖</Text>
+    <Card onPress={() => router.push(`/book/${book.id}`)} style={{ padding: 14 }}>
+      <View style={{ flexDirection: 'row', gap: 14 }}>
+        <BookCover book={book} size="sm" />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={2} style={{
+            fontFamily: fonts.black,
+            fontSize: 15,
+            color: colors.text,
+            lineHeight: 18,
+            letterSpacing: -0.1,
+          }}>{book.title}</Text>
+          <Text numberOfLines={1} style={{
+            fontFamily: fonts.semi,
+            fontSize: 11.5,
+            color: colors.textMute,
+            marginTop: 2,
+            marginBottom: 10,
+          }}>{book.author}</Text>
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginBottom: 5,
+          }}>
+            <Text style={{
+              fontFamily: fonts.bold,
+              fontSize: 11,
+              color: colors.textMute,
+            }}>
+              pág. {studentBook.current_page}/{book.total_pages}
+            </Text>
+            <Text style={{
+              fontFamily: fonts.black,
+              fontSize: 11,
+              color: colors.green,
+            }}>{pct}%</Text>
           </View>
-        )}
-
-        {/* Info */}
-        <View style={styles.info}>
-          <View>
-            <Text style={styles.title} numberOfLines={2}>{book.title}</Text>
-            <Text style={styles.author} numberOfLines={1}>{book.author}</Text>
-          </View>
-
-          <View style={styles.progressArea}>
-            <ProgressBar progress={progress} />
-            <View style={styles.progressMeta}>
-              <Text style={styles.progressText}>
-                Pág. {studentBook.current_page} / {book.total_pages}
-              </Text>
-              <Text style={styles.pct}>{pct}%</Text>
-            </View>
-          </View>
+          <ProgressBar progress={progress} height={8} color={color} colorDeep={deep} />
         </View>
       </View>
-    </TouchableOpacity>
+    </Card>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 14,
-  },
-  cover: {
-    width: 60,
-    height: 88,
-    borderRadius: 8,
-  },
-  coverPlaceholder: {
-    width: 60,
-    height: 88,
-    borderRadius: 8,
-    backgroundColor: '#EEF2FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  coverEmoji: {
-    fontSize: 26,
-  },
-  info: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111827',
-    lineHeight: 21,
-  },
-  author: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    marginTop: 3,
-  },
-  progressArea: {
-    gap: 5,
-  },
-  progressMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  progressText: {
-    fontSize: 11,
-    color: '#9CA3AF',
-  },
-  pct: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#4F46E5',
-  },
-});

@@ -2,25 +2,30 @@ import { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  StyleSheet,
   ScrollView,
+  Image,
+  Pressable,
 } from 'react-native';
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { User, Compass, Lock, ArrowRight, ArrowLeft } from 'lucide-react-native';
 import { supabase } from '../../src/lib/supabase';
 import { usePendingAuthStore } from '../../src/stores/pendingAuthStore';
+import { BrandHeader } from '../../src/components/BrandHeader';
+import { AuthField } from '../../src/components/AuthField';
+import { Press3DButton } from '../../src/components/Press3DButton';
+import { colors, fonts, radii } from '../../src/theme/tokens';
 
 export default function SignupScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [focusedField, setFocusedField] = useState<string | null>(null);
-  const router = useRouter();
   const setPendingPassword = usePendingAuthStore((s) => s.setPendingPassword);
 
   async function handleSignup() {
@@ -52,201 +57,134 @@ export default function SignupScreen() {
     }
   }
 
+  const valid = name.trim().length >= 2 && email.includes('@') && password.length >= 6;
+
   return (
     <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom + 30,
+        }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Cabeçalho */}
-        <View style={styles.headerArea}>
-          <Text style={styles.title}>Criar conta</Text>
-          <View style={styles.accentLine} />
-          <Text style={styles.subtitle}>
-            Junte-se a milhares de leitores no BeReading
-          </Text>
+        <View style={{
+          padding: 20,
+          paddingTop: 20,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <Pressable
+            onPress={() => router.back()}
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 12,
+              backgroundColor: colors.bgRaise,
+              borderWidth: 1,
+              borderColor: colors.hairline,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <ArrowLeft size={16} color={colors.text} strokeWidth={2.2} />
+          </Pressable>
+          <BrandHeader />
+          <View style={{ width: 38 }} />
         </View>
 
-        {/* Formulário */}
-        <View style={styles.form}>
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Seu nome</Text>
-            <TextInput
-              style={[styles.input, focusedField === 'name' && styles.inputFocused]}
-              placeholder="Como você se chama?"
-              placeholderTextColor="#9CA3AF"
-              value={name}
-              onChangeText={setName}
-              onFocus={() => setFocusedField('name')}
-              onBlur={() => setFocusedField(null)}
-              autoCapitalize="words"
-              autoComplete="name"
-              returnKeyType="next"
-            />
-          </View>
+        {/* Mascote centralizado */}
+        <View style={{
+          padding: 18,
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: 200,
+        }}>
+          <Image
+            source={require('../../assets/images/mascot2.png')}
+            style={{ height: 200, maxWidth: '100%' }}
+            resizeMode="contain"
+          />
+        </View>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={[styles.input, focusedField === 'email' && styles.inputFocused]}
-              placeholder="seu@email.com"
-              placeholderTextColor="#9CA3AF"
-              value={email}
-              onChangeText={setEmail}
-              onFocus={() => setFocusedField('email')}
-              onBlur={() => setFocusedField(null)}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoComplete="email"
-              returnKeyType="next"
-            />
-          </View>
+        <View style={{ padding: 24, paddingTop: 10 }}>
+          <Text style={{
+            fontFamily: fonts.black,
+            fontSize: 24,
+            color: colors.text,
+            letterSpacing: -0.5,
+            textAlign: 'center',
+            marginBottom: 6,
+          }}>Começa a sua saga</Text>
+          <Text style={{
+            fontFamily: fonts.semi,
+            fontSize: 13.5,
+            color: colors.textMute,
+            textAlign: 'center',
+            marginBottom: 22,
+          }}>Em menos de 1 minuto você está lendo.</Text>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Senha</Text>
-            <TextInput
-              style={[styles.input, focusedField === 'password' && styles.inputFocused]}
-              placeholder="Mínimo 6 caracteres"
-              placeholderTextColor="#9CA3AF"
-              value={password}
-              onChangeText={setPassword}
-              onFocus={() => setFocusedField('password')}
-              onBlur={() => setFocusedField(null)}
-              secureTextEntry
-              autoComplete="new-password"
-              returnKeyType="done"
-              onSubmitEditing={handleSignup}
-            />
-          </View>
+          <AuthField
+            label="Nome"
+            Icon={User}
+            value={name}
+            onChangeText={setName}
+            placeholder="Como te chamamos?"
+            autoCapitalize="words"
+            autoComplete="name"
+            returnKeyType="next"
+          />
+          <AuthField
+            label="E-mail"
+            Icon={Compass}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="seu@email.com"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+            returnKeyType="next"
+          />
+          <AuthField
+            label="Senha"
+            Icon={Lock}
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Mínimo 6 caracteres"
+            secureTextEntry
+            autoComplete="new-password"
+            returnKeyType="done"
+            onSubmitEditing={handleSignup}
+          />
 
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+          <Text style={{
+            fontFamily: fonts.medium,
+            fontSize: 11,
+            color: colors.textMute,
+            textAlign: 'center',
+            marginBottom: 14,
+            lineHeight: 16,
+          }}>
+            Ao continuar, você aceita os termos de uso e a política de privacidade.
+          </Text>
+
+          <Press3DButton
             onPress={handleSignup}
-            disabled={loading}
-            activeOpacity={0.82}
+            disabled={loading || !valid}
+            Icon={ArrowRight}
+            size="lg"
+            color="purple"
           >
-            <Text style={styles.buttonText}>
-              {loading ? 'Criando conta…' : 'Criar conta'}
-            </Text>
-          </TouchableOpacity>
-
-          <Link href="/(auth)/login" asChild>
-            <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.7}>
-              <Text style={styles.secondaryText}>
-                Já tem conta?{' '}
-                <Text style={styles.secondaryLink}>Entrar</Text>
-              </Text>
-            </TouchableOpacity>
-          </Link>
+            {loading ? 'Criando conta…' : 'Criar conta'}
+          </Press3DButton>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 48,
-  },
-  headerArea: {
-    alignItems: 'flex-start',
-    marginBottom: 40,
-  },
-  title: {
-    fontSize: 34,
-    fontWeight: '800',
-    color: '#111827',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    letterSpacing: -0.5,
-  },
-  accentLine: {
-    width: 40,
-    height: 3,
-    backgroundColor: '#F59E0B',
-    borderRadius: 2,
-    marginTop: 6,
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    lineHeight: 22,
-  },
-  form: {
-    gap: 16,
-  },
-  fieldGroup: {
-    gap: 6,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  input: {
-    height: 52,
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#F9FAFB',
-  },
-  inputFocused: {
-    borderColor: '#4F46E5',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  button: {
-    height: 56,
-    backgroundColor: '#4F46E5',
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  buttonDisabled: {
-    opacity: 0.65,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  secondaryAction: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  secondaryText: {
-    fontSize: 15,
-    color: '#6B7280',
-  },
-  secondaryLink: {
-    color: '#4F46E5',
-    fontWeight: '600',
-  },
-});

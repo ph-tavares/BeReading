@@ -1,55 +1,21 @@
 import { Tabs } from 'expo-router';
-import { Home, BookOpen, Search, User } from 'lucide-react-native';
+import { CustomTabBar } from '../../src/components/CustomTabBar';
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#4F46E5',
-        tabBarInactiveTintColor: '#9CA3AF',
-        tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#F3F4F6',
-          borderTopWidth: 1,
-          paddingBottom: 4,
-          height: 60,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-          marginTop: 2,
-        },
+        // Remove o fundo branco padrão do wrapper da tab bar que o framework adiciona.
+        // O CustomTabBar já pinta seu próprio fundo (bgSunk) via SVG e safe-area fill.
+        tabBarStyle: { backgroundColor: 'transparent', borderTopWidth: 0, elevation: 0, shadowOpacity: 0 },
       }}
+      tabBar={(props) => <CustomTabBar {...props} />}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Início',
-          tabBarIcon: ({ color, size }) => <Home size={size ?? 22} stroke={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="livros"
-        options={{
-          title: 'Meus Livros',
-          tabBarIcon: ({ color, size }) => <BookOpen size={size ?? 22} stroke={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="catalogo"
-        options={{
-          title: 'Catálogo',
-          tabBarIcon: ({ color, size }) => <Search size={size ?? 22} stroke={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="perfil"
-        options={{
-          title: 'Perfil',
-          tabBarIcon: ({ color, size }) => <User size={size ?? 22} stroke={color} />,
-        }}
-      />
+      <Tabs.Screen name="index" options={{ title: 'Início' }} />
+      <Tabs.Screen name="livros" options={{ title: 'Estante' }} />
+      <Tabs.Screen name="catalogo" options={{ title: 'Explorar' }} />
+      <Tabs.Screen name="perfil" options={{ title: 'Perfil' }} />
     </Tabs>
   );
 }

@@ -1,10 +1,13 @@
+import '../global.css';
 import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { supabase } from '../src/lib/supabase';
 import { useAuthStore } from '../src/stores/authStore';
 import { getProfileByUserId, createProfile } from '../src/api/queries';
+import { useLuminousFonts } from '../src/theme/fonts';
 
 export default function RootLayout() {
+  const fontsLoaded = useLuminousFonts();
   const {
     session,
     profile,
@@ -76,6 +79,8 @@ export default function RootLayout() {
     }
     // session + confirmed + !profile: createProfile em andamento, aguarda
   }, [session, profile, segments, isInitialized, router]);
+
+  if (!fontsLoaded) return null;
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }

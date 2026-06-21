@@ -3,14 +3,19 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   ActivityIndicator,
-  StyleSheet,
-  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ChevronRight } from 'lucide-react-native';
 import { getBookWithChapters } from '../../src/api/queries';
+import { TopBar } from '../../src/components/TopBar';
+import { BookCover } from '../../src/components/BookCover';
+import { Card } from '../../src/components/Card';
+import { SectionLabel } from '../../src/components/SectionLabel';
+import { Press3DButton } from '../../src/components/Press3DButton';
+import { colors, fonts, radii } from '../../src/theme/tokens';
+import { categoryOf } from '../../src/theme/categories';
 import type { Book, Chapter } from '../../src/types/database';
 
 export default function BookDetailScreen() {
@@ -26,7 +31,7 @@ export default function BookDetailScreen() {
 
     getBookWithChapters(id)
       .then((d) => { if (!cancelled) setData(d); })
-      .catch((e: unknown) => {
+      .catch(() => {
         if (!cancelled) setError('Não foi possível carregar o livro.');
       })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -36,289 +41,172 @@ export default function BookDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.centeredScreen} edges={['top']}>
-        <ActivityIndicator size="large" color="#4F46E5" />
-      </SafeAreaView>
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={colors.green} />
+      </View>
     );
   }
 
   if (error || !data) {
     return (
-      <SafeAreaView style={styles.centeredScreen} edges={['top']}>
-        <Text style={styles.errorEmoji}>😔</Text>
-        <Text style={styles.errorText}>{error ?? 'Livro não encontrado'}</Text>
-        <TouchableOpacity
-          style={styles.errorButton}
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.errorButtonText}>Voltar</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <TopBar title="Livro" onBack={() => router.back()} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Text style={{ fontSize: 40, marginBottom: 12 }}>😔</Text>
+          <Text style={{
+            fontFamily: fonts.medium,
+            fontSize: 15,
+            color: colors.textSoft,
+            textAlign: 'center',
+            marginBottom: 20,
+          }}>{error ?? 'Livro não encontrado'}</Text>
+          <View style={{ width: '60%' }}>
+            <Press3DButton onPress={() => router.back()}>Voltar</Press3DButton>
+          </View>
+        </View>
+      </View>
     );
   }
 
   const sortedChapters = [...data.chapters].sort((a, b) => a.number - b.number);
+  const category = categoryOf(data.genre);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Hero índigo com info do livro */}
-      <View style={styles.hero}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-          style={styles.backWrap}
-        >
-          <Text style={styles.backLink}>← Voltar</Text>
-        </TouchableOpacity>
-        <Text style={styles.bookTitle} numberOfLines={3}>
-          {data.title}
-        </Text>
-        <Text style={styles.bookAuthor}>{data.author}</Text>
-        <View style={styles.heroMeta}>
-          {data.genre && (
-            <View style={styles.genrePill}>
-              <Text style={styles.genrePillText}>{data.genre}</Text>
-            </View>
-          )}
-          <Text style={styles.pagesText}>{data.total_pages} páginas</Text>
-        </View>
-      </View>
-
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <TopBar title="Livro" onBack={() => router.back()} />
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 20 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Seção de capítulos */}
-        <Text style={styles.sectionLabel}>
-          {sortedChapters.length}{' '}
-          {sortedChapters.length === 1 ? 'Capítulo' : 'Capítulos'}
-        </Text>
-
-        {sortedChapters.length === 0 ? (
-          <View style={styles.emptyChapters}>
-            <Text style={styles.emptyChaptersText}>
-              Capítulos ainda não disponíveis
-            </Text>
-          </View>
-        ) : (
-          /* Card com overflow:hidden para bordas arredondadas nos extremos */
-          <View style={styles.chapterCard}>
-            {sortedChapters.map((chapter, index) => (
-              <TouchableOpacity
-                key={chapter.id}
-                style={[
-                  styles.chapterRow,
-                  index < sortedChapters.length - 1 && styles.chapterRowBorder,
-                ]}
-                onPress={() => router.push(`/quiz/${chapter.id}`)}
-                activeOpacity={0.7}
-              >
-                {/* Número âmbar */}
-                <View style={styles.chapterNumberWrap}>
-                  <Text style={styles.chapterNumberText}>{chapter.number}</Text>
+        {/* Hero com capa + info */}
+        <View style={{ alignItems: 'center', gap: 16, paddingTop: 8 }}>
+          <BookCover book={data} size="lg" glow />
+          <View style={{ alignItems: 'center', gap: 6 }}>
+            <Text style={{
+              fontFamily: fonts.black,
+              fontSize: 22,
+              color: colors.text,
+              letterSpacing: -0.3,
+              textAlign: 'center',
+              lineHeight: 27,
+            }}>{data.title}</Text>
+            <Text style={{
+              fontFamily: fonts.semi,
+              fontSize: 14,
+              color: colors.textMute,
+            }}>{data.author}</Text>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              marginTop: 4,
+            }}>
+              {category && (
+                <View style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 3,
+                  borderRadius: 999,
+                  backgroundColor: `${category.color}22`,
+                  borderWidth: 1,
+                  borderColor: `${category.color}55`,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 5,
+                }}>
+                  <category.Icon size={12} color={category.color} strokeWidth={2.4} />
+                  <Text style={{
+                    fontFamily: fonts.black,
+                    fontSize: 10.5,
+                    color: category.color,
+                    letterSpacing: 1.2,
+                    textTransform: 'uppercase',
+                  }}>{category.label}</Text>
                 </View>
-
-                {/* Título + páginas */}
-                <View style={styles.chapterInfo}>
-                  {chapter.title ? (
-                    <Text style={styles.chapterTitle}>{chapter.title}</Text>
-                  ) : (
-                    <Text style={styles.chapterTitle}>
-                      Capítulo {chapter.number}
-                    </Text>
-                  )}
-                  <Text style={styles.chapterPages}>
-                    p. {chapter.start_page}–{chapter.end_page}
-                  </Text>
-                </View>
-
-                <Text style={styles.chapterArrow}>›</Text>
-              </TouchableOpacity>
-            ))}
+              )}
+              <Text style={{
+                fontFamily: fonts.semi,
+                fontSize: 12,
+                color: colors.textMute,
+              }}>{data.total_pages} páginas</Text>
+            </View>
           </View>
-        )}
+        </View>
+
+        {/* Capítulos */}
+        <View>
+          <SectionLabel
+            right={
+              <Text style={{
+                fontFamily: fonts.black,
+                fontSize: 11,
+                color: colors.green,
+              }}>{sortedChapters.length}</Text>
+            }
+          >
+            {sortedChapters.length === 1 ? 'Capítulo' : 'Capítulos'}
+          </SectionLabel>
+
+          {sortedChapters.length === 0 ? (
+            <Card style={{ padding: 24, alignItems: 'center' }}>
+              <Text style={{
+                fontFamily: fonts.medium,
+                fontSize: 14,
+                color: colors.textMute,
+              }}>Capítulos ainda não disponíveis</Text>
+            </Card>
+          ) : (
+            <Card style={{ overflow: 'hidden', padding: 0 }}>
+              {sortedChapters.map((chapter, index) => (
+                <Pressable
+                  key={chapter.id}
+                  onPress={() => router.push(`/quiz/${chapter.id}`)}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: 16,
+                    gap: 14,
+                    borderBottomWidth: index < sortedChapters.length - 1 ? 1 : 0,
+                    borderBottomColor: colors.hairline,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <View style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: colors.gold,
+                    borderBottomWidth: 3,
+                    borderBottomColor: colors.goldDeep,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <Text style={{
+                      fontFamily: fonts.black,
+                      fontSize: 13,
+                      color: '#fff',
+                    }}>{chapter.number}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{
+                      fontFamily: fonts.bold,
+                      fontSize: 14,
+                      color: colors.text,
+                    }}>{chapter.title ?? `Capítulo ${chapter.number}`}</Text>
+                    <Text style={{
+                      fontFamily: fonts.semi,
+                      fontSize: 12,
+                      color: colors.textMute,
+                      marginTop: 2,
+                    }}>p. {chapter.start_page}–{chapter.end_page}</Text>
+                  </View>
+                  <ChevronRight size={18} color={colors.textMute} />
+                </Pressable>
+              ))}
+            </Card>
+          )}
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#4F46E5',
-  },
-  centeredScreen: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  errorEmoji: {
-    fontSize: 40,
-    marginBottom: 12,
-  },
-  errorText: {
-    fontSize: 15,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  errorButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 12,
-  },
-  errorButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#4F46E5',
-  },
-
-  // Hero
-  hero: {
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 28,
-    gap: 6,
-  },
-  backWrap: {
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-    marginBottom: 4,
-  },
-  backLink: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.75)',
-    fontWeight: '600',
-  },
-  bookTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    lineHeight: 32,
-    letterSpacing: -0.3,
-  },
-  bookAuthor: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.65)',
-  },
-  heroMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 4,
-  },
-  genrePill: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  genrePillText: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.9)',
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  pagesText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.55)',
-  },
-
-  // Scroll body
-  scroll: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    marginTop: -2,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-
-  // Seção
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#9CA3AF',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    marginBottom: 12,
-  },
-
-  // Capítulos em card agrupado
-  chapterCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  chapterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 14,
-  },
-  chapterRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  chapterNumberWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  chapterNumberText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#92400E',
-  },
-  chapterInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  chapterTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  chapterPages: {
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
-  chapterArrow: {
-    fontSize: 18,
-    color: '#D1D5DB',
-    fontWeight: '600',
-  },
-
-  // Empty chapters
-  emptyChapters: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-  },
-  emptyChaptersText: {
-    fontSize: 14,
-    color: '#9CA3AF',
-  },
-});
