@@ -1,5 +1,6 @@
 // supabase/functions/evaluate-answer/index.ts
 import { createServiceClient } from '../_shared/supabase-client.ts';
+import { authErrorResponse, resolveUserId } from '../_shared/auth.ts';
 import type { AnswerPayload } from '../_shared/types.ts';
 
 function buildEvaluationPrompt(
@@ -125,9 +126,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { question_id, user_id, answer_text } = payload;
+  const { question_id, user_id: bodyUserId, answer_text } = payload;
 
-  if (!question_id || !user_id || !answer_text?.trim()) {
+  if (!question_id || !answer_text?.trim()) {
     return new Response(JSON.stringify({ error: 'Missing required fields' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
@@ -135,6 +136,19 @@ Deno.serve(async (req) => {
   }
 
   const supabase = createServiceClient();
+
+  // BER-30: sem isto, o upsert em (question_id, user_id) abaixo sobrescreve a
+  // resposta de qualquer aluno cujo id o chamador conheça.
+  let user_id: string;
+  try {
+    user_id = await resolveUserId(
+      req.headers.get('Authorization'),
+      bodyUserId,
+      (token) => supabase.auth.getUser(token),
+    );
+  } catch (err) {
+    return authErrorResponse(err);
+  }
 
   // Buscar pergunta + conteúdo do capítulo
   const { data: question } = await supabase

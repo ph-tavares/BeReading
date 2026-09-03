@@ -1,5 +1,6 @@
 // supabase/functions/generate-questions/index.ts
 import { createServiceClient } from '../_shared/supabase-client.ts';
+import { assertServiceRole, authErrorResponse } from '../_shared/auth.ts';
 
 const QUESTION_COUNT = 4;
 
@@ -97,6 +98,17 @@ Deno.serve(async (req) => {
       status: 405,
       headers: { 'Content-Type': 'application/json' },
     });
+  }
+
+  // Função interna (BER-30 / BER-46): chamada por register-reading-session e pelo
+  // cron de retry. Endpoint público aqui é abuso de custo de IA por chamada.
+  try {
+    assertServiceRole(
+      req.headers.get('Authorization'),
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+    );
+  } catch (err) {
+    return authErrorResponse(err);
   }
 
   let chapter_id: string;

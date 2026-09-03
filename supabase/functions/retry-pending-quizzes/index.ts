@@ -1,10 +1,22 @@
 // supabase/functions/retry-pending-quizzes/index.ts
 // Called by pg_cron every hour to retry AI question generation for failed chapters.
 import { createServiceClient } from '../_shared/supabase-client.ts';
+import { assertServiceRole, authErrorResponse } from '../_shared/auth.ts';
+import { buildPendingFilter } from './filter.ts';
 
 const MAX_ATTEMPTS = 3;
 
-Deno.serve(async (_req) => {
+Deno.serve(async (req) => {
+  // Função interna: só o pg_cron (que manda a service_role key) entra. Ver BER-30.
+  try {
+    assertServiceRole(
+      req.headers.get('Authorization'),
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+    );
+  } catch (err) {
+    return authErrorResponse(err);
+  }
+
   const supabase = createServiceClient();
 
   // Buscar capítulos com quiz failed ou pending travado (> 30 min sem atualização)
@@ -13,7 +25,7 @@ Deno.serve(async (_req) => {
   const { data: pending, error: queryError } = await supabase
     .from('chapter_quiz_status')
     .select('chapter_id')
-    .or(`status.eq.failed,and(status.eq.pending,last_attempt_at.lt.${thirtyMinutesAgo})`)
+    .or(buildPendingFilter(thirtyMinutesAgo))
     .lt('attempts', MAX_ATTEMPTS);
 
   if (queryError) {

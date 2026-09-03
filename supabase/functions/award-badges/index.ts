@@ -1,7 +1,8 @@
 // supabase/functions/award-badges/index.ts
 // Avalia e concede badges ao aluno após cada sessão de leitura.
-// Chamado em fire-and-forget por register-reading-session.
+// Chamado em segundo plano por register-reading-session.
 import { createServiceClient } from '../_shared/supabase-client.ts';
+import { assertServiceRole, authErrorResponse } from '../_shared/auth.ts';
 
 export interface BadgeCriteria {
   id: string;
@@ -152,6 +153,18 @@ if (import.meta.main) Deno.serve(async (req) => {
       status: 405,
       headers: { 'Content-Type': 'application/json' },
     });
+  }
+
+  // Função interna (BER-30): quem chama é register-reading-session, com a
+  // service_role key. Não é endpoint de usuário — o user_id do corpo é o alvo
+  // da premiação, definido pelo servidor, não uma identidade alegada.
+  try {
+    assertServiceRole(
+      req.headers.get('Authorization'),
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+    );
+  } catch (err) {
+    return authErrorResponse(err);
   }
 
   let user_id: string;
