@@ -21,11 +21,11 @@ import { XPPill } from '../../src/components/XPPill';
 import { colors, fonts, radii } from '../../src/theme/tokens';
 import type { Question } from '../../src/types/database';
 import type { QuestionResult } from '../../src/utils/quizUtils';
+import { pollDelayMs, shouldKeepPolling } from '../../src/utils/quizPolling';
 
-type ScreenState = 'loading' | 'polling' | 'ready' | 'failed';
-
-const MAX_POLLS = 10;
-const POLL_INTERVAL_MS = 4000;
+// BER-40: 'still-generating' NAO e 'failed'. Esgotar a janela de espera significa
+// "ainda nao ficou pronto", nao "deu erro" — e a diferenca aparece na tela.
+type ScreenState = 'loading' | 'polling' | 'ready' | 'failed' | 'still-generating';
 
 export default function QuizScreen() {
   const { chapterId } = useLocalSearchParams<{ chapterId: string }>();
@@ -71,8 +71,9 @@ export default function QuizScreen() {
 
   useEffect(() => {
     if (screenState !== 'polling') return;
-    if (pollCount >= MAX_POLLS) {
-      setScreenState('failed');
+    if (!shouldKeepPolling(pollCount)) {
+      // A geracao pode continuar no servidor; o que acabou foi a nossa espera.
+      setScreenState('still-generating');
       return;
     }
 
@@ -96,7 +97,7 @@ export default function QuizScreen() {
       } catch {
         if (!cancelled) setPollCount((c) => c + 1);
       }
-    }, POLL_INTERVAL_MS);
+    }, pollDelayMs(pollCount));
 
     return () => {
       cancelled = true;
@@ -207,6 +208,69 @@ export default function QuizScreen() {
             Responder depois
           </Text>
         </Pressable>
+      </View>
+    );
+  }
+
+  if (screenState === 'still-generating') {
+    return (
+      <View style={{
+        flex: 1,
+        backgroundColor: colors.bg,
+        paddingTop: insets.top + 60,
+        paddingBottom: insets.bottom + 40,
+        paddingHorizontal: 32,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <View style={{ alignItems: 'center' }}>
+          <View style={{
+            width: 72,
+            height: 72,
+            borderRadius: 20,
+            backgroundColor: colors.purple,
+            borderBottomWidth: 4,
+            borderBottomColor: colors.purpleDeep,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 24,
+          }}>
+            <Sparkles size={32} color="#fff" strokeWidth={2.2} />
+          </View>
+          <Text style={{
+            fontFamily: fonts.black,
+            fontSize: 22,
+            color: colors.text,
+            marginBottom: 12,
+            textAlign: 'center',
+            letterSpacing: -0.3,
+          }}>Seu quiz ainda está sendo preparado</Text>
+          <Text style={{
+            fontFamily: fonts.medium,
+            fontSize: 15,
+            color: colors.textSoft,
+            textAlign: 'center',
+            lineHeight: 22,
+          }}>
+            Está demorando mais que o normal, mas as perguntas continuam sendo
+            geradas. Volte em alguns minutos — sua leitura já está registrada.
+          </Text>
+        </View>
+        <View style={{ width: '100%', gap: 8 }}>
+          <Pressable
+            onPress={() => { setPollCount(0); setScreenState('polling'); }}
+            style={{ paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' }}
+          >
+            <Text style={{ fontFamily: fonts.black, fontSize: 15, color: colors.purple }}>
+              Verificar de novo
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => router.back()} style={{ paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' }}>
+            <Text style={{ fontFamily: fonts.medium, fontSize: 14, color: colors.textMute }}>
+              Responder depois
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
