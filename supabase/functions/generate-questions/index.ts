@@ -1,6 +1,7 @@
 // supabase/functions/generate-questions/index.ts
 import { createServiceClient } from '../_shared/supabase-client.ts';
 import { assertServiceRole, authErrorResponse } from '../_shared/auth.ts';
+import { parseQuestions } from '../_shared/ai-json.ts';
 
 const QUESTION_COUNT = 4;
 
@@ -21,12 +22,6 @@ Regras:
 - Perguntas de reflexão: pedem opinião, conexão pessoal, pensamento crítico
 - Linguagem adequada para ${grade}
 - Retorne APENAS um array JSON válido: [{"type":"comprehension","question_text":"..."},{"type":"reflection","question_text":"..."}]`;
-}
-
-function parseQuestionsJson(raw: string): { type: string; question_text: string }[] {
-  const match = raw.match(/\[[\s\S]*?\]/);
-  if (!match) throw new Error('No JSON array found in LLM response');
-  return JSON.parse(match[0]);
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +181,20 @@ Deno.serve(async (req) => {
 
   try {
     const rawResponse = await callAI(prompt);
-    const questions = parseQuestionsJson(rawResponse);
+    // BER-38: uma pergunta com `type` fora do CHECK do banco derrubava o INSERT do
+    // lote inteiro — as 4 perdidas e o capítulo marcado como `failed`. Agora as
+    // inválidas são descartadas individualmente.
+    const { valid: questions, rejected } = parseQuestions(rawResponse);
+
+    if (rejected.length > 0) {
+      console.warn(
+        `[generate-questions] ${rejected.length} pergunta(s) descartada(s) para o capítulo ${chapter_id}:`,
+        rejected.map(r => r.reason).join(' | '),
+      );
+    }
+    if (questions.length === 0) {
+      throw new Error('LLM não devolveu nenhuma pergunta válida');
+    }
 
     // Salvar perguntas (cache por capítulo — sem student_id)
     const { error: insertError } = await supabase.from('questions').insert(

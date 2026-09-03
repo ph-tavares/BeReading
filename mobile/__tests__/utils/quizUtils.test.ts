@@ -1,4 +1,8 @@
-import { getScoreConfig, calcAverageScore } from '../../src/utils/quizUtils';
+import {
+  getScoreConfig,
+  calcAverageScore,
+  countPendingEvaluations,
+} from '../../src/utils/quizUtils';
 
 describe('getScoreConfig', () => {
   it('retorna troféu para score >= 80', () => {
@@ -41,8 +45,8 @@ describe('getScoreConfig', () => {
 });
 
 describe('calcAverageScore', () => {
-  it('retorna 0 para array vazio', () => {
-    expect(calcAverageScore([])).toBe(0);
+  it('retorna null para array vazio (nao ha media, e isso nao e zero)', () => {
+    expect(calcAverageScore([])).toBeNull();
   });
 
   it('retorna o score quando há apenas um resultado', () => {
@@ -64,10 +68,33 @@ describe('calcAverageScore', () => {
     ])).toBe(71); // 70.5 → 71
   });
 
-  it('trata score null como 0', () => {
+  // BER-42: este teste travava o bug. Uma resposta ainda nao avaliada entrava na
+  // conta como zero e derrubava a media em ~25 pontos num quiz de 4 perguntas.
+  it('IGNORA score null em vez de tratar como 0', () => {
     expect(calcAverageScore([
       { score: null, feedback: '' },
       { score: 100, feedback: '' },
-    ])).toBe(50);
+    ])).toBe(100);
+  });
+
+  it('retorna null quando nenhuma resposta foi avaliada ainda', () => {
+    expect(calcAverageScore([
+      { score: null, feedback: '' },
+      { score: null, feedback: '' },
+    ])).toBeNull();
+  });
+});
+
+describe('countPendingEvaluations', () => {
+  it('conta as respostas sem nota', () => {
+    expect(countPendingEvaluations([
+      { score: 80, feedback: '' },
+      { score: null, feedback: '' },
+      { score: null, feedback: '' },
+    ])).toBe(2);
+  });
+
+  it('retorna 0 quando todas foram avaliadas', () => {
+    expect(countPendingEvaluations([{ score: 80, feedback: '' }])).toBe(0);
   });
 });

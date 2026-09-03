@@ -15,7 +15,7 @@ import { X, Target, Wand, Sparkles, ArrowRight, Trophy, CheckCheck } from 'lucid
 import { useAuthStore } from '../../src/stores/authStore';
 import { getQuestionsForChapter, getChapterQuizStatus } from '../../src/api/queries';
 import { evaluateAnswer } from '../../src/api/edgeFunctions';
-import { calcAverageScore } from '../../src/utils/quizUtils';
+import { calcAverageScore, countPendingEvaluations } from '../../src/utils/quizUtils';
 import { Press3DButton } from '../../src/components/Press3DButton';
 import { XPPill } from '../../src/components/XPPill';
 import { colors, fonts, radii } from '../../src/theme/tokens';
@@ -124,10 +124,18 @@ export default function QuizScreen() {
       setCurrentIndex((i) => i + 1);
       setAnswer('');
     } else {
-      const avg = calcAverageScore(Object.values(results));
+      const all = Object.values(results);
+      const avg = calcAverageScore(all);
+      const pending = countPendingEvaluations(all);
       router.replace({
         pathname: '/quiz/summary',
-        params: { avgScore: String(avg), total: String(questions.length) },
+        params: {
+          // BER-42: sem nota nenhuma, manda vazio em vez de "0" — a tela distingue
+          // "ainda avaliando" de "tirou zero".
+          avgScore: avg === null ? '' : String(avg),
+          total: String(questions.length),
+          pending: String(pending),
+        },
       });
     }
   }
@@ -392,46 +400,79 @@ export default function QuizScreen() {
               }}>"{answer || q.question_text}"</Text>
             </View>
 
-            {/* Score grande */}
-            <View style={{
-              padding: 20,
-              marginBottom: 16,
-              backgroundColor: colors.bgRaise,
-              borderRadius: radii.lg,
-              borderWidth: 1,
-              borderColor: `${(currentResult?.score ?? 0) >= 85 ? colors.green : colors.gold}44`,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 16,
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                <Text style={{
-                  fontFamily: fonts.black,
-                  fontSize: 56,
-                  color: (currentResult?.score ?? 0) >= 85 ? colors.green : colors.gold,
-                  lineHeight: 56,
-                  letterSpacing: -2,
-                }}>{(currentResult?.score ?? 0)}</Text>
-                <Text style={{
-                  fontFamily: fonts.bold,
-                  fontSize: 18,
-                  color: colors.textMute,
-                }}>/100</Text>
+            {/* BER-42: nota ausente NAO e nota zero. Enquanto a IA nao avaliou, a tela
+                mostra o estado real em vez de um "0/100 - SEGUE ASSIM" desanimador
+                ao lado de um feedback dizendo "avaliacao em breve". */}
+            {currentResult == null || currentResult.score === null ? (
+              <View style={{
+                padding: 20,
+                marginBottom: 16,
+                backgroundColor: colors.bgRaise,
+                borderRadius: radii.lg,
+                borderWidth: 1,
+                borderColor: `${colors.textMute}33`,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 16,
+              }}>
+                <ActivityIndicator size="small" color={colors.textMute} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{
+                    fontFamily: fonts.black,
+                    fontSize: 11,
+                    color: colors.textMute,
+                    letterSpacing: 1.5,
+                    textTransform: 'uppercase',
+                    marginBottom: 4,
+                  }}>Avaliação em processamento</Text>
+                  <Text style={{
+                    fontFamily: fonts.bold,
+                    fontSize: 13,
+                    color: colors.textMute,
+                  }}>Sua resposta foi salva. A nota aparece assim que a avaliação terminar.</Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{
-                  fontFamily: fonts.black,
-                  fontSize: 11,
-                  color: (currentResult?.score ?? 0) >= 85 ? colors.green : colors.gold,
-                  letterSpacing: 1.5,
-                  textTransform: 'uppercase',
-                  marginBottom: 4,
-                }}>
-                  {(currentResult?.score ?? 0) >= 90 ? 'PERFEITO' : (currentResult?.score ?? 0) >= 85 ? 'EXCELENTE' : (currentResult?.score ?? 0) >= 70 ? 'MUITO BOM' : 'SEGUE ASSIM'}
-                </Text>
-                <XPPill xp={Math.round((currentResult?.score ?? 0) / 5)} />
+            ) : (
+              <View style={{
+                padding: 20,
+                marginBottom: 16,
+                backgroundColor: colors.bgRaise,
+                borderRadius: radii.lg,
+                borderWidth: 1,
+                borderColor: `${currentResult.score >= 85 ? colors.green : colors.gold}44`,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 16,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                  <Text style={{
+                    fontFamily: fonts.black,
+                    fontSize: 56,
+                    color: currentResult.score >= 85 ? colors.green : colors.gold,
+                    lineHeight: 56,
+                    letterSpacing: -2,
+                  }}>{currentResult.score}</Text>
+                  <Text style={{
+                    fontFamily: fonts.bold,
+                    fontSize: 18,
+                    color: colors.textMute,
+                  }}>/100</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{
+                    fontFamily: fonts.black,
+                    fontSize: 11,
+                    color: currentResult.score >= 85 ? colors.green : colors.gold,
+                    letterSpacing: 1.5,
+                    textTransform: 'uppercase',
+                    marginBottom: 4,
+                  }}>
+                    {currentResult.score >= 90 ? 'PERFEITO' : currentResult.score >= 85 ? 'EXCELENTE' : currentResult.score >= 70 ? 'MUITO BOM' : 'SEGUE ASSIM'}
+                  </Text>
+                  <XPPill xp={Math.round(currentResult.score / 5)} />
+                </View>
               </View>
-            </View>
+            )}
 
             {/* Feedback */}
             <View style={{
