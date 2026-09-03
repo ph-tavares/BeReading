@@ -1,0 +1,67 @@
+name: CI
+
+# BER-34: até aqui nada verificava nada. O type-check do mobile ficou vermelho no
+# `main` por 111 commits sem ninguém notar, e o PR #4 foi mergeado assim.
+# Este workflow existe para que "verde por omissão" deixe de ser possível.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Um PR que recebe push novo cancela a execução anterior.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mobile:
+    name: Mobile — type-check e testes
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      # `npm ci` respeita o lockfile; `npm install` não.
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Testes
+        run: npx jest --ci
+
+  backend:
+    name: Edge Functions — type-check e testes
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supabase/functions
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check das functions
+        run: |
+          deno check \
+            register-reading-session/index.ts \
+            evaluate-answer/index.ts \
+            award-badges/index.ts \
+            generate-questions/index.ts \
+            retry-pending-quizzes/index.ts \
+            check-chapter-completion/index.ts
+
+      - name: Testes
+        run: deno test --allow-net --allow-env
