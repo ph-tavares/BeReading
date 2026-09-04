@@ -13,6 +13,7 @@ import type {
   ChapterQuizStatus,
   ReadingSession,
 } from '../types/database';
+import { filterReachedChapters } from '../utils/pendingQuizzes';
 
 export async function getProfileByUserId(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
@@ -181,4 +182,39 @@ export async function getPendingQuizChapterIds(userId: string): Promise<string[]
     .is('answers.id', null);
   if (error) throw error;
   return [...new Set((data ?? []).map((r: any) => r.chapter_id as string))];
+}
+
+/**
+ * Capítulos por id, com o que basta para saber se o leitor chegou neles.
+ *
+ * BER-54: usada com `getPendingQuizChapterIds`, que sozinha devolve todo capítulo
+ * com pergunta gerada e sem resposta deste usuário — inclusive de livros que ele
+ * nunca abriu. Ver `src/utils/pendingQuizzes.ts`.
+ */
+export async function getChaptersByIds(ids: string[]): Promise<Chapter[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from('chapters')
+    .select('*')
+    .in('id', ids);
+  if (error) throw error;
+  return (data ?? []) as Chapter[];
+}
+
+/**
+ * Quizzes que o leitor deixou para depois (BER-54).
+ *
+ * Junta as três coisas necessárias para a resposta ser honesta: os capítulos com
+ * pergunta e sem resposta dele, os dados desses capítulos, e até onde ele leu em
+ * cada livro. Sem o último filtro, o card na Home anunciaria quizzes de livros
+ * que a pessoa nunca abriu.
+ */
+export async function loadPendingQuizzes(
+  userId: string,
+  studentBooks: StudentBook[],
+): Promise<Chapter[]> {
+  const ids = await getPendingQuizChapterIds(userId);
+  if (ids.length === 0) return [];
+  const chapters = await getChaptersByIds(ids);
+  return filterReachedChapters(chapters, studentBooks);
 }
