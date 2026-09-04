@@ -67,3 +67,42 @@ describe('useAuthStore', () => {
     expect(useAuthStore.getState().isInitialized).toBe(true);
   });
 });
+
+// BER-45: o perfil que não carrega precisa ser um estado visível, não silêncio.
+// Antes, a falha morria num console.error e as abas giravam para sempre.
+describe('profileStatus', () => {
+  beforeEach(() => {
+    useAuthStore.setState({ session: null, profile: null, profileStatus: 'loading', isInitialized: false });
+  });
+
+  it('começa em loading', () => {
+    expect(useAuthStore.getState().profileStatus).toBe('loading');
+  });
+
+  it('perfil que chega marca ready', () => {
+    useAuthStore.getState().setProfile(mockProfile);
+    expect(useAuthStore.getState().profileStatus).toBe('ready');
+  });
+
+  it('setProfileStatus("error") é o que a tela usa para oferecer o retry', () => {
+    useAuthStore.getState().setProfileStatus('error');
+    expect(useAuthStore.getState().profileStatus).toBe('error');
+  });
+
+  it('um retry bem-sucedido tira do erro', () => {
+    useAuthStore.getState().setProfileStatus('error');
+    useAuthStore.getState().setProfile(mockProfile);
+    expect(useAuthStore.getState().profileStatus).toBe('ready');
+    expect(useAuthStore.getState().profile).toEqual(mockProfile);
+  });
+
+  it('clear volta para loading — logout não pode deixar erro grudado', () => {
+    useAuthStore.getState().setSession(mockSession);
+    useAuthStore.getState().setProfileStatus('error');
+    useAuthStore.getState().clear();
+    const s = useAuthStore.getState();
+    expect(s.profileStatus).toBe('loading');
+    expect(s.profile).toBeNull();
+    expect(s.session).toBeNull();
+  });
+});

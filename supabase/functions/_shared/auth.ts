@@ -74,6 +74,22 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 /**
+ * A requisição apresenta a service_role key?
+ *
+ * Falha fechada — sem a env configurada, a resposta é `false`. Use quando a
+ * chamada interna é um *caminho alternativo* e não uma exigência (BER-36: o cron
+ * re-avalia respostas na `evaluate-answer`, que para o app segue exigindo JWT).
+ */
+export function isServiceRole(
+  authHeader: string | null | undefined,
+  serviceRoleKey: string | null | undefined,
+): boolean {
+  const token = extractBearer(authHeader);
+  if (!token || !serviceRoleKey) return false;
+  return safeEqual(token, serviceRoleKey);
+}
+
+/**
  * Guard das funções internas: só passa quem apresenta a service_role key.
  * Falha fechada — sem a env configurada, ninguém entra.
  *
@@ -83,8 +99,7 @@ export function assertServiceRole(
   authHeader: string | null | undefined,
   serviceRoleKey: string | null | undefined,
 ): void {
-  const token = extractBearer(authHeader);
-  if (!token || !serviceRoleKey || !safeEqual(token, serviceRoleKey)) {
+  if (!isServiceRole(authHeader, serviceRoleKey)) {
     throw new AuthError(401, 'Service role required');
   }
 }

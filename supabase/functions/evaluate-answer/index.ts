@@ -1,7 +1,7 @@
 // supabase/functions/evaluate-answer/index.ts
 import { createServiceClient } from '../_shared/supabase-client.ts';
-import { authErrorResponse, resolveUserId } from '../_shared/auth.ts';
-import { parseEvaluation } from '../_shared/ai-json.ts';
+import { authErrorResponse, isServiceRole, resolveUserId } from '../_shared/auth.ts';
+import { parseEvaluation, type ParsedEvaluation } from '../_shared/ai-json.ts';
 import type { AnswerPayload } from '../_shared/types.ts';
 // BER-35: o prompt vive em módulo próprio para ser testado de verdade.
 // BER-65: sem "aluno" e sem "ensino fundamental" — o leitor é adulto.
@@ -70,6 +70,115 @@ async function callAI(prompt: string): Promise<string> {
   return data.choices?.[0]?.message?.content ?? '';
 }
 
+type SupabaseClient = ReturnType<typeof createServiceClient>;
+
+/**
+ * Avalia uma resposta já gravada e persiste o resultado.
+ *
+ * Usada pelos dois caminhos: o do app (logo depois de salvar a resposta) e o do
+ * cron (BER-36, re-avaliando o que ficou sem nota). Falha aqui nunca é fatal para
+ * quem chamou — a linha fica `failed`, e é justamente isso que o retry procura.
+ */
+async function evaluateAndStore(
+  supabase: SupabaseClient,
+  answerId: string,
+  questionText: string,
+  questionType: 'comprehension' | 'reflection',
+  answerText: string,
+  chapterContent: string,
+  // BER-42: `score` pode ser null — a IA respondeu, mas não conseguiu pontuar.
+  // Isso NÃO é nota zero e não é falha de avaliação: a linha vai para `completed`
+  // com score nulo, e a tela mostra "avaliação em processamento".
+): Promise<ParsedEvaluation | null> {
+  const prompt = buildEvaluationPrompt(questionText, questionType, answerText, chapterContent);
+
+  try {
+    const evaluation = parseEvaluation(await callAI(prompt));
+
+    const { error: updateError } = await supabase
+      .from('answers')
+      .update({
+        comprehension_score: evaluation.score,
+        ai_feedback: evaluation.feedback,
+        evaluated_at: new Date().toISOString(),
+        evaluation_status: 'completed',
+      })
+      .eq('id', answerId);
+
+    if (updateError) {
+      console.error('Failed to update answer with evaluation:', updateError.message);
+    }
+
+    return evaluation;
+  } catch (err) {
+    console.error(`[evaluate-answer] avaliação falhou para a resposta ${answerId}:`, err);
+    // Marcar como falha — o cron de retry volta aqui depois (BER-36).
+    await supabase
+      .from('answers')
+      .update({ evaluation_status: 'failed' })
+      .eq('id', answerId);
+    return null;
+  }
+}
+
+/**
+ * Caminho interno (BER-36): o cron manda `answer_id` de uma resposta que ficou
+ * sem nota, e a avaliação é refeita sobre a linha que já existe.
+ *
+ * Não há `user_id` envolvido: nada é criado nem sobrescrito, só a avaliação de
+ * uma resposta que o próprio dono já gravou. O IDOR da BER-30 continua fechado
+ * porque este caminho exige a service_role key, que o app não tem.
+ */
+async function handleReevaluation(supabase: SupabaseClient, answerId: unknown): Promise<Response> {
+  if (typeof answerId !== 'string' || !answerId) {
+    return new Response(JSON.stringify({ error: 'answer_id required' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const { data: answer } = await supabase
+    .from('answers')
+    .select('id, answer_text, evaluation_status, questions(question_text, type, chapters(book_contents(content_text)))')
+    .eq('id', answerId)
+    .single();
+
+  if (!answer) {
+    return new Response(JSON.stringify({ error: 'Answer not found' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Corrida com o app: se alguém já avaliou entre a varredura e agora, não
+  // gastar IA de novo.
+  if (answer.evaluation_status === 'completed') {
+    return new Response(JSON.stringify({ data: { status: 'already-evaluated' }, error: null }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const question = (answer.questions as any);
+  const chapterContent = question?.chapters?.book_contents?.content_text ?? '';
+
+  const evaluation = await evaluateAndStore(
+    supabase,
+    answer.id,
+    question?.question_text ?? '',
+    (question?.type as 'comprehension' | 'reflection') ?? 'comprehension',
+    answer.answer_text,
+    chapterContent,
+  );
+
+  return new Response(JSON.stringify({
+    data: { status: evaluation ? 'evaluated' : 'failed' },
+    error: null,
+  }), {
+    status: evaluation ? 200 : 502,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
@@ -78,7 +187,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  let payload: AnswerPayload;
+  let payload: AnswerPayload & { answer_id?: string };
   try {
     payload = await req.json();
   } catch {
@@ -98,6 +207,12 @@ Deno.serve(async (req) => {
   }
 
   const supabase = createServiceClient();
+
+  // BER-36: chamada do cron para re-avaliar uma resposta que ficou sem nota.
+  // Só entra aqui quem apresenta a service_role key; para o app, nada muda.
+  if (isServiceRole(req.headers.get('Authorization'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))) {
+    return await handleReevaluation(supabase, payload.answer_id);
+  }
 
   // BER-30: sem isto, o upsert em (question_id, user_id) abaixo sobrescreve a
   // resposta de qualquer aluno cujo id o chamador conheça.
@@ -146,49 +261,30 @@ Deno.serve(async (req) => {
   }
 
   const chapterContent = (question.chapters as any)?.book_contents?.content_text ?? '';
-  const prompt = buildEvaluationPrompt(
+
+  const evaluation = await evaluateAndStore(
+    supabase,
+    savedAnswer.id,
     question.question_text,
     question.type as 'comprehension' | 'reflection',
     answer_text.trim(),
-    chapterContent
+    chapterContent,
   );
 
-  try {
-    const rawResponse = await callAI(prompt);
-    const evaluation = parseEvaluation(rawResponse);
-
-    const { error: updateError } = await supabase
-      .from('answers')
-      .update({
-        comprehension_score: evaluation.score,
-        ai_feedback: evaluation.feedback,
-        evaluated_at: new Date().toISOString(),
-        evaluation_status: 'completed',
-      })
-      .eq('id', savedAnswer.id);
-
-    if (updateError) {
-      console.error('Failed to update answer with evaluation:', updateError.message);
-    }
-
+  if (evaluation) {
     return new Response(JSON.stringify({
       data: { score: evaluation.score, feedback: evaluation.feedback },
       error: null,
     }), { headers: { 'Content-Type': 'application/json' } });
-
-  } catch {
-    // Marcar como falha — pode ser retentado
-    await supabase
-      .from('answers')
-      .update({ evaluation_status: 'failed' })
-      .eq('id', savedAnswer.id);
-
-    return new Response(JSON.stringify({
-      data: {
-        score: null,
-        feedback: 'Resposta recebida! A avaliação ficará disponível em breve.',
-      },
-      error: null,
-    }), { headers: { 'Content-Type': 'application/json' } });
   }
+
+  // A resposta está salva e marcada como `failed`; o cron volta nela (BER-36).
+  // BER-42: score null não é nota zero — a tela mostra "avaliação em processamento".
+  return new Response(JSON.stringify({
+    data: {
+      score: null,
+      feedback: 'Resposta recebida! A avaliação ficará disponível em breve.',
+    },
+    error: null,
+  }), { headers: { 'Content-Type': 'application/json' } });
 });

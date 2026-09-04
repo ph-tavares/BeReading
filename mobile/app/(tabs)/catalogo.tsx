@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Search, X, Plus, CheckCheck } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
+import { ProfileErrorState } from '../../src/components/ProfileErrorState';
 import { getBooks, addBookToReadingList, getStudentBooks } from '../../src/api/queries';
 import { BookCover } from '../../src/components/BookCover';
 import { Chip } from '../../src/components/Chip';
@@ -22,7 +23,7 @@ import type { Book } from '../../src/types/database';
 
 export default function CatalogoScreen() {
   const insets = useSafeAreaInsets();
-  const { profile } = useAuthStore();
+  const { profile, profileStatus } = useAuthStore();
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState<string>('all');
   const [books, setBooks] = useState<Book[]>([]);
@@ -31,7 +32,9 @@ export default function CatalogoScreen() {
   const [addingId, setAddingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!profile) return;
+    // BER-45: sem o setLoading(false) aqui, o `loading` inicial `true` nunca
+    // virava false quando o perfil falhava — e a aba girava para sempre.
+    if (!profile) { setLoading(false); return; }
     let cancelled = false;
 
     async function loadInitial() {
@@ -90,6 +93,9 @@ export default function CatalogoScreen() {
   });
 
   const selectedCat = CATEGORIES.find((c) => c.id === cat);
+
+  // BER-45: o perfil nao carregou. Antes isto era um spinner eterno.
+  if (profileStatus === 'error') return <ProfileErrorState />;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>

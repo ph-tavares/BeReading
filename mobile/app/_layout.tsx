@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { supabase } from '../src/lib/supabase';
 import { useAuthStore } from '../src/stores/authStore';
-import { getProfileByUserId, createProfile } from '../src/api/queries';
+import { loadOrCreateProfile } from '../src/api/profile';
 import { useLuminousFonts } from '../src/theme/fonts';
 
 export default function RootLayout() {
@@ -14,6 +14,7 @@ export default function RootLayout() {
     isInitialized,
     setSession,
     setProfile,
+    setProfileStatus,
     setInitialized,
     clear,
   } = useAuthStore();
@@ -25,17 +26,15 @@ export default function RootLayout() {
 
     async function hydrateProfile(sess: NonNullable<typeof session>) {
       if (!sess.user.email_confirmed_at) return;
+      if (!cancelled) setProfileStatus('loading');
       try {
-        let p = await getProfileByUserId(sess.user.id);
-        if (!p) {
-          p = await createProfile(
-            sess.user.id,
-            sess.user.user_metadata?.display_name ?? 'Leitor',
-          );
-        }
-        if (!cancelled) setProfile(p);
+        const p = await loadOrCreateProfile(sess);
+        if (!cancelled && p) setProfile(p);
       } catch (err) {
+        // BER-45: antes parava aqui, no console. As abas ficavam girando para
+        // sempre porque esperavam um `profile` que nunca ia chegar.
         console.error('Falha ao carregar perfil:', err);
+        if (!cancelled) setProfileStatus('error');
       }
     }
 

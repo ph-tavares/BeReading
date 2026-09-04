@@ -16,6 +16,11 @@ import { usePendingAuthStore } from '../../src/stores/pendingAuthStore';
 import { Press3DButton } from '../../src/components/Press3DButton';
 import { GhostButton } from '../../src/components/GhostButton';
 import { colors, fonts, radii } from '../../src/theme/tokens';
+import {
+  classifyRefreshResult,
+  classifySignInError,
+  shouldClearPendingPassword,
+} from '../../src/utils/confirmEmail';
 
 export default function ConfirmEmailScreen() {
   const insets = useSafeAreaInsets();
@@ -57,29 +62,45 @@ export default function ConfirmEmailScreen() {
     setChecking(true);
 
     if (email && pendingPassword) {
-      clearPendingPassword();
       const { error } = await supabase.auth.signInWithPassword({ email, password: pendingPassword });
       setChecking(false);
 
-      if (!error) return;
+      // BER-43: a senha guardada so e descartada DEPOIS de entrar. Antes ela era
+      // apagada aqui em cima, e o segundo toque em "Ja confirmei" caia no branch
+      // sem senha — que mandava o usuario para o login para redigitar tudo.
+      const outcome = classifySignInError(error);
+      if (shouldClearPendingPassword(outcome)) {
+        clearPendingPassword();
+        return;
+      }
 
-      if (error.message.toLowerCase().includes('email not confirmed')) {
+      if (outcome === 'not-confirmed') {
         Alert.alert('Email ainda não confirmado', 'Verifique sua caixa de entrada e tente novamente.');
         return;
       }
-      Alert.alert('Erro ao fazer login', error.message);
+      Alert.alert('Erro ao fazer login', error!.message);
       return;
     }
 
-    const { data, error } = await supabase.auth.refreshSession();
+    const result = await supabase.auth.refreshSession();
     setChecking(false);
 
-    if (!error && data?.session?.user.email_confirmed_at) return;
-    if (error || !data?.session) {
-      router.replace('/(auth)/login');
-      return;
+    switch (classifyRefreshResult(result)) {
+      case 'confirmed':
+        return;
+      case 'session_revoked':
+        // BER-43: antes ia direto para o login, sem dizer por que. Quem confirmou
+        // pelo navegador perde a sessao do app — o destino esta certo, o silencio
+        // e que nao estava.
+        Alert.alert(
+          'Entre com sua conta',
+          'Seu e-mail foi confirmado em outro lugar e esta sessão expirou. É só entrar com o e-mail e a senha que você acabou de cadastrar.',
+          [{ text: 'Ir para o login', onPress: () => router.replace('/(auth)/login') }],
+        );
+        return;
+      default:
+        Alert.alert('Email ainda não confirmado', 'Verifique sua caixa de entrada e tente novamente.');
     }
-    Alert.alert('Email ainda não confirmado', 'Verifique sua caixa de entrada e tente novamente.');
   }
 
   async function handleResend() {

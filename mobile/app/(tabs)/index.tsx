@@ -10,6 +10,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Zap, Clock, Compass } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
+import { ProfileErrorState } from '../../src/components/ProfileErrorState';
 import { useReadingStore } from '../../src/stores/readingStore';
 import { getStudentBooks, getStreak } from '../../src/api/queries';
 import { Card } from '../../src/components/Card';
@@ -23,7 +24,7 @@ import type { Streak, StudentBook, Book } from '../../src/types/database';
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { profile } = useAuthStore();
+  const { profile, profileStatus } = useAuthStore();
   const { currentBook, setCurrentBook } = useReadingStore();
   const [streak, setStreak] = useState<Streak | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,7 +32,9 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!profile) return;
+      // BER-45: sem o setLoading(false) aqui, o `loading` inicial `true` nunca
+      // virava false quando o perfil falhava — e a aba girava para sempre.
+      if (!profile) { setLoading(false); return; }
       let cancelled = false;
       setError(null);
 
@@ -62,6 +65,9 @@ export default function HomeScreen() {
   const currentEntry = currentBook
     ? ({ ...currentBook.studentBook, book: currentBook.book } as StudentBook & { book: Book })
     : undefined;
+
+  // BER-45: o perfil nao carregou. Antes isto era um spinner eterno.
+  if (profileStatus === 'error') return <ProfileErrorState />;
 
   if (loading) {
     return (
