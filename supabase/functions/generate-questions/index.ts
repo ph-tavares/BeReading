@@ -2,27 +2,12 @@
 import { createServiceClient } from '../_shared/supabase-client.ts';
 import { assertServiceRole, authErrorResponse } from '../_shared/auth.ts';
 import { parseQuestions } from '../_shared/ai-json.ts';
+// BER-35: o prompt vive em módulo próprio para que o teste exercite o código real.
+// BER-65: sem `grade` — o público é leitor adulto, não turma do fundamental.
+import { buildQuestionPrompt } from './prompt.ts';
+import { buildNoContentMessage, hasUsableContent } from '../_shared/content.ts';
 
 const QUESTION_COUNT = 4;
-
-function buildQuestionPrompt(
-  bookTitle: string, author: string, chapterNumber: number,
-  chapterTitle: string, contentText: string, grade: string, count: number
-): string {
-  return `Você é um companheiro de leitura para estudantes do ensino fundamental (${grade}).
-Gere ${count} perguntas sobre o capítulo abaixo, sendo aproximadamente metade de compreensão e metade de reflexão.
-
-Livro: ${bookTitle} — ${author}
-Capítulo ${chapterNumber}: ${chapterTitle}
-Conteúdo: ${contentText}
-
-Regras:
-- Tom conversacional e curioso, nunca de prova
-- Perguntas de compreensão: verificam se o aluno leu e entendeu o que aconteceu
-- Perguntas de reflexão: pedem opinião, conexão pessoal, pensamento crítico
-- Linguagem adequada para ${grade}
-- Retorne APENAS um array JSON válido: [{"type":"comprehension","question_text":"..."},{"type":"reflection","question_text":"..."}]`;
-}
 
 // ---------------------------------------------------------------------------
 // AI PROVIDER — OpenAI (default) or Anthropic/Claude (set AI_PROVIDER=anthropic)
@@ -173,10 +158,32 @@ Deno.serve(async (req) => {
   const bookTitle = (chapter.books as any)?.title ?? '';
   const author = (chapter.books as any)?.author ?? '';
 
+  // BER-66: sem conteúdo, o prompt saía com "Conteúdo: " em branco e a IA gerava as
+  // 4 perguntas a partir só do título — o capítulo virava `generated`, o custo de IA
+  // era gasto e nada era registrado. Falha silenciosa que passa por sucesso.
+  // A chamada de IA agora nem acontece.
+  if (!hasUsableContent(contentText)) {
+    const message = buildNoContentMessage(contentText);
+    console.error(`[generate-questions] ${message} — capítulo ${chapter_id}`);
+
+    await supabase.from('chapter_quiz_status').upsert({
+      chapter_id,
+      status: 'failed',
+      attempts,
+      error_message: message,
+      last_attempt_at: new Date().toISOString(),
+    }, { onConflict: 'chapter_id' });
+
+    return new Response(JSON.stringify({ error: message }), {
+      status: 422,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   const prompt = buildQuestionPrompt(
     bookTitle, author, chapter.number,
     chapter.title ?? `Capítulo ${chapter.number}`,
-    contentText, '7o ao 9o ano', QUESTION_COUNT
+    contentText, QUESTION_COUNT
   );
 
   try {

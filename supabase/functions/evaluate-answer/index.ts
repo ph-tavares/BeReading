@@ -3,35 +3,9 @@ import { createServiceClient } from '../_shared/supabase-client.ts';
 import { authErrorResponse, resolveUserId } from '../_shared/auth.ts';
 import { parseEvaluation } from '../_shared/ai-json.ts';
 import type { AnswerPayload } from '../_shared/types.ts';
-
-function buildEvaluationPrompt(
-  questionText: string,
-  questionType: 'comprehension' | 'reflection',
-  answerText: string,
-  chapterContent: string
-): string {
-  const typeInstruction = questionType === 'comprehension'
-    ? 'Esta é uma pergunta de COMPREENSÃO. Avalie se a resposta demonstra conhecimento correto do conteúdo do capítulo.'
-    : 'Esta é uma pergunta de REFLEXÃO. Avalie a profundidade e coerência da reflexão. Não há resposta certa ou errada — avalie se o aluno engajou de verdade com a pergunta.';
-
-  return `Você é um avaliador de leitura para estudantes do ensino fundamental.
-
-Pergunta: ${questionText}
-${typeInstruction}
-
-Conteúdo do capítulo (contexto): ${chapterContent.substring(0, 2000)}
-
-Resposta do aluno: ${answerText}
-
-Retorne APENAS um JSON válido:
-{"score": <0-100>, "feedback": "<1-2 frases encorajadoras em português>"}
-
-Score 0-100 onde:
-- 80-100: excelente, demonstra compreensão/reflexão profunda
-- 60-79: boa resposta, com algumas lacunas
-- 40-59: resposta parcial
-- 0-39: muito superficial ou fora do contexto`;
-}
+// BER-35: o prompt vive em módulo próprio para ser testado de verdade.
+// BER-65: sem "aluno" e sem "ensino fundamental" — o leitor é adulto.
+import { buildEvaluationPrompt } from './prompt.ts';
 
 // ---------------------------------------------------------------------------
 // AI PROVIDER — OpenAI (default) or Anthropic/Claude (set AI_PROVIDER=anthropic)

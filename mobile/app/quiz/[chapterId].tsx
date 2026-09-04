@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, Target, Wand, Sparkles, ArrowRight, Trophy, CheckCheck } from 'lucide-react-native';
+import { X, Target, Wand, Sparkles, ArrowRight, Trophy, CheckCheck, BookOpen } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
 import { getQuestionsForChapter, getChapterQuizStatus } from '../../src/api/queries';
 import { evaluateAnswer } from '../../src/api/edgeFunctions';
@@ -22,10 +22,14 @@ import { colors, fonts, radii } from '../../src/theme/tokens';
 import type { Question } from '../../src/types/database';
 import type { QuestionResult } from '../../src/utils/quizUtils';
 import { pollDelayMs, shouldKeepPolling } from '../../src/utils/quizPolling';
+import { quizScreenStateFor } from '../../src/utils/quizStatus';
 
 // BER-40: 'still-generating' NAO e 'failed'. Esgotar a janela de espera significa
 // "ainda nao ficou pronto", nao "deu erro" — e a diferenca aparece na tela.
-type ScreenState = 'loading' | 'polling' | 'ready' | 'failed' | 'still-generating';
+// BER-66: 'no-content' tambem NAO e 'failed'. O capitulo nao tem texto cadastrado,
+// entao nao ha o que re-tentar — e mentir ("deu erro") esconde o motivo real.
+type ScreenState =
+  | 'loading' | 'polling' | 'ready' | 'failed' | 'still-generating' | 'no-content';
 
 export default function QuizScreen() {
   const { chapterId } = useLocalSearchParams<{ chapterId: string }>();
@@ -50,15 +54,15 @@ export default function QuizScreen() {
         const status = await getChapterQuizStatus(chapterId!);
         if (cancelled) return;
 
-        if (status?.status === 'generated') {
+        const next = quizScreenStateFor(status);
+        if (next === 'ready') {
           const qs = await getQuestionsForChapter(chapterId!);
           if (cancelled) return;
           setQuestions(qs);
           setScreenState(qs.length > 0 ? 'ready' : 'failed');
-        } else if (status?.status === 'failed') {
-          setScreenState('failed');
         } else {
-          setScreenState('polling');
+          // 'polling', 'failed' ou 'no-content' (BER-66).
+          setScreenState(next);
         }
       } catch {
         if (!cancelled) setScreenState('failed');
@@ -84,15 +88,17 @@ export default function QuizScreen() {
         const status = await getChapterQuizStatus(chapterId!);
         if (cancelled) return;
 
-        if (status?.status === 'generated') {
+        const next = quizScreenStateFor(status);
+        if (next === 'ready') {
           const qs = await getQuestionsForChapter(chapterId!);
           if (cancelled) return;
           setQuestions(qs);
           setScreenState(qs.length > 0 ? 'ready' : 'failed');
-        } else if (status?.status === 'failed') {
-          setScreenState('failed');
-        } else {
+        } else if (next === 'polling') {
           setPollCount((c) => c + 1);
+        } else {
+          // 'failed' ou 'no-content' (BER-66) — parar de esperar, os dois sao finais.
+          setScreenState(next);
         }
       } catch {
         if (!cancelled) setPollCount((c) => c + 1);
@@ -268,6 +274,68 @@ export default function QuizScreen() {
           <Pressable onPress={() => router.back()} style={{ paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' }}>
             <Text style={{ fontFamily: fonts.medium, fontSize: 14, color: colors.textMute }}>
               Responder depois
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // BER-66: o capitulo nao tem texto cadastrado em book_contents. Nao e falha da IA
+  // e nao adianta re-tentar — o que falta e conteudo. A tela diz isso, em vez de
+  // "deu erro", e nao oferece um botao que sabidamente nao resolve.
+  if (screenState === 'no-content') {
+    return (
+      <View style={{
+        flex: 1,
+        backgroundColor: colors.bg,
+        paddingTop: insets.top + 60,
+        paddingBottom: insets.bottom + 40,
+        paddingHorizontal: 32,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <View style={{ alignItems: 'center' }}>
+          <View style={{
+            width: 72,
+            height: 72,
+            borderRadius: 20,
+            backgroundColor: colors.surface,
+            borderBottomWidth: 4,
+            borderBottomColor: colors.surface2,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 24,
+          }}>
+            <BookOpen size={32} color={colors.textSoft} strokeWidth={2.2} />
+          </View>
+          <Text style={{
+            fontFamily: fonts.black,
+            fontSize: 22,
+            color: colors.text,
+            marginBottom: 12,
+            textAlign: 'center',
+            letterSpacing: -0.3,
+          }}>Ainda não temos este capítulo</Text>
+          <Text style={{
+            fontFamily: fonts.medium,
+            fontSize: 15,
+            color: colors.textSoft,
+            textAlign: 'center',
+            lineHeight: 22,
+          }}>
+            Sem o conteúdo do capítulo, qualquer pergunta que a gente fizesse seria
+            chute — e preferimos não fazer isso. Sua leitura já está registrada e
+            continua contando para a sua sequência.
+          </Text>
+        </View>
+        <View style={{ width: '100%', gap: 8 }}>
+          <Pressable
+            onPress={() => router.back()}
+            style={{ paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' }}
+          >
+            <Text style={{ fontFamily: fonts.black, fontSize: 15, color: colors.purple }}>
+              Voltar para o livro
             </Text>
           </Pressable>
         </View>
