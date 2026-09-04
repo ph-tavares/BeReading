@@ -10,6 +10,7 @@ import {
   AuthError,
   extractBearer,
   type GetUserFn,
+  isServiceRole,
   resolveUserId,
 } from './auth.ts';
 
@@ -111,4 +112,27 @@ Deno.test('assertServiceRole: falha FECHADA quando a env não está configurada'
   // Sem a chave no ambiente, ninguém entra — nunca o contrário.
   assertThrows(() => assertServiceRole('Bearer qualquer', undefined), AuthError);
   assertThrows(() => assertServiceRole('Bearer qualquer', ''), AuthError);
+});
+
+// --- BER-36: isServiceRole, o caminho alternativo do cron ---
+
+Deno.test('isServiceRole: reconhece a chave correta', () => {
+  assertEquals(isServiceRole('Bearer chave-secreta', 'chave-secreta'), true);
+});
+
+Deno.test('isServiceRole: recusa chave errada, header ausente e env ausente', () => {
+  assertEquals(isServiceRole('Bearer outra-chave', 'chave-secreta'), false);
+  assertEquals(isServiceRole(null, 'chave-secreta'), false);
+  assertEquals(isServiceRole('Bearer chave-secreta', null), false);
+  assertEquals(isServiceRole('Bearer chave-secreta', undefined), false);
+});
+
+Deno.test('isServiceRole: falha fechada — sem env configurada, ninguém é interno', () => {
+  // O caso que importa: se a env sumir do deploy, o caminho interno não pode
+  // virar uma porta aberta. Sem chave configurada, a resposta é sempre false.
+  assertEquals(isServiceRole('Bearer qualquer-coisa', ''), false);
+});
+
+Deno.test('isServiceRole: um JWT de usuário não passa por interno', () => {
+  assertEquals(isServiceRole('Bearer jwt.de.usuario', 'service-role-key'), false);
 });

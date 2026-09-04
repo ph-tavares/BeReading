@@ -11,6 +11,7 @@ import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BookOpen, Trophy, Award } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
+import { ProfileErrorState } from '../../src/components/ProfileErrorState';
 import { ClassroomGateModal } from '../../src/components/ClassroomGateModal';
 import { BadgeGrid } from '../../src/components/BadgeGrid';
 import { PagesChart } from '../../src/components/PagesChart';
@@ -32,7 +33,7 @@ import type { Streak, Badge, StudentBadge, StudentBook, ReadingSession } from '.
 
 export default function PerfilScreen() {
   const insets = useSafeAreaInsets();
-  const { profile, clear } = useAuthStore();
+  const { profile, profileStatus, clear } = useAuthStore();
   const [streak, setStreak] = useState<Streak | null>(null);
   const [studentBadges, setStudentBadges] = useState<(StudentBadge & { badge: Badge })[]>([]);
   const [allBadges, setAllBadges] = useState<Badge[]>([]);
@@ -44,7 +45,9 @@ export default function PerfilScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!profile) return;
+      // BER-45: sem o setLoading(false) aqui, o `loading` inicial `true` nunca
+      // virava false quando o perfil falhava — e a aba girava para sempre.
+      if (!profile) { setLoading(false); return; }
       let cancelled = false;
 
       (async () => {
@@ -102,6 +105,9 @@ export default function PerfilScreen() {
   const booksFinished = studentBooks.filter((b) => b.status === 'finished').length;
   const earnedCount = studentBadges.length;
   const totalSession = sessions.reduce((s, v) => s + v.pages_read, 0);
+
+  // BER-45: o perfil nao carregou. Antes isto era um spinner eterno.
+  if (profileStatus === 'error') return <ProfileErrorState />;
 
   if (loading) {
     return (
