@@ -73,7 +73,17 @@ export default function RegisterReadingScreen() {
           'Capítulo completo!',
           `Você completou um capítulo de "${book.title}"!\n\nStreak: ${result.current_streak} dia${result.current_streak !== 1 ? 's' : ''}\n\nQuer responder as perguntas agora?`,
           [
-            { text: 'Depois', style: 'cancel', onPress: () => router.replace('/reading-success?pagesRead=' + (pagesRead ?? 0) + '&streak=' + result.current_streak) },
+            {
+              text: 'Depois',
+              style: 'cancel',
+              // Params como objeto: tipado pelo Expo Router e escapa os valores,
+              // ao contrário da query string concatenada à mão.
+              onPress: () =>
+                router.replace({
+                  pathname: '/reading-success',
+                  params: { pagesRead: pagesRead ?? 0, streak: result.current_streak },
+                }),
+            },
             { text: 'Responder agora', onPress: () => router.replace(`/quiz/${chapterId}`) },
           ],
         );

@@ -1,5 +1,7 @@
 // supabase/functions/evaluate-answer/index.ts
 import { createServiceClient } from '../_shared/supabase-client.ts';
+import { authErrorResponse, resolveUserId } from '../_shared/auth.ts';
+import { parseEvaluation } from '../_shared/ai-json.ts';
 import type { AnswerPayload } from '../_shared/types.ts';
 
 function buildEvaluationPrompt(
@@ -29,19 +31,6 @@ Score 0-100 onde:
 - 60-79: boa resposta, com algumas lacunas
 - 40-59: resposta parcial
 - 0-39: muito superficial ou fora do contexto`;
-}
-
-function parseEvaluationJson(raw: string): { score: number; feedback: string } {
-  const match = raw.match(/\{[\s\S]*?\}/);
-  if (!match) throw new Error('No JSON found in response');
-  const parsed = JSON.parse(match[0]);
-  if (typeof parsed.score !== 'number' || typeof parsed.feedback !== 'string') {
-    throw new Error('Invalid evaluation format');
-  }
-  return {
-    score: Math.min(100, Math.max(0, parsed.score)),
-    feedback: parsed.feedback,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -125,9 +114,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { question_id, user_id, answer_text } = payload;
+  const { question_id, user_id: bodyUserId, answer_text } = payload;
 
-  if (!question_id || !user_id || !answer_text?.trim()) {
+  if (!question_id || !answer_text?.trim()) {
     return new Response(JSON.stringify({ error: 'Missing required fields' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
@@ -135,6 +124,19 @@ Deno.serve(async (req) => {
   }
 
   const supabase = createServiceClient();
+
+  // BER-30: sem isto, o upsert em (question_id, user_id) abaixo sobrescreve a
+  // resposta de qualquer aluno cujo id o chamador conheça.
+  let user_id: string;
+  try {
+    user_id = await resolveUserId(
+      req.headers.get('Authorization'),
+      bodyUserId,
+      (token) => supabase.auth.getUser(token),
+    );
+  } catch (err) {
+    return authErrorResponse(err);
+  }
 
   // Buscar pergunta + conteúdo do capítulo
   const { data: question } = await supabase
@@ -179,7 +181,7 @@ Deno.serve(async (req) => {
 
   try {
     const rawResponse = await callAI(prompt);
-    const evaluation = parseEvaluationJson(rawResponse);
+    const evaluation = parseEvaluation(rawResponse);
 
     const { error: updateError } = await supabase
       .from('answers')

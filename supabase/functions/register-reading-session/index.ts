@@ -1,5 +1,7 @@
 // supabase/functions/register-reading-session/index.ts
 import { createServiceClient } from '../_shared/supabase-client.ts';
+import { authErrorResponse, resolveUserId } from '../_shared/auth.ts';
+import { dispatchBackground } from '../_shared/background.ts';
 import type { ReadingSessionPayload } from '../_shared/types.ts';
 
 const SAOPAULO_OFFSET = -3; // UTC-3
@@ -44,10 +46,25 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { user_id, book_id, start_page, end_page } = payload;
+  const { user_id: bodyUserId, book_id, start_page, end_page } = payload;
+
+  const supabase = createServiceClient();
+
+  // BER-30: o dono da ação é o JWT. O `user_id` do corpo continua sendo aceito
+  // (o app manda), mas serve só para detectar tentativa de agir por outro.
+  let user_id: string;
+  try {
+    user_id = await resolveUserId(
+      req.headers.get('Authorization'),
+      bodyUserId,
+      (token) => supabase.auth.getUser(token),
+    );
+  } catch (err) {
+    return authErrorResponse(err);
+  }
 
   // Validação básica
-  if (!user_id || !book_id || !start_page || !end_page) {
+  if (!book_id || !start_page || !end_page) {
     return new Response(JSON.stringify({ error: 'Missing required fields' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
@@ -60,7 +77,6 @@ Deno.serve(async (req) => {
     });
   }
 
-  const supabase = createServiceClient();
   const today = getTodayInSaoPaulo();
 
   // 1. Validar que o livro existe e que end_page <= total_pages
@@ -183,32 +199,35 @@ Deno.serve(async (req) => {
       .single();
 
     if (!quizStatus || quizStatus.status === 'pending' || quizStatus.status === 'failed') {
-      // Disparar generate-questions (fire-and-forget)
+      // BER-27: waitUntil mantém o worker vivo até o request sair. Sem isso o
+      // disparo morria com o worker e o quiz nunca era gerado (attempts=0).
       if (supabaseUrl) {
-        fetch(`${supabaseUrl}/functions/v1/generate-questions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          },
-          body: JSON.stringify({ chapter_id: ch.id }),
-        }).catch(() => {}); // fire-and-forget, fallback via pg_cron
+        dispatchBackground('generate-questions', () =>
+          fetch(`${supabaseUrl}/functions/v1/generate-questions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: JSON.stringify({ chapter_id: ch.id }),
+          }));
       }
     }
 
     completedChapterIds.push(ch.id);
   }
 
-  // 8. Disparar award-badges (fire-and-forget)
+  // 8. Disparar award-badges em segundo plano (BER-27)
   if (supabaseUrl) {
-    fetch(`${supabaseUrl}/functions/v1/award-badges`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-      },
-      body: JSON.stringify({ user_id }),
-    }).catch(() => {});
+    dispatchBackground('award-badges', () =>
+      fetch(`${supabaseUrl}/functions/v1/award-badges`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({ user_id }),
+      }));
   }
 
   return new Response(JSON.stringify({

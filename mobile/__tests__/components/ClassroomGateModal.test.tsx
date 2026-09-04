@@ -31,7 +31,7 @@ const mockSetProfile = jest.fn();
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (useAuthStore as jest.Mock).mockReturnValue({
+  (useAuthStore as unknown as jest.Mock).mockReturnValue({
     session: { user: { id: 'u1' } },
     setProfile: mockSetProfile,
   });

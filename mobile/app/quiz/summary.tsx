@@ -14,11 +14,20 @@ const R = 68;
 const CIRCUM = 2 * Math.PI * R;
 
 export default function QuizSummaryScreen() {
-  const { avgScore, total } = useLocalSearchParams<{ avgScore: string; total: string }>();
+  const { avgScore, total, pending } = useLocalSearchParams<{
+    avgScore: string;
+    total: string;
+    pending?: string;
+  }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const avg = parseInt(avgScore ?? '0', 10);
+  // BER-42: `avgScore` chega vazio quando NENHUMA resposta foi avaliada ainda.
+  // Vazio nao e zero — a media so aparece quando existe de fato.
+  const parsedAvg = parseInt(avgScore ?? '', 10);
+  const hasAvg = !Number.isNaN(parsedAvg);
+  const avg = hasAvg ? parsedAvg : 0;
+  const pendingN = parseInt(pending ?? '0', 10) || 0;
   const totalN = parseInt(total ?? '1', 10);
   const config = getScoreConfig(avg);
   const totalXP = Math.round((avg / 5) * totalN);
@@ -80,14 +89,14 @@ export default function QuizSummaryScreen() {
               color: colors.text,
               lineHeight: 56,
               letterSpacing: -2,
-            }}>{avg}</Text>
+            }}>{hasAvg ? avg : '—'}</Text>
             <Text style={{
               fontFamily: fonts.bold,
               fontSize: 11,
               color: colors.textMute,
               letterSpacing: 1.5,
               marginTop: 4,
-            }}>/100 MÉDIA</Text>
+            }}>{hasAvg ? '/100 MÉDIA' : 'AVALIANDO'}</Text>
           </View>
         </View>
 
@@ -107,6 +116,23 @@ export default function QuizSummaryScreen() {
           maxWidth: 280,
           marginBottom: 18,
         }}>{totalN} de {totalN} respondidas. Sua compreensão subiu.</Text>
+
+        {pendingN > 0 && (
+          <Text style={{
+            fontFamily: fonts.medium,
+            fontSize: 12.5,
+            color: colors.textMute,
+            lineHeight: 18,
+            textAlign: 'center',
+            maxWidth: 280,
+            marginTop: -10,
+            marginBottom: 18,
+          }}>
+            {pendingN === 1
+              ? '1 resposta ainda está sendo avaliada e não entrou na média.'
+              : `${pendingN} respostas ainda estão sendo avaliadas e não entraram na média.`}
+          </Text>
+        )}
 
         <XPPill xp={totalXP} />
       </View>

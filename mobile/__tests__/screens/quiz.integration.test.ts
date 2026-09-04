@@ -33,8 +33,9 @@ describe('Quiz flow — contrato de comportamento', () => {
         { score: null, feedback: 'sem score' },
         { score: 60, feedback: 'ok' },
       ];
-      // score null tratado como 0
-      expect(calcAverageScore(results)).toBe(30);
+      // BER-42: a pendente fica FORA da média em vez de entrar como zero.
+      // Antes esperava 30 — o aluno perdia metade da nota por uma falha da IA.
+      expect(calcAverageScore(results)).toBe(60);
     });
   });
 

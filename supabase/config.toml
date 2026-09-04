@@ -387,3 +387,32 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# === Edge Functions ===
+# BER-30: até aqui, `verify_jwt` só existia no dashboard — invisível no repositório e
+# perdido a cada deploy manual (BER-50). Declarado aqui, a configuração vem junto com
+# o código e o `supabase functions deploy` a respeita.
+#
+# Regra: quem é chamado pelo APP verifica o JWT do usuário; quem é chamado por outra
+# function ou pelo pg_cron não tem JWT de usuário nenhum e valida a service_role key
+# dentro do handler (`_shared/auth.ts`).
+
+# --- Chamadas pelo app (identidade do usuário) ---
+[functions.register-reading-session]
+verify_jwt = true
+
+[functions.evaluate-answer]
+verify_jwt = true
+
+# --- Internas (service_role; o guard está no handler) ---
+[functions.generate-questions]
+verify_jwt = false
+
+[functions.award-badges]
+verify_jwt = false
+
+[functions.retry-pending-quizzes]
+verify_jwt = false
+
+# check-chapter-completion não tem chamador em nenhum ponto do repo — deixada como
+# está de propósito. Ver nota no PR.

@@ -15,17 +15,17 @@ import { X, Target, Wand, Sparkles, ArrowRight, Trophy, CheckCheck } from 'lucid
 import { useAuthStore } from '../../src/stores/authStore';
 import { getQuestionsForChapter, getChapterQuizStatus } from '../../src/api/queries';
 import { evaluateAnswer } from '../../src/api/edgeFunctions';
-import { calcAverageScore } from '../../src/utils/quizUtils';
+import { calcAverageScore, countPendingEvaluations } from '../../src/utils/quizUtils';
 import { Press3DButton } from '../../src/components/Press3DButton';
 import { XPPill } from '../../src/components/XPPill';
 import { colors, fonts, radii } from '../../src/theme/tokens';
 import type { Question } from '../../src/types/database';
 import type { QuestionResult } from '../../src/utils/quizUtils';
+import { pollDelayMs, shouldKeepPolling } from '../../src/utils/quizPolling';
 
-type ScreenState = 'loading' | 'polling' | 'ready' | 'failed';
-
-const MAX_POLLS = 10;
-const POLL_INTERVAL_MS = 4000;
+// BER-40: 'still-generating' NAO e 'failed'. Esgotar a janela de espera significa
+// "ainda nao ficou pronto", nao "deu erro" — e a diferenca aparece na tela.
+type ScreenState = 'loading' | 'polling' | 'ready' | 'failed' | 'still-generating';
 
 export default function QuizScreen() {
   const { chapterId } = useLocalSearchParams<{ chapterId: string }>();
@@ -71,8 +71,9 @@ export default function QuizScreen() {
 
   useEffect(() => {
     if (screenState !== 'polling') return;
-    if (pollCount >= MAX_POLLS) {
-      setScreenState('failed');
+    if (!shouldKeepPolling(pollCount)) {
+      // A geracao pode continuar no servidor; o que acabou foi a nossa espera.
+      setScreenState('still-generating');
       return;
     }
 
@@ -96,7 +97,7 @@ export default function QuizScreen() {
       } catch {
         if (!cancelled) setPollCount((c) => c + 1);
       }
-    }, POLL_INTERVAL_MS);
+    }, pollDelayMs(pollCount));
 
     return () => {
       cancelled = true;
@@ -124,10 +125,18 @@ export default function QuizScreen() {
       setCurrentIndex((i) => i + 1);
       setAnswer('');
     } else {
-      const avg = calcAverageScore(Object.values(results));
+      const all = Object.values(results);
+      const avg = calcAverageScore(all);
+      const pending = countPendingEvaluations(all);
       router.replace({
         pathname: '/quiz/summary',
-        params: { avgScore: String(avg), total: String(questions.length) },
+        params: {
+          // BER-42: sem nota nenhuma, manda vazio em vez de "0" — a tela distingue
+          // "ainda avaliando" de "tirou zero".
+          avgScore: avg === null ? '' : String(avg),
+          total: String(questions.length),
+          pending: String(pending),
+        },
       });
     }
   }
@@ -199,6 +208,69 @@ export default function QuizScreen() {
             Responder depois
           </Text>
         </Pressable>
+      </View>
+    );
+  }
+
+  if (screenState === 'still-generating') {
+    return (
+      <View style={{
+        flex: 1,
+        backgroundColor: colors.bg,
+        paddingTop: insets.top + 60,
+        paddingBottom: insets.bottom + 40,
+        paddingHorizontal: 32,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <View style={{ alignItems: 'center' }}>
+          <View style={{
+            width: 72,
+            height: 72,
+            borderRadius: 20,
+            backgroundColor: colors.purple,
+            borderBottomWidth: 4,
+            borderBottomColor: colors.purpleDeep,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 24,
+          }}>
+            <Sparkles size={32} color="#fff" strokeWidth={2.2} />
+          </View>
+          <Text style={{
+            fontFamily: fonts.black,
+            fontSize: 22,
+            color: colors.text,
+            marginBottom: 12,
+            textAlign: 'center',
+            letterSpacing: -0.3,
+          }}>Seu quiz ainda está sendo preparado</Text>
+          <Text style={{
+            fontFamily: fonts.medium,
+            fontSize: 15,
+            color: colors.textSoft,
+            textAlign: 'center',
+            lineHeight: 22,
+          }}>
+            Está demorando mais que o normal, mas as perguntas continuam sendo
+            geradas. Volte em alguns minutos — sua leitura já está registrada.
+          </Text>
+        </View>
+        <View style={{ width: '100%', gap: 8 }}>
+          <Pressable
+            onPress={() => { setPollCount(0); setScreenState('polling'); }}
+            style={{ paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' }}
+          >
+            <Text style={{ fontFamily: fonts.black, fontSize: 15, color: colors.purple }}>
+              Verificar de novo
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => router.back()} style={{ paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' }}>
+            <Text style={{ fontFamily: fonts.medium, fontSize: 14, color: colors.textMute }}>
+              Responder depois
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -392,46 +464,79 @@ export default function QuizScreen() {
               }}>"{answer || q.question_text}"</Text>
             </View>
 
-            {/* Score grande */}
-            <View style={{
-              padding: 20,
-              marginBottom: 16,
-              backgroundColor: colors.bgRaise,
-              borderRadius: radii.lg,
-              borderWidth: 1,
-              borderColor: `${(currentResult?.score ?? 0) >= 85 ? colors.green : colors.gold}44`,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 16,
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                <Text style={{
-                  fontFamily: fonts.black,
-                  fontSize: 56,
-                  color: (currentResult?.score ?? 0) >= 85 ? colors.green : colors.gold,
-                  lineHeight: 56,
-                  letterSpacing: -2,
-                }}>{(currentResult?.score ?? 0)}</Text>
-                <Text style={{
-                  fontFamily: fonts.bold,
-                  fontSize: 18,
-                  color: colors.textMute,
-                }}>/100</Text>
+            {/* BER-42: nota ausente NAO e nota zero. Enquanto a IA nao avaliou, a tela
+                mostra o estado real em vez de um "0/100 - SEGUE ASSIM" desanimador
+                ao lado de um feedback dizendo "avaliacao em breve". */}
+            {currentResult == null || currentResult.score === null ? (
+              <View style={{
+                padding: 20,
+                marginBottom: 16,
+                backgroundColor: colors.bgRaise,
+                borderRadius: radii.lg,
+                borderWidth: 1,
+                borderColor: `${colors.textMute}33`,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 16,
+              }}>
+                <ActivityIndicator size="small" color={colors.textMute} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{
+                    fontFamily: fonts.black,
+                    fontSize: 11,
+                    color: colors.textMute,
+                    letterSpacing: 1.5,
+                    textTransform: 'uppercase',
+                    marginBottom: 4,
+                  }}>Avaliação em processamento</Text>
+                  <Text style={{
+                    fontFamily: fonts.bold,
+                    fontSize: 13,
+                    color: colors.textMute,
+                  }}>Sua resposta foi salva. A nota aparece assim que a avaliação terminar.</Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{
-                  fontFamily: fonts.black,
-                  fontSize: 11,
-                  color: (currentResult?.score ?? 0) >= 85 ? colors.green : colors.gold,
-                  letterSpacing: 1.5,
-                  textTransform: 'uppercase',
-                  marginBottom: 4,
-                }}>
-                  {(currentResult?.score ?? 0) >= 90 ? 'PERFEITO' : (currentResult?.score ?? 0) >= 85 ? 'EXCELENTE' : (currentResult?.score ?? 0) >= 70 ? 'MUITO BOM' : 'SEGUE ASSIM'}
-                </Text>
-                <XPPill xp={Math.round((currentResult?.score ?? 0) / 5)} />
+            ) : (
+              <View style={{
+                padding: 20,
+                marginBottom: 16,
+                backgroundColor: colors.bgRaise,
+                borderRadius: radii.lg,
+                borderWidth: 1,
+                borderColor: `${currentResult.score >= 85 ? colors.green : colors.gold}44`,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 16,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                  <Text style={{
+                    fontFamily: fonts.black,
+                    fontSize: 56,
+                    color: currentResult.score >= 85 ? colors.green : colors.gold,
+                    lineHeight: 56,
+                    letterSpacing: -2,
+                  }}>{currentResult.score}</Text>
+                  <Text style={{
+                    fontFamily: fonts.bold,
+                    fontSize: 18,
+                    color: colors.textMute,
+                  }}>/100</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{
+                    fontFamily: fonts.black,
+                    fontSize: 11,
+                    color: currentResult.score >= 85 ? colors.green : colors.gold,
+                    letterSpacing: 1.5,
+                    textTransform: 'uppercase',
+                    marginBottom: 4,
+                  }}>
+                    {currentResult.score >= 90 ? 'PERFEITO' : currentResult.score >= 85 ? 'EXCELENTE' : currentResult.score >= 70 ? 'MUITO BOM' : 'SEGUE ASSIM'}
+                  </Text>
+                  <XPPill xp={Math.round(currentResult.score / 5)} />
+                </View>
               </View>
-            </View>
+            )}
 
             {/* Feedback */}
             <View style={{

@@ -71,7 +71,7 @@ export default function ReadingSuccessScreen() {
           <StreakPill count={st} />
         </View>
         <View style={{ width: '100%' }}>
-          <Press3DButton onPress={() => router.replace('/(tabs)/')} size="lg">
+          <Press3DButton onPress={() => router.replace('/')} size="lg">
             Voltar ao início
           </Press3DButton>
         </View>
