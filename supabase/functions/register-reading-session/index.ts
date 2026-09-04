@@ -3,30 +3,14 @@ import { createServiceClient } from '../_shared/supabase-client.ts';
 import { authErrorResponse, resolveUserId } from '../_shared/auth.ts';
 import { dispatchBackground } from '../_shared/background.ts';
 import type { ReadingSessionPayload } from '../_shared/types.ts';
-
-const SAOPAULO_OFFSET = -3; // UTC-3
-
-function getTodayInSaoPaulo(): string {
-  const now = new Date();
-  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-  const sp = new Date(utc + SAOPAULO_OFFSET * 3600000);
-  return sp.toISOString().split('T')[0];
-}
-
-function getMaxPageReached(sessions: { end_page: number }[]): number {
-  if (sessions.length === 0) return 0;
-  return Math.max(...sessions.map(s => s.end_page));
-}
-
-function findNewlyCompletedChapters(
-  chapters: { id: string; end_page: number }[],
-  previousMaxPage: number,
-  newMaxPage: number
-) {
-  return chapters.filter(
-    ch => ch.end_page > previousMaxPage && ch.end_page <= newMaxPage
-  );
-}
+// BER-35: a lógica pura vive em `reading.ts` para que o teste exercite o código
+// real. Antes ficava aqui dentro, sem export, e o teste testava cópias suas.
+import {
+  findNewlyCompletedChapters,
+  getMaxPageReached,
+  getTodayInSaoPaulo,
+  nextStreak,
+} from './reading.ts';
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -144,23 +128,7 @@ Deno.serve(async (req) => {
     .eq('user_id', user_id)
     .single();
 
-  let newCurrentStreak = 1;
-  let newLongestStreak = 1;
-
-  if (streak) {
-    const lastDate = streak.last_read_date;
-    if (lastDate === today) {
-      // Já leu hoje — não altera streak
-      newCurrentStreak = streak.current_streak;
-      newLongestStreak = streak.longest_streak;
-    } else {
-      const last = new Date(lastDate);
-      const todayDate = new Date(today);
-      const diffDays = Math.floor((todayDate.getTime() - last.getTime()) / 86400000);
-      newCurrentStreak = diffDays === 1 ? streak.current_streak + 1 : 1;
-      newLongestStreak = Math.max(newCurrentStreak, streak.longest_streak);
-    }
-  }
+  const { current: newCurrentStreak, longest: newLongestStreak } = nextStreak(streak, today);
 
   const { error: streakUpsertError } = await supabase
     .from('streaks')
