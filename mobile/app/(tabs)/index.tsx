@@ -8,18 +8,18 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Zap, Clock, Compass } from 'lucide-react-native';
+import { Compass, Wand } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
 import { ProfileErrorState } from '../../src/components/ProfileErrorState';
 import { useReadingStore } from '../../src/stores/readingStore';
-import { getStudentBooks, getStreak } from '../../src/api/queries';
+import { getStudentBooks, getStreak, loadPendingQuizzes } from '../../src/api/queries';
 import { Card } from '../../src/components/Card';
 import { StreakPill } from '../../src/components/StreakPill';
 import { BookCover } from '../../src/components/BookCover';
 import { ProgressBar } from '../../src/components/ProgressBar';
 import { Press3DButton } from '../../src/components/Press3DButton';
 import { colors, fonts, radii } from '../../src/theme/tokens';
-import type { Streak, StudentBook, Book } from '../../src/types/database';
+import type { Chapter, Streak, StudentBook, Book } from '../../src/types/database';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -27,6 +27,8 @@ export default function HomeScreen() {
   const { profile, profileStatus } = useAuthStore();
   const { currentBook, setCurrentBook } = useReadingStore();
   const [streak, setStreak] = useState<Streak | null>(null);
+  // BER-54: quiz que ficou para depois nunca era lembrado.
+  const [pendingQuizzes, setPendingQuizzes] = useState<Chapter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +41,7 @@ export default function HomeScreen() {
       setError(null);
 
       Promise.all([getStreak(profile.user_id), getStudentBooks(profile.user_id)])
-        .then(([s, books]) => {
+        .then(async ([s, books]) => {
           if (cancelled) return;
           setStreak(s);
           const raw = books.find((b) => b.status === 'reading') ?? books[0] ?? null;
@@ -49,11 +51,21 @@ export default function HomeScreen() {
           } else {
             setCurrentBook(null);
           }
+
+          // BER-54: depois dos livros, porque precisa deles para saber até onde o
+          // leitor chegou. Falhar aqui não derruba a Home — o card some, o resto fica.
+          try {
+            const pending = await loadPendingQuizzes(profile.user_id, books);
+            if (!cancelled) setPendingQuizzes(pending);
+          } catch {
+            if (!cancelled) setPendingQuizzes([]);
+          }
         })
         .catch(() => {
           if (cancelled) return;
           setError('Não foi possível carregar seus dados. Puxe para atualizar.');
           setStreak(null);
+          setPendingQuizzes([]);
           setCurrentBook(null);
         })
         .finally(() => { if (!cancelled) setLoading(false); });
@@ -249,63 +261,45 @@ export default function HomeScreen() {
             </Card>
           )}
 
-          {/* Mini stats */}
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <MiniStat Icon={Zap} iconColor={colors.purple} value="+0" label="XP hoje" tint={colors.purple} />
-            <MiniStat Icon={Clock} iconColor={colors.sky} value="0min" label="Tempo lendo" tint={colors.sky} />
-          </View>
+          {/* BER-54: aqui ficavam dois MiniStat com valores fixos no código —
+              "XP hoje +0" e "Tempo lendo 0min". Nenhuma das duas métricas existe
+              no produto: o app não mede tempo de leitura e não tem XP diário.
+              Mostrar número inventado é pior do que não mostrar nada. Saíram; o
+              espaço agora é do quiz que ficou esperando, que era código morto. */}
+          {pendingQuizzes.length > 0 && (
+            <Card style={{ padding: 18, gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Wand size={20} color={colors.purple} strokeWidth={2.4} />
+                <Text style={{
+                  fontFamily: fonts.black,
+                  fontSize: 16,
+                  color: colors.text,
+                  letterSpacing: -0.2,
+                }}>
+                  {pendingQuizzes.length === 1
+                    ? 'Um quiz esperando por você'
+                    : `${pendingQuizzes.length} quizzes esperando por você`}
+                </Text>
+              </View>
+              <Text style={{
+                fontFamily: fonts.medium,
+                fontSize: 14,
+                color: colors.textSoft,
+                lineHeight: 20,
+              }}>
+                Você terminou o capítulo {pendingQuizzes[0].number} e ainda não respondeu.
+              </Text>
+              <Press3DButton
+                onPress={() => router.push(`/quiz/${pendingQuizzes[0].id}`)}
+                Icon={Wand}
+                color="purple"
+              >
+                Responder agora
+              </Press3DButton>
+            </Card>
+          )}
         </View>
       </ScrollView>
-    </View>
-  );
-}
-
-function MiniStat({
-  Icon,
-  iconColor,
-  value,
-  label,
-  tint,
-}: {
-  Icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>;
-  iconColor: string;
-  value: string;
-  label: string;
-  tint: string;
-}) {
-  return (
-    <View style={{
-      flex: 1,
-      padding: 12,
-      backgroundColor: colors.bgRaise,
-      borderRadius: radii.md,
-      borderWidth: 1,
-      borderColor: colors.hairline,
-    }}>
-      <View style={{
-        width: 28,
-        height: 28,
-        borderRadius: 10,
-        backgroundColor: `${tint}22`,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 8,
-      }}>
-        <Icon size={15} color={iconColor} strokeWidth={2.4} />
-      </View>
-      <Text style={{
-        fontFamily: fonts.black,
-        fontSize: 17,
-        color: colors.text,
-        letterSpacing: -0.3,
-      }}>{value}</Text>
-      <Text style={{
-        fontFamily: fonts.semi,
-        fontSize: 10,
-        color: colors.textMute,
-        letterSpacing: 0.3,
-        marginTop: 1,
-      }}>{label}</Text>
     </View>
   );
 }

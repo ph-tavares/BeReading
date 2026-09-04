@@ -249,6 +249,12 @@ Deno.serve(async (req) => {
       user_id,
       answer_text: answer_text.trim(),
       evaluation_status: 'pending',
+      // BER-54: refazer a resposta mantinha a nota e o feedback da anterior. Se a
+      // nova avaliação falhasse, a tela mostrava a avaliação antiga ao lado do
+      // texto novo — parecendo que a IA respondeu, e respondeu a outra coisa.
+      comprehension_score: null,
+      ai_feedback: null,
+      evaluated_at: null,
     }, { onConflict: 'question_id,user_id' })
     .select('id')
     .single();
