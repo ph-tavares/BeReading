@@ -1,0 +1,61 @@
+name: Mobile Build
+
+# BER-51: o app só rodava via Expo Go, sem nenhuma forma configurada de
+# instalar numa pessoa de verdade (TestFlight, APK). Este workflow existe para
+# disparar um build via EAS sob demanda — não em todo push, porque cada build
+# consome cota do plano EAS e o resultado (TestFlight/APK) não deve sair sem
+# alguém decidir que é hora.
+#
+# Fica inerte até `EXPO_TOKEN` ser configurado nos secrets do repositório —
+# sem ele, o passo de build falha na autenticação, sem custo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Perfil do eas.json"
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - production
+      platform:
+        description: "Plataforma"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - ios
+          - android
+
+jobs:
+  build:
+    name: EAS Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # As env vars EXPO_PUBLIC_* de cada perfil devem estar configuradas no
+      # projeto EAS (`eas env:create`) antes do primeiro build — não são
+      # gerenciadas por este workflow. Ver docs/mobile-build.md.
+      - name: Disparar build
+        run: eas build --profile "${{ inputs.profile }}" --platform "${{ inputs.platform }}" --non-interactive --no-wait

@@ -72,6 +72,14 @@ SQL de schema direto em produção — isso dessincroniza o histórico de migrat
 próximo deploy. Runbook completo (secrets, deploy manual, rotação de token, troubleshooting):
 [`docs/deploy.md`](docs/deploy.md).
 
+## Distribuição do app (BER-51)
+
+O app só roda via Expo Go hoje — sem instalável para dar na mão de um leitor de
+verdade. `mobile/eas.json` e o workflow `.github/workflows/mobile-build.yml` deixam o
+build via EAS pronto para configurar (conta EAS, contas de desenvolvedor Apple/Google e
+o `bundleIdentifier` definitivo ainda faltam — nada disso foi criado). Runbook completo:
+[`docs/mobile-build.md`](docs/mobile-build.md).
+
 ## ⚠️ Known issues / dívida técnica
 
 - ~~`supabase/migrations/` dessincronizado da nuvem~~ — **resolvido (BER-31).** O schema foi
