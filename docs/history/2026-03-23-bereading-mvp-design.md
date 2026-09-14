@@ -1,4 +1,14 @@
-# BeReading MVP — Design Spec
+# BeReading MVP — Design Spec (arquivado)
+
+> **Arquivado em 14/09/2026 (BER-52).** Este documento descreve o piloto
+> escolar original — dashboard de professor, roles student/teacher, turmas —
+> que nunca existiu de fato no código e deixou de ser o produto em construção
+> depois do pivô B2C oficializado em 31/08/2026: assinatura paga pelo próprio
+> leitor adulto, sem escola no escopo imediato. A expansão escolar (BER-47)
+> fica para fase 2; se voltar à pauta, este spec é o ponto de partida, mas
+> precisa ser revisto contra o schema real (BER-31) antes de valer de novo.
+> Mantido aqui só como referência histórica de como o produto foi desenhado
+> originalmente — não representa o app hoje e não deve guiar trabalho atual.
 
 ## Contexto
 

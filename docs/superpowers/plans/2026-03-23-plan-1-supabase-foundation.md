@@ -8,7 +8,7 @@
 
 **Tech Stack:** Supabase CLI, PostgreSQL, TypeScript/Deno (Edge Functions), Deno test
 
-**Spec de referência:** `docs/superpowers/specs/2026-03-23-bereading-mvp-design.md`
+**Spec de referência:** `docs/history/2026-03-23-bereading-mvp-design.md` (arquivada em 14/09/2026 — BER-52, pivô B2C)
 
 ---
 

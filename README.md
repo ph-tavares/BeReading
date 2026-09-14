@@ -47,10 +47,14 @@ supabase functions deploy generate-questions evaluate-answer --no-verify-jwt --p
 
 ## ⚠️ Known issues / dívida técnica
 
-- **`supabase/migrations/` está dessincronizado da nuvem.** O schema deployado usa
-  `profiles`/`user_id`; as migrations do repo criam `students`/`student_id` e **falham ao
-  aplicar localmente** (apóstrofos não escapados em `005_book_contents_pilot.sql` →
-  erro de sintaxe SQL). **Não use `supabase start` esperando paridade** — o backend real é o
-  projeto na nuvem. Reproduzir o backend a partir do repo exige reconciliar as migrations.
-- As Edge Functions estão com **`verify_jwt=false`**: `user_id` chega no body sem ser
-  validado contra o JWT do chamador (risco de IDOR). Endereçar antes de produção real.
+- ~~`supabase/migrations/` dessincronizado da nuvem~~ — **resolvido (BER-31).** O schema foi
+  reconciliado a partir do banco vivo em `20260910210000_baseline_reconciled_from_live.sql`,
+  que é a fonte única da verdade desde 10/09/2026. `supabase start` / `supabase db reset`
+  agora aplicam do zero com paridade real — as 5 migrations antigas (`students`/`student_id`,
+  com o erro de sintaxe em `005_book_contents_pilot.sql`) foram movidas para
+  `docs/history/` como referência histórica, não para reexecução.
+- ~~Edge Functions com `verify_jwt=false` aceitando `user_id` sem validar contra o JWT (IDOR)~~
+  — **resolvido no código (BER-30).** As funções de ação do usuário derivam o dono da ação do
+  JWT (`resolveUserId`, em `_shared/auth.ts`); `user_id` no corpo só serve para detectar
+  divergência. Não verificamos aqui se a flag `verify_jwt` de cada function no projeto de
+  produção também foi atualizada — isso é configuração de deploy, fora do repositório.
