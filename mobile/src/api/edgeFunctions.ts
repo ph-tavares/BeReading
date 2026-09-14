@@ -115,3 +115,13 @@ export async function evaluateAnswer(
   if (data.error) throw new Error(data.error);
   return data.data as EvaluateAnswerResponse;
 }
+
+/**
+ * BER-62: apaga o dado do leitor e a conta de login. Auto-serviço — o dono é
+ * sempre quem está logado, nunca um id passado por fora.
+ */
+export async function deleteAccount(): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('delete-account');
+  if (error) throw error;
+  if (data.error) throw new Error(data.error);
+}

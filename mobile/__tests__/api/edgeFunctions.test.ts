@@ -8,6 +8,7 @@ import {
   buildEvaluateAnswerPayload,
   evaluateAnswer,
   interpretEvaluateFailure,
+  deleteAccount,
 } from '../../src/api/edgeFunctions';
 import { supabase } from '../../src/lib/supabase';
 
@@ -101,5 +102,26 @@ describe('buildEvaluateAnswerPayload', () => {
   it('retorna null para answer vazia após trim', () => {
     const result = buildEvaluateAnswerPayload('q-1', 'user-1', '   ');
     expect(result).toBeNull();
+  });
+});
+
+describe('deleteAccount (BER-62)', () => {
+  beforeEach(() => invoke.mockReset());
+
+  it('chama a function sem body — o dono é sempre quem está logado', async () => {
+    invoke.mockResolvedValue({ data: { data: { deleted: true }, error: null }, error: null });
+    await deleteAccount();
+    expect(invoke).toHaveBeenCalledWith('delete-account');
+  });
+
+  it('erro de rede/HTTP é relançado', async () => {
+    const err = new Error('network error');
+    invoke.mockResolvedValue({ data: null, error: err });
+    await expect(deleteAccount()).rejects.toBe(err);
+  });
+
+  it('erro de negócio no corpo vira Error', async () => {
+    invoke.mockResolvedValue({ data: { data: null, error: 'Failed to delete account data' }, error: null });
+    await expect(deleteAccount()).rejects.toThrow('Failed to delete account data');
   });
 });

@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Pressable,
+  Alert,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,6 +28,7 @@ import {
   getStudentBooks,
   getReadingSessions,
 } from '../../src/api/queries';
+import { deleteAccount } from '../../src/api/edgeFunctions';
 import { supabase } from '../../src/lib/supabase';
 import { colors, fonts, radii } from '../../src/theme/tokens';
 import type { Streak, Badge, StudentBadge, StudentBook, ReadingSession } from '../../src/types/database';
@@ -42,6 +44,7 @@ export default function PerfilScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showGateModal, setShowGateModal] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -99,6 +102,35 @@ export default function PerfilScreen() {
   async function handleLogout() {
     await supabase.auth.signOut();
     clear();
+  }
+
+  // BER-62: exigência de loja (Apple/Google) e direito de eliminação (LGPD Art.
+  // 18) — confirmação explícita antes de uma ação que não tem volta.
+  function handleDeleteAccount() {
+    Alert.alert(
+      'Excluir sua conta?',
+      'Isso apaga sua sequência, medalhas, respostas e progresso de leitura para sempre. Não é possível desfazer.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir conta',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingAccount(true);
+            try {
+              await deleteAccount();
+              await supabase.auth.signOut();
+              clear();
+            } catch (e: unknown) {
+              const msg = e instanceof Error ? e.message : 'Erro ao excluir a conta';
+              Alert.alert('Não foi possível excluir sua conta', msg);
+            } finally {
+              setDeletingAccount(false);
+            }
+          },
+        },
+      ],
+    );
   }
 
   const totalPages = sessions.reduce((sum, s) => sum + s.pages_read, 0);
@@ -286,6 +318,18 @@ export default function PerfilScreen() {
             onDismiss={() => setShowGateModal(false)}
             onSuccess={() => setShowGateModal(false)}
           />
+
+          <Pressable
+            onPress={handleDeleteAccount}
+            disabled={deletingAccount}
+            style={{ alignItems: 'center', paddingVertical: 16, opacity: deletingAccount ? 0.5 : 1 }}
+          >
+            <Text style={{
+              fontFamily: fonts.bold,
+              fontSize: 13,
+              color: colors.textMute,
+            }}>{deletingAccount ? 'Excluindo conta…' : 'Excluir conta'}</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </View>
