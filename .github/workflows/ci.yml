@@ -61,7 +61,8 @@ jobs:
             award-badges/index.ts \
             generate-questions/index.ts \
             retry-pending-quizzes/index.ts \
-            check-chapter-completion/index.ts
+            check-chapter-completion/index.ts \
+            delete-account/index.ts
 
       - name: Testes
         run: deno test --allow-net --allow-env

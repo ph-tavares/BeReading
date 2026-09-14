@@ -29,6 +29,8 @@ export interface FakeSupabase {
   tables: Record<string, Record<string, unknown>[]>;
   /** Toda chamada recebida, na ordem — útil para provar que um dispatch aconteceu. */
   calls: RecordedCall[];
+  /** IDs apagados via `auth.admin.deleteUser`, na ordem. */
+  deletedAuthUsers: string[];
   close(): Promise<void>;
 }
 
@@ -130,6 +132,7 @@ export function startFakeSupabase(options: FakeSupabaseOptions = {}): FakeSupaba
   }
   const users = options.users ?? {};
   const calls: RecordedCall[] = [];
+  const deletedAuthUsers: string[] = [];
 
   function respond(rows: Record<string, unknown>[], single: boolean): Response {
     if (single) {
@@ -222,6 +225,25 @@ export function startFakeSupabase(options: FakeSupabaseOptions = {}): FakeSupaba
         for (const row of rows) Object.assign(row, body as Record<string, unknown>);
         return respond(rows, wantsSingle);
       }
+
+      if (method === 'DELETE') {
+        const [removed, kept] = [
+          tables[table].filter((r) => matchesFilters(r, url.searchParams)),
+          tables[table].filter((r) => !matchesFilters(r, url.searchParams)),
+        ];
+        tables[table] = kept;
+        return respond(removed, wantsSingle);
+      }
+    }
+
+    const adminUserMatch = url.pathname.match(/^\/auth\/v1\/admin\/users\/(.+)$/);
+    if (adminUserMatch && method === 'DELETE') {
+      const id = adminUserMatch[1];
+      for (const token of Object.keys(users)) {
+        if (users[token].id === id) delete users[token];
+      }
+      deletedAuthUsers.push(id);
+      return new Response(JSON.stringify({}), { headers: jsonHeaders() });
     }
 
     // Chamada para outra rota (ex: /functions/v1/algo) que o teste não precisa
@@ -234,6 +256,7 @@ export function startFakeSupabase(options: FakeSupabaseOptions = {}): FakeSupaba
     url: `http://127.0.0.1:${addr.port}`,
     tables,
     calls,
+    deletedAuthUsers,
     close: () => server.shutdown(),
   };
 }
