@@ -58,10 +58,10 @@ export function summarizeCompletedChapters(ids: string[]): {
 /**
  * Quantas páginas do intervalo informado já tinham sido registradas antes.
  *
- * BER-54: páginas relidas entram de novo na contagem — `pages_read` é coluna
- * **gerada** no banco (`end_page - start_page + 1`), então não há como contar só
- * as novas sem migration, que hoje é inaplicável (BER-31). O que dá para fazer
- * agora é não deixar isso acontecer em silêncio: a tela avisa antes de enviar.
+ * BER-54: avisa quantas páginas do intervalo já tinham sido registradas antes,
+ * para quem está prestes a enviar. O double-count em si (XP/medalha por
+ * página relida) foi corrigido no servidor — ver BER-68 — mas o aviso de
+ * transparência aqui continua valendo por conta própria.
  */
 export function pagesAlreadyRead(start: number, end: number, currentPage: number): number {
   if (currentPage <= 0 || start > currentPage) return 0;

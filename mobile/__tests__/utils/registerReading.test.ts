@@ -84,9 +84,8 @@ describe('summarizeCompletedChapters', () => {
   });
 });
 
-// BER-54: relê e registra de novo -> as páginas contam duas vezes. Não dá para
-// corrigir a contagem sem migration (`pages_read` é coluna gerada), mas dá para
-// a pessoa saber antes de enviar.
+// BER-54: avisa quem está registrando quantas páginas do intervalo já tinham
+// sido lidas antes. A contagem dupla em si foi corrigida no servidor (BER-68).
 describe('pagesAlreadyRead', () => {
   it('intervalo totalmente novo não tem sobreposição', () => {
     expect(pagesAlreadyRead(51, 80, 50)).toBe(0);

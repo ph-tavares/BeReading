@@ -125,9 +125,10 @@ export default function RegisterReadingScreen() {
     !isNaN(sNum) && !isNaN(eNum) ? validatePageRange(sNum, eNum, book.total_pages) : 'incompleto';
   const valid = !validationError;
   const pagesRead = valid ? eNum - sNum + 1 : null;
-  // BER-54: paginas relidas entram de novo na contagem — `pages_read` e coluna
-  // gerada no banco, entao a correcao de verdade depende de migration (BER-31).
-  // O que da para fazer agora e a pessoa saber antes de enviar.
+  // BER-54: avisa quantas dessas páginas já tinham sido registradas antes de
+  // enviar. O double-count em si (XP/medalha) foi corrigido no servidor
+  // (BER-68) — este aviso segue valendo por conta própria, como transparência
+  // para quem está registrando.
   const repetidas = valid ? pagesAlreadyRead(sNum, eNum, studentBook.current_page) : 0;
   const progressNow = valid
     ? eNum / book.total_pages
