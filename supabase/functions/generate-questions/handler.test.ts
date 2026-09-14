@@ -122,6 +122,31 @@ Deno.test('generate-questions: caminho feliz — gera e salva as perguntas, marc
   }
 });
 
+Deno.test('generate-questions: fixa a temperatura da IA para consistência entre gerações (BER-55)', async () => {
+  const fake = startFakeSupabase({
+    tables: {
+      questions: [],
+      chapters: [{
+        id: 'ch-1', number: 1, title: 'Cap 1', book_id: 'book-1',
+        book_contents: { content_text: CONTENT_200_CHARS },
+        books: { title: 'Livro', author: 'Autor' },
+      }],
+    },
+  });
+  withEnv(fake.url);
+
+  try {
+    const { handler } = await import('./index.ts');
+    const requests: unknown[] = [];
+    await withMockedAIFetch(VALID_AI_RESPONSE, () => handler(request({ chapter_id: 'ch-1' })), requests);
+
+    assertEquals(requests.length, 1);
+    assertEquals((requests[0] as { temperature: number }).temperature, 0.4);
+  } finally {
+    await fake.close();
+  }
+});
+
 Deno.test('generate-questions: falha da IA marca o capítulo como failed para o retry (BER-27/BER-36)', async () => {
   const fake = startFakeSupabase({
     tables: {

@@ -24,6 +24,12 @@ function inProgressResponse(): Response {
 //   OpenAI    -> AI_API_KEY, AI_MODEL (default gpt-4o-mini)
 //   Anthropic -> ANTHROPIC_API_KEY, ANTHROPIC_MODEL (default claude-haiku-4-5)
 // ---------------------------------------------------------------------------
+// BER-55: sem temperature, os dois provedores usam o default de 1.0 — as
+// perguntas de um mesmo capítulo variam mais do que precisam. O cache por
+// capítulo mitiga o custo de gerar de novo, mas não a qualidade de uma geração
+// só. 0.4 mantém formato e tom consistentes sem virar sempre a mesma pergunta.
+const QUESTION_TEMPERATURE = 0.4;
+
 async function callAI(prompt: string): Promise<string> {
   const provider = Deno.env.get('AI_PROVIDER') ?? 'openai';
 
@@ -42,6 +48,7 @@ async function callAI(prompt: string): Promise<string> {
       body: JSON.stringify({
         model,
         max_tokens: 1024,
+        temperature: QUESTION_TEMPERATURE,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -68,6 +75,7 @@ async function callAI(prompt: string): Promise<string> {
     body: JSON.stringify({
       model,
       max_tokens: 1024,
+      temperature: QUESTION_TEMPERATURE,
       messages: [{ role: 'user', content: prompt }],
     }),
   });

@@ -16,15 +16,25 @@ function urlOf(input: RequestInfo | URL): string {
  * Roda `fn` com `fetch` interceptado: chamadas à OpenAI ou à Anthropic devolvem
  * `responseText` como o conteúdo gerado; qualquer outra URL segue para o fetch
  * original (o fake Supabase local).
+ *
+ * @param capturedRequestBodies quando passado, recebe o corpo (já parseado) de
+ * cada chamada de IA interceptada — útil para checar parâmetros como
+ * `temperature` sem duplicar a interceptação de fetch em cada teste.
  */
 export async function withMockedAIFetch<T>(
   responseText: string,
   fn: () => Promise<T>,
+  capturedRequestBodies?: unknown[],
 ): Promise<T> {
   const original = globalThis.fetch;
 
   globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     const url = urlOf(input);
+    const isAI = url.startsWith('https://api.openai.com/') || url.startsWith('https://api.anthropic.com/');
+
+    if (isAI && capturedRequestBodies && typeof init?.body === 'string') {
+      capturedRequestBodies.push(JSON.parse(init.body));
+    }
 
     if (url.startsWith('https://api.openai.com/')) {
       return Promise.resolve(new Response(JSON.stringify({
