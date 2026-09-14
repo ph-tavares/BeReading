@@ -21,6 +21,23 @@ export function getTodayInSaoPaulo(now: Date = new Date()): string {
 // BER-48: a trava do quiz no evaluate-answer usa a mesma regra.
 export { getMaxPageReached } from '../_shared/progress.ts';
 
+/**
+ * Quantas páginas desta sessão são NOVAS (nunca contadas antes) — BER-68.
+ *
+ * `pages_read` era coluna gerada (`end_page - start_page + 1`): reler um
+ * trecho já registrado somava as mesmas páginas de novo no XP e nas medalhas.
+ * Esta é a conta que falta gravar: o intervalo [start_page, end_page] menos a
+ * parte que já ficava coberta pela maior página já alcançada antes desta
+ * sessão. Reler é legítimo (o aluno pode reler); contar duas vezes não.
+ */
+export function computeNewPagesRead(
+  startPage: number,
+  endPage: number,
+  previousMaxPage: number,
+): number {
+  return Math.max(0, endPage - Math.max(startPage - 1, previousMaxPage));
+}
+
 /** Capítulos que passaram de "não completo" para "completo" com esta sessão. */
 export function findNewlyCompletedChapters<T extends { end_page: number }>(
   chapters: T[],

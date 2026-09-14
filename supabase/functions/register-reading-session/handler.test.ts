@@ -66,6 +66,7 @@ Deno.test({
       assertEquals(json.data.completed_chapter_ids, ['ch-1']);
 
       assertEquals(fake.tables.reading_sessions.length, 1);
+      assertEquals(fake.tables.reading_sessions[0].pages_read, 50); // BER-68
       assertEquals(fake.tables.streaks.length, 1);
       assertEquals(fake.tables.streaks[0].current_streak, 1);
 
@@ -175,4 +176,56 @@ Deno.test({
       await fake.close();
     }
   },
+});
+
+Deno.test('register-reading-session: reler um trecho já registrado não soma páginas de novo no XP (BER-68)', async () => {
+  const fake = startFakeSupabase({
+    users: { [TOKEN]: { id: USER_ID } },
+    tables: {
+      books: [{ id: 'book-1', total_pages: 300 }],
+      reading_sessions: [{ id: 's0', user_id: USER_ID, book_id: 'book-1', end_page: 50 }],
+      student_books: [],
+      chapters: [],
+    },
+  });
+  withEnv(fake.url);
+
+  try {
+    const { handler } = await import('./index.ts');
+    // já leu até a página 50; registra 30-50 de novo (releitura completa)
+    const res = await handler(request({ user_id: USER_ID, book_id: 'book-1', start_page: 30, end_page: 50 }));
+    const json = await res.json();
+
+    assertEquals(res.status, 200);
+    assertEquals(json.data.new_max_page, 50);
+    assertEquals(fake.tables.reading_sessions.length, 2);
+    assertEquals(fake.tables.reading_sessions[1].pages_read, 0);
+  } finally {
+    await fake.close();
+  }
+});
+
+Deno.test('register-reading-session: intervalo parcialmente sobreposto conta só a parte nova (BER-68)', async () => {
+  const fake = startFakeSupabase({
+    users: { [TOKEN]: { id: USER_ID } },
+    tables: {
+      books: [{ id: 'book-1', total_pages: 300 }],
+      reading_sessions: [{ id: 's0', user_id: USER_ID, book_id: 'book-1', end_page: 50 }],
+      student_books: [],
+      chapters: [],
+    },
+  });
+  withEnv(fake.url);
+
+  try {
+    const { handler } = await import('./index.ts');
+    // já leu até 50; registra 30-80 -> só 51-80 (30 páginas) são novas
+    const res = await handler(request({ user_id: USER_ID, book_id: 'book-1', start_page: 30, end_page: 80 }));
+    const json = await res.json();
+
+    assertEquals(res.status, 200);
+    assertEquals(fake.tables.reading_sessions[1].pages_read, 30);
+  } finally {
+    await fake.close();
+  }
 });

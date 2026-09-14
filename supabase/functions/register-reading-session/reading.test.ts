@@ -4,6 +4,7 @@
 // teve — mudar a regra de streak não quebrava teste nenhum.
 import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
 import {
+  computeNewPagesRead,
   findNewlyCompletedChapters,
   getMaxPageReached,
   getTodayInSaoPaulo,
@@ -133,4 +134,28 @@ Deno.test('getTodayInSaoPaulo: vira o dia às 03:00 UTC (00:00 em São Paulo), n
     getTodayInSaoPaulo(new Date('2026-03-24T03:00:00.000Z')),
     '2026-03-24',
   );
+});
+
+// --- BER-68: pages_read passa a contar só páginas novas ---
+
+Deno.test('computeNewPagesRead: primeira leitura conta o intervalo inteiro', () => {
+  assertEquals(computeNewPagesRead(1, 50, 0), 50);
+});
+
+Deno.test('computeNewPagesRead: reler o mesmo intervalo inteiro conta zero páginas novas', () => {
+  assertEquals(computeNewPagesRead(1, 50, 50), 0);
+});
+
+Deno.test('computeNewPagesRead: intervalo parcialmente sobreposto conta só a parte nova', () => {
+  // já leu até 50; registra 30-80 -> só 51-80 (30 páginas) são novas
+  assertEquals(computeNewPagesRead(30, 80, 50), 30);
+});
+
+Deno.test('computeNewPagesRead: pular à frente não inventa páginas no meio como lidas', () => {
+  // já leu até 50; registra 80-100 direto -> conta só 80-100 (21 páginas), não 51-100
+  assertEquals(computeNewPagesRead(80, 100, 50), 21);
+});
+
+Deno.test('computeNewPagesRead: nunca fica negativo', () => {
+  assertEquals(computeNewPagesRead(1, 10, 100), 0);
 });

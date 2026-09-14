@@ -6,6 +6,7 @@ import type { ReadingSessionPayload } from '../_shared/types.ts';
 // BER-35: a lógica pura vive em `reading.ts` para que o teste exercite o código
 // real. Antes ficava aqui dentro, sem export, e o teste testava cópias suas.
 import {
+  computeNewPagesRead,
   findNewlyCompletedChapters,
   getMaxPageReached,
   getTodayInSaoPaulo,
@@ -95,9 +96,13 @@ export async function handler(req: Request): Promise<Response> {
   const previousMaxPage = getMaxPageReached(prevSessions ?? []);
 
   // 3. Criar ReadingSession
+  // BER-68: pages_read deixou de ser coluna gerada — grava só as páginas
+  // novas desta sessão, não o intervalo bruto. Reler é legítimo; contar duas
+  // vezes no XP e nas medalhas não.
+  const pagesRead = computeNewPagesRead(start_page, end_page, previousMaxPage);
   const { error: sessionError } = await supabase
     .from('reading_sessions')
-    .insert({ user_id, book_id, start_page, end_page });
+    .insert({ user_id, book_id, start_page, end_page, pages_read: pagesRead });
 
   if (sessionError) {
     return new Response(JSON.stringify({ error: 'Failed to create session' }), {
