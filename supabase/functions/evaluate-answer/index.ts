@@ -179,7 +179,9 @@ async function handleReevaluation(supabase: SupabaseClient, answerId: unknown): 
   });
 }
 
-Deno.serve(async (req) => {
+// BER-49: exportada para que o teste de handler chame o código real, não uma
+// cópia — o mesmo raciocínio da BER-35 para a lógica pura.
+export async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
@@ -199,19 +201,25 @@ Deno.serve(async (req) => {
 
   const { question_id, user_id: bodyUserId, answer_text } = payload;
 
+  const supabase = createServiceClient();
+
+  // BER-36: chamada do cron para re-avaliar uma resposta que ficou sem nota.
+  // Só entra aqui quem apresenta a service_role key; para o app, nada muda.
+  //
+  // BER-49: este guard tinha que vir ANTES da validação de `question_id`/
+  // `answer_text` logo abaixo. O cron manda só `{ answer_id }` (ver
+  // retry-pending-quizzes/index.ts) — com o guard depois, todo request do cron
+  // caía 400 sem nunca chegar em `handleReevaluation`. O retry da BER-36 nunca
+  // tinha reavaliado uma resposta sequer.
+  if (isServiceRole(req.headers.get('Authorization'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))) {
+    return await handleReevaluation(supabase, payload.answer_id);
+  }
+
   if (!question_id || !answer_text?.trim()) {
     return new Response(JSON.stringify({ error: 'Missing required fields' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
-  }
-
-  const supabase = createServiceClient();
-
-  // BER-36: chamada do cron para re-avaliar uma resposta que ficou sem nota.
-  // Só entra aqui quem apresenta a service_role key; para o app, nada muda.
-  if (isServiceRole(req.headers.get('Authorization'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))) {
-    return await handleReevaluation(supabase, payload.answer_id);
   }
 
   // BER-30: sem isto, o upsert em (question_id, user_id) abaixo sobrescreve a
@@ -293,4 +301,8 @@ Deno.serve(async (req) => {
     },
     error: null,
   }), { headers: { 'Content-Type': 'application/json' } });
-});
+}
+
+// BER-49: só sobe o listener quando este arquivo é o entrypoint (deploy real).
+// Um teste que importa `handler` não pode abrir uma porta de verdade.
+if (import.meta.main) Deno.serve(handler);
