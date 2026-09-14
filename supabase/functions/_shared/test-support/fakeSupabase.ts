@@ -64,12 +64,35 @@ function resolveEmbeds(
   return result;
 }
 
+/** Compara numericamente quando os dois lados parseiam como número; senão, como string (funciona para ISO-8601). */
+function compare(rowValue: unknown, target: string): number {
+  const rowNum = typeof rowValue === 'number' ? rowValue : Number(rowValue);
+  const targetNum = Number(target);
+  if (!Number.isNaN(rowNum) && !Number.isNaN(targetNum) && rowValue !== null && rowValue !== undefined) {
+    return rowNum < targetNum ? -1 : rowNum > targetNum ? 1 : 0;
+  }
+  const rowStr = String(rowValue ?? '');
+  return rowStr < target ? -1 : rowStr > target ? 1 : 0;
+}
+
+/**
+ * Um subconjunto dos operadores do PostgREST: `eq`, `neq`, `gt`, `gte`, `lt`,
+ * `lte`. Combinações via `.or(...)` não são interpretadas — ver o comentário de
+ * `resolveEmbeds` sobre o mesmo tipo de limite deste fake.
+ */
 function matchesFilters(row: Record<string, unknown>, params: URLSearchParams): boolean {
   for (const [key, value] of params) {
     if (key === 'select' || key === 'on_conflict' || key === 'order' || key === 'limit') continue;
-    const eq = value.match(/^eq\.(.*)$/);
-    if (!eq) continue;
-    if (String(row[key]) !== eq[1]) return false;
+    const op = value.match(/^(eq|neq|gt|gte|lt|lte)\.(.*)$/);
+    if (!op) continue;
+    const [, operator, target] = op;
+
+    if (operator === 'eq' && String(row[key]) !== target) return false;
+    if (operator === 'neq' && String(row[key]) === target) return false;
+    if (operator === 'gt' && compare(row[key], target) <= 0) return false;
+    if (operator === 'gte' && compare(row[key], target) < 0) return false;
+    if (operator === 'lt' && compare(row[key], target) >= 0) return false;
+    if (operator === 'lte' && compare(row[key], target) > 0) return false;
   }
   return true;
 }

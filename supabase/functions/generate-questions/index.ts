@@ -7,6 +7,7 @@ import { parseQuestions } from '../_shared/ai-json.ts';
 import { buildQuestionPrompt } from './prompt.ts';
 import { buildNoContentMessage, hasUsableContent } from '../_shared/content.ts';
 import { buildClaimableFilter, isClaimable } from './claim.ts';
+import { notifyOps } from '../_shared/ops-alert.ts';
 
 const QUESTION_COUNT = 4;
 
@@ -291,6 +292,11 @@ export async function handler(req: Request): Promise<Response> {
     }), { headers: { 'Content-Type': 'application/json' } });
 
   } catch (err) {
+    // BER-39: antes, esta falha não deixava rastro nenhum além da linha
+    // `failed` — nenhum log, nenhum alerta. O retry cobre o sintoma; isto
+    // avisa que ele está sendo necessário.
+    await notifyOps('generate-questions', `falha ao gerar perguntas para o capítulo ${chapter_id}: ${err}`);
+
     // Marcar como falha para retry via pg_cron
     await supabase.from('chapter_quiz_status').upsert({
       chapter_id,

@@ -2,6 +2,7 @@
 import { createServiceClient } from '../_shared/supabase-client.ts';
 import { authErrorResponse, isServiceRole, resolveUserId } from '../_shared/auth.ts';
 import { hasReachedChapterEnd } from '../_shared/progress.ts';
+import { notifyOps } from '../_shared/ops-alert.ts';
 import { existingAnswerResult, isUniqueViolation, PENDING_FEEDBACK } from './submission.ts';
 import { parseEvaluation, type ParsedEvaluation } from '../_shared/ai-json.ts';
 import type { AnswerPayload } from '../_shared/types.ts';
@@ -108,12 +109,14 @@ async function evaluateAndStore(
       .eq('id', answerId);
 
     if (updateError) {
-      console.error('Failed to update answer with evaluation:', updateError.message);
+      await notifyOps('evaluate-answer', `falha ao gravar avaliação da resposta ${answerId}: ${updateError.message}`);
     }
 
     return evaluation;
   } catch (err) {
-    console.error(`[evaluate-answer] avaliação falhou para a resposta ${answerId}:`, err);
+    // BER-39: antes, só um console.error — sem alerta, sem rastro depois de
+    // 24h de log do Edge Runtime.
+    await notifyOps('evaluate-answer', `avaliação falhou para a resposta ${answerId}: ${err}`);
     // Marcar como falha — o cron de retry volta aqui depois (BER-36).
     await supabase
       .from('answers')

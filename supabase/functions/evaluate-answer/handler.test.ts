@@ -3,7 +3,7 @@
 // app e cron de reavaliação) que faltava — só o prompt/parsing tinha teste.
 import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
 import { startFakeSupabase } from '../_shared/test-support/fakeSupabase.ts';
-import { withMockedAIFetch } from '../_shared/test-support/mockAI.ts';
+import { withFailingAIFetch, withMockedAIFetch } from '../_shared/test-support/mockAI.ts';
 
 const SERVICE_KEY = 'service-role-key-teste';
 const TOKEN = 'jwt-leitor';
@@ -78,6 +78,28 @@ Deno.test('evaluate-answer: caminho do app — avalia, salva a nota e o feedback
     assertEquals(fake.tables.answers.length, 1);
     assertEquals(fake.tables.answers[0].comprehension_score, 88);
     assertEquals(fake.tables.answers[0].evaluation_status, 'completed');
+  } finally {
+    await fake.close();
+  }
+});
+
+Deno.test('evaluate-answer: falha da IA marca a resposta como failed (BER-36) e não fica em silêncio (BER-39)', async () => {
+  const fake = startFakeSupabase(readerFixture());
+  withEnv(fake.url);
+
+  try {
+    const { handler } = await import('./index.ts');
+    const res = await withFailingAIFetch(
+      500,
+      () => handler(request({ question_id: 'q1', user_id: USER_ID, answer_text: 'minha resposta' }, `Bearer ${TOKEN}`)),
+    );
+    const json = await res.json();
+
+    // A resposta fica salva (pending -> failed); o retry cobre depois.
+    assertEquals(res.status, 200);
+    assertEquals(json.data.score, null);
+    assertEquals(fake.tables.answers.length, 1);
+    assertEquals(fake.tables.answers[0].evaluation_status, 'failed');
   } finally {
     await fake.close();
   }

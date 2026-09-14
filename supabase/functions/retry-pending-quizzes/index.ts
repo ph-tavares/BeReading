@@ -16,6 +16,7 @@ import {
   EVALUATION_GIVE_UP_AFTER_MS,
   EVALUATION_STUCK_AFTER_MS,
 } from './answers-filter.ts';
+import { notifyOps } from '../_shared/ops-alert.ts';
 
 const MAX_ATTEMPTS = 3;
 const QUIZ_STUCK_AFTER_MS = 30 * 60 * 1000;
@@ -119,7 +120,31 @@ async function retryPendingEvaluations(
   return reevaluated;
 }
 
-Deno.serve(async (req) => {
+/**
+ * BER-39: quanto ficou para trás de vez — não o que ainda vai ser re-tentado
+ * (isso é o retry funcionando), mas o que já esgotou as tentativas e não vai se
+ * curar sozinho. É esse número que precisa acordar alguém.
+ */
+async function countAbandoned(supabase: SupabaseClient, now: number): Promise<{ quizzes: number; answers: number }> {
+  const { data: quizzes } = await supabase
+    .from('chapter_quiz_status')
+    .select('chapter_id')
+    .neq('status', 'generated')
+    .gte('attempts', MAX_ATTEMPTS);
+
+  const giveUpBefore = new Date(now - EVALUATION_GIVE_UP_AFTER_MS).toISOString();
+  const { data: answers } = await supabase
+    .from('answers')
+    .select('id')
+    .neq('evaluation_status', 'completed')
+    .lt('answered_at', giveUpBefore);
+
+  return { quizzes: quizzes?.length ?? 0, answers: answers?.length ?? 0 };
+}
+
+// BER-49: exportada para que o teste de handler chame o código real, não uma
+// cópia — o mesmo raciocínio da BER-35 para a lógica pura.
+export async function handler(req: Request): Promise<Response> {
   // Função interna (BER-30): entra o pg_cron, com o CRON_SECRET que lê do Vault, ou
   // quem tiver a service_role. Ver callers.ts (BER-69 / BER-33).
   try {
@@ -154,8 +179,23 @@ Deno.serve(async (req) => {
 
   const reevaluated = await retryPendingEvaluations(supabase, invoker);
 
+  // BER-39: item (2) da proposta — "cron diário que conta presos e alerta se >
+  // 0" — sem agendar nada novo. Uma function nova exigiria mexer no pg_cron via
+  // migration, inaplicável hoje (BER-31); este cron já roda de hora em hora.
+  const abandoned = await countAbandoned(supabase, Date.now());
+  if (abandoned.quizzes > 0 || abandoned.answers > 0) {
+    await notifyOps(
+      'retry-pending-quizzes',
+      `${abandoned.quizzes} capítulo(s) e ${abandoned.answers} resposta(s) esgotaram as tentativas e não vão se resolver sozinhos.`,
+    );
+  }
+
   return new Response(JSON.stringify({
-    data: { retried, reevaluated },
+    data: { retried, reevaluated, abandoned },
     error: null,
   }), { headers: { 'Content-Type': 'application/json' } });
-});
+}
+
+// BER-49: só sobe o listener quando este arquivo é o entrypoint (deploy real).
+// Um teste que importa `handler` não pode abrir uma porta de verdade.
+if (import.meta.main) Deno.serve(handler);
