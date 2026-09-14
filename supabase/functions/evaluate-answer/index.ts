@@ -1,6 +1,8 @@
 // supabase/functions/evaluate-answer/index.ts
 import { createServiceClient } from '../_shared/supabase-client.ts';
 import { authErrorResponse, isServiceRole, resolveUserId } from '../_shared/auth.ts';
+import { hasReachedChapterEnd } from '../_shared/progress.ts';
+import { existingAnswerResult, isUniqueViolation, PENDING_FEEDBACK } from './submission.ts';
 import { parseEvaluation, type ParsedEvaluation } from '../_shared/ai-json.ts';
 import type { AnswerPayload } from '../_shared/types.ts';
 // BER-35: o prompt vive em módulo próprio para ser testado de verdade.
@@ -235,10 +237,10 @@ export async function handler(req: Request): Promise<Response> {
     return authErrorResponse(err);
   }
 
-  // Buscar pergunta + conteúdo do capítulo
+  // Buscar pergunta + capítulo (fim e livro, para a trava) + conteúdo
   const { data: question } = await supabase
     .from('questions')
-    .select('question_text, type, chapter_id, chapters(book_contents(content_text))')
+    .select('question_text, type, chapter_id, chapters(end_page, book_id, book_contents(content_text))')
     .eq('id', question_id)
     .single();
 
@@ -249,23 +251,52 @@ export async function handler(req: Request): Promise<Response> {
     });
   }
 
-  // Salvar resposta imediatamente com evaluation_status = 'pending'
+  // BER-48: só responde quem leu. Mesma regra que dispara a geração das perguntas
+  // no register-reading-session: a maior página registrada alcança o fim do capítulo.
+  // Sem tipos gerados, o supabase-js infere a relação como lista; o PostgREST devolve
+  // objeto, porque é muitos-para-um (questions.chapter_id → chapters).
+  const chapter = question.chapters as unknown as { end_page: number; book_id: string } | null;
+  const { data: sessions } = await supabase
+    .from('reading_sessions')
+    .select('end_page')
+    .eq('user_id', user_id)
+    .eq('book_id', chapter?.book_id ?? '');
+
+  if (!chapter || !hasReachedChapterEnd(chapter.end_page, sessions ?? [])) {
+    return new Response(JSON.stringify({ error: 'Chapter not completed' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // BER-48: a resposta é imutável — insert, não upsert (ver submission.ts).
   const { data: savedAnswer, error: answerError } = await supabase
     .from('answers')
-    .upsert({
+    .insert({
       question_id,
       user_id,
       answer_text: answer_text.trim(),
       evaluation_status: 'pending',
-      // BER-54: refazer a resposta mantinha a nota e o feedback da anterior. Se a
-      // nova avaliação falhasse, a tela mostrava a avaliação antiga ao lado do
-      // texto novo — parecendo que a IA respondeu, e respondeu a outra coisa.
-      comprehension_score: null,
-      ai_feedback: null,
-      evaluated_at: null,
-    }, { onConflict: 'question_id,user_id' })
+    })
     .select('id')
     .single();
+
+  if (isUniqueViolation(answerError)) {
+    const { data: existing } = await supabase
+      .from('answers')
+      .select('evaluation_status, comprehension_score, ai_feedback')
+      .eq('question_id', question_id)
+      .eq('user_id', user_id)
+      .single();
+
+    return new Response(JSON.stringify({
+      error: 'Answer already submitted',
+      data: existing ? existingAnswerResult(existing) : null,
+    }), {
+      status: 409,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
   if (answerError || !savedAnswer) {
     return new Response(JSON.stringify({ error: 'Failed to save answer' }), {
@@ -297,7 +328,7 @@ export async function handler(req: Request): Promise<Response> {
   return new Response(JSON.stringify({
     data: {
       score: null,
-      feedback: 'Resposta recebida! A avaliação ficará disponível em breve.',
+      feedback: PENDING_FEEDBACK,
     },
     error: null,
   }), { headers: { 'Content-Type': 'application/json' } });

@@ -17,11 +17,9 @@ export function getTodayInSaoPaulo(now: Date = new Date()): string {
   return sp.toISOString().split('T')[0];
 }
 
-/** Página mais alta já alcançada nas sessões anteriores. */
-export function getMaxPageReached(sessions: { end_page: number }[]): number {
-  if (sessions.length === 0) return 0;
-  return Math.max(...sessions.map(s => s.end_page));
-}
+// Página mais alta já alcançada nas sessões anteriores. Mora em _shared desde a
+// BER-48: a trava do quiz no evaluate-answer usa a mesma regra.
+export { getMaxPageReached } from '../_shared/progress.ts';
 
 /** Capítulos que passaram de "não completo" para "completo" com esta sessão. */
 export function findNewlyCompletedChapters<T extends { end_page: number }>(

@@ -42,8 +42,8 @@ Deno.test('evaluate-answer: campos obrigatórios ausentes devolvem 400', async (
   }
 });
 
-Deno.test('evaluate-answer: caminho do app — avalia, salva a nota e o feedback', async () => {
-  const fake = startFakeSupabase({
+function readerFixture(overrides: { reading_sessions?: Record<string, unknown>[] } = {}) {
+  return {
     users: { [TOKEN]: { id: USER_ID } },
     tables: {
       questions: [{
@@ -51,11 +51,16 @@ Deno.test('evaluate-answer: caminho do app — avalia, salva a nota e o feedback
         question_text: 'O que motivou a personagem?',
         type: 'comprehension',
         chapter_id: 'ch-1',
-        chapters: { book_contents: { content_text: 'conteúdo do capítulo' } },
-      }],
-      answers: [],
+        chapters: { end_page: 50, book_id: 'book-1', book_contents: { content_text: 'conteúdo do capítulo' } },
+      }] as Record<string, unknown>[],
+      answers: [] as Record<string, unknown>[],
+      reading_sessions: overrides.reading_sessions ?? [{ user_id: USER_ID, book_id: 'book-1', end_page: 50 }],
     },
-  });
+  };
+}
+
+Deno.test('evaluate-answer: caminho do app — avalia, salva a nota e o feedback', async () => {
+  const fake = startFakeSupabase(readerFixture());
   withEnv(fake.url);
 
   try {
@@ -73,6 +78,54 @@ Deno.test('evaluate-answer: caminho do app — avalia, salva a nota e o feedback
     assertEquals(fake.tables.answers.length, 1);
     assertEquals(fake.tables.answers[0].comprehension_score, 88);
     assertEquals(fake.tables.answers[0].evaluation_status, 'completed');
+  } finally {
+    await fake.close();
+  }
+});
+
+Deno.test('evaluate-answer: capítulo não lido até o fim devolve 403 e não salva resposta (BER-48)', async () => {
+  // Leu só até a página 30; o capítulo termina na 50.
+  const fake = startFakeSupabase(readerFixture({
+    reading_sessions: [{ user_id: USER_ID, book_id: 'book-1', end_page: 30 }],
+  }));
+  withEnv(fake.url);
+
+  try {
+    const { handler } = await import('./index.ts');
+    const res = await handler(request({ question_id: 'q1', user_id: USER_ID, answer_text: 'minha resposta' }, `Bearer ${TOKEN}`));
+    const json = await res.json();
+
+    assertEquals(res.status, 403);
+    assertEquals(json.error, 'Chapter not completed');
+    assertEquals(fake.tables.answers.length, 0);
+  } finally {
+    await fake.close();
+  }
+});
+
+Deno.test('evaluate-answer: responder de novo devolve 409 com a avaliação que já existe, sem sobrescrever (BER-48)', async () => {
+  const fixture = readerFixture();
+  fixture.tables.answers = [{
+    question_id: 'q1',
+    user_id: USER_ID,
+    answer_text: 'primeira resposta',
+    evaluation_status: 'completed',
+    comprehension_score: 75,
+    ai_feedback: 'Boa primeira tentativa.',
+  }];
+  const fake = startFakeSupabase(fixture);
+  withEnv(fake.url);
+
+  try {
+    const { handler } = await import('./index.ts');
+    const res = await handler(request({ question_id: 'q1', user_id: USER_ID, answer_text: 'tentando de novo' }, `Bearer ${TOKEN}`));
+    const json = await res.json();
+
+    assertEquals(res.status, 409);
+    assertEquals(json.data, { score: 75, feedback: 'Boa primeira tentativa.' });
+    // não sobrescreveu a resposta original
+    assertEquals(fake.tables.answers.length, 1);
+    assertEquals(fake.tables.answers[0].answer_text, 'primeira resposta');
   } finally {
     await fake.close();
   }
