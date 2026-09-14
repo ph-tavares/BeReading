@@ -92,3 +92,45 @@ Deno.test('getTodayInSaoPaulo: devolve YYYY-MM-DD', () => {
   const hoje = getTodayInSaoPaulo(new Date('2026-03-23T15:00:00.000Z'));
   assertEquals(/^\d{4}-\d{2}-\d{2}$/.test(hoje), true);
 });
+
+// --- BER-78: getTodayInSaoPaulo não pode depender do fuso da máquina ---
+
+/**
+ * Roda `fn` com `Date.prototype.getTimezoneOffset` fixado em `offsetMinutes`,
+ * simulando o processo rodando numa máquina naquele fuso. Restaura o método
+ * original ao final, mesmo se `fn` lançar.
+ */
+function withMachineTimezoneOffset<T>(offsetMinutes: number, fn: () => T): T {
+  const original = Date.prototype.getTimezoneOffset;
+  Date.prototype.getTimezoneOffset = () => offsetMinutes;
+  try {
+    return fn();
+  } finally {
+    Date.prototype.getTimezoneOffset = original;
+  }
+}
+
+Deno.test('getTodayInSaoPaulo: resultado não muda com o fuso da máquina (UTC vs São Paulo vs qualquer outro)', () => {
+  const now = new Date('2026-03-23T15:00:00.000Z');
+
+  const emUTC = withMachineTimezoneOffset(0, () => getTodayInSaoPaulo(now));
+  const emSaoPaulo = withMachineTimezoneOffset(180, () => getTodayInSaoPaulo(now));
+  const emTokyo = withMachineTimezoneOffset(-540, () => getTodayInSaoPaulo(now));
+
+  assertEquals(emUTC, '2026-03-23');
+  assertEquals(emSaoPaulo, emUTC);
+  assertEquals(emTokyo, emUTC);
+});
+
+Deno.test('getTodayInSaoPaulo: vira o dia às 03:00 UTC (00:00 em São Paulo), não à meia-noite UTC', () => {
+  // 02:59 UTC = 23:59 do dia anterior em São Paulo (UTC-3)
+  assertEquals(
+    getTodayInSaoPaulo(new Date('2026-03-24T02:59:00.000Z')),
+    '2026-03-23',
+  );
+  // 03:00 UTC = 00:00 do novo dia em São Paulo
+  assertEquals(
+    getTodayInSaoPaulo(new Date('2026-03-24T03:00:00.000Z')),
+    '2026-03-24',
+  );
+});

@@ -9,8 +9,11 @@ const SAOPAULO_OFFSET = -3; // UTC-3
 
 /** Data de hoje (YYYY-MM-DD) no fuso de São Paulo. */
 export function getTodayInSaoPaulo(now: Date = new Date()): string {
-  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-  const sp = new Date(utc + SAOPAULO_OFFSET * 3600000);
+  // BER-78: now.getTime() já é um instante absoluto (epoch), independente de
+  // fuso. Somar now.getTimezoneOffset() reintroduzia o fuso da máquina que
+  // roda o processo, cancelando o SAOPAULO_OFFSET quando a máquina já está em
+  // UTC-3 e fazendo a conta errar em qualquer outro fuso.
+  const sp = new Date(now.getTime() + SAOPAULO_OFFSET * 3600000);
   return sp.toISOString().split('T')[0];
 }
 
