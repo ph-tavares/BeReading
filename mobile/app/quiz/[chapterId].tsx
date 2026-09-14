@@ -3,7 +3,12 @@ import { View, Alert, ActivityIndicator, Pressable, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Sparkles, BookOpen } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
-import { getQuestionsForChapter, getChapterQuizStatus } from '../../src/api/queries';
+import {
+  getChapterQuizStatus,
+  getStudentAnswersForChapter,
+  loadQuizForReader,
+} from '../../src/api/queries';
+import { resultsFromExistingAnswers } from '../../src/utils/quizAnswers';
 import { evaluateAnswer } from '../../src/api/edgeFunctions';
 import { calcAverageScore, countPendingEvaluations } from '../../src/utils/quizUtils';
 import { Press3DButton } from '../../src/components/Press3DButton';
@@ -36,6 +41,17 @@ export default function QuizScreen() {
   const [pollCount, setPollCount] = useState(0);
   const [answer, setAnswer] = useState('');
   const [evaluating, setEvaluating] = useState(false);
+  // BER-48: o texto que o leitor escreveu em cada pergunta já respondida.
+  const [answerTexts, setAnswerTexts] = useState<Record<number, string>>({});
+
+  /** Perguntas carregadas: o quiz abre mostrando o que já foi respondido (BER-48). */
+  function applyLoaded({ questions: qs, progress }: Awaited<ReturnType<typeof loadQuizForReader>>) {
+    setQuestions(qs);
+    setResults(progress.results);
+    setAnswerTexts(progress.answerTexts);
+    setCurrentIndex(progress.startIndex);
+    setScreenState(qs.length > 0 ? 'ready' : 'failed');
+  }
 
   useEffect(() => {
     if (!chapterId) return;
@@ -48,10 +64,9 @@ export default function QuizScreen() {
 
         const next = quizScreenStateFor(status);
         if (next === 'ready') {
-          const qs = await getQuestionsForChapter(chapterId!);
+          const loaded = await loadQuizForReader(chapterId!, profile?.user_id);
           if (cancelled) return;
-          setQuestions(qs);
-          setScreenState(qs.length > 0 ? 'ready' : 'failed');
+          applyLoaded(loaded);
         } else {
           // 'polling', 'failed' ou 'no-content' (BER-66).
           setScreenState(next);
@@ -82,10 +97,9 @@ export default function QuizScreen() {
 
         const next = quizScreenStateFor(status);
         if (next === 'ready') {
-          const qs = await getQuestionsForChapter(chapterId!);
+          const loaded = await loadQuizForReader(chapterId!, profile?.user_id);
           if (cancelled) return;
-          setQuestions(qs);
-          setScreenState(qs.length > 0 ? 'ready' : 'failed');
+          applyLoaded(loaded);
         } else if (next === 'polling') {
           setPollCount((c) => c + 1);
         } else {
@@ -109,7 +123,17 @@ export default function QuizScreen() {
     setEvaluating(true);
     try {
       const result = await evaluateAnswer(q.id, profile.user_id, answer.trim());
-      setResults((prev) => ({ ...prev, [currentIndex]: result }));
+      if (result.alreadyAnswered) {
+        // BER-48: a pergunta já tinha resposta (outro aparelho, toque duplo). Vale a
+        // avaliação que ficou no servidor — recarrega as respostas do capítulo.
+        const answers = await getStudentAnswersForChapter(profile.user_id, chapterId!);
+        const progress = resultsFromExistingAnswers(questions, answers);
+        setResults(progress.results);
+        setAnswerTexts(progress.answerTexts);
+      } else {
+        setResults((prev) => ({ ...prev, [currentIndex]: result }));
+        setAnswerTexts((prev) => ({ ...prev, [currentIndex]: answer.trim() }));
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erro ao avaliar resposta';
       Alert.alert('Erro', msg);
@@ -274,6 +298,7 @@ export default function QuizScreen() {
       totalQuestions={questions.length}
       answer={answer}
       onChangeAnswer={setAnswer}
+      submittedAnswerText={answerTexts[currentIndex]}
       evaluating={evaluating}
       result={results[currentIndex] ?? null}
       onBack={() => router.back()}

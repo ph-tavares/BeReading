@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { PENDING_FEEDBACK } from '../utils/quizAnswers';
 
 export interface RegisterReadingResponse {
   session_created: boolean;
@@ -11,6 +12,8 @@ export interface RegisterReadingResponse {
 export interface EvaluateAnswerResponse {
   score: number | null;
   feedback: string;
+  /** BER-48: a pergunta já tinha resposta; esta é a avaliação que ficou. */
+  alreadyAnswered?: boolean;
 }
 
 export function buildRegisterReadingPayload(
@@ -46,6 +49,52 @@ export async function registerReadingSession(
   return data.data as RegisterReadingResponse;
 }
 
+/**
+ * BER-48: as respostas do evaluate-answer que não são erro para o leitor.
+ *
+ * - 409: a pergunta já foi respondida (a resposta é imutável). O corpo traz a
+ *   avaliação que ficou, e é ela que a tela mostra.
+ * - 403 "Chapter not completed": o quiz ainda não abriu para este leitor.
+ *
+ * @returns a avaliação existente no 409; `null` quando o erro não é um desses.
+ * @throws Error com mensagem para o leitor no 403 de capítulo não lido.
+ */
+export function interpretEvaluateFailure(
+  status: number | undefined,
+  body: unknown,
+): EvaluateAnswerResponse | null {
+  const payload = (body ?? {}) as {
+    error?: string;
+    data?: { score?: number | null; feedback?: string } | null;
+  };
+
+  if (status === 409) {
+    return {
+      score: payload.data?.score ?? null,
+      feedback: payload.data?.feedback ?? PENDING_FEEDBACK,
+      alreadyAnswered: true,
+    };
+  }
+  if (status === 403 && payload.error === 'Chapter not completed') {
+    throw new Error('Termine de ler este capítulo para responder o quiz.');
+  }
+  return null;
+}
+
+/** Status e corpo de um erro não-2xx do supabase-js (a resposta vem em `context`). */
+async function readHttpError(error: unknown): Promise<{ status?: number; body: unknown }> {
+  const context = (error as { context?: { status?: number; json?: () => Promise<unknown> } })
+    ?.context;
+  if (!context) return { body: null };
+  let body: unknown = null;
+  try {
+    body = context.json ? await context.json() : null;
+  } catch {
+    body = null;
+  }
+  return { status: context.status, body };
+}
+
 export async function evaluateAnswer(
   questionId: string,
   userId: string,
@@ -57,7 +106,12 @@ export async function evaluateAnswer(
   const { data, error } = await supabase.functions.invoke('evaluate-answer', {
     body: payload,
   });
-  if (error) throw error;
+  if (error) {
+    const { status, body } = await readHttpError(error);
+    const interpreted = interpretEvaluateFailure(status, body);
+    if (interpreted) return interpreted;
+    throw error;
+  }
   if (data.error) throw new Error(data.error);
   return data.data as EvaluateAnswerResponse;
 }

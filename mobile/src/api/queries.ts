@@ -14,6 +14,7 @@ import type {
   ReadingSession,
 } from '../types/database';
 import { filterReachedChapters } from '../utils/pendingQuizzes';
+import { resultsFromExistingAnswers, type ExistingQuizProgress } from '../utils/quizAnswers';
 
 export async function getProfileByUserId(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
@@ -67,6 +68,22 @@ export async function getStudentBooks(userId: string): Promise<(StudentBook & { 
     .order('started_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as (StudentBook & { book: Book })[];
+}
+
+/**
+ * Até que página o leitor chegou neste livro (BER-48). O register-reading-session
+ * grava `student_books.current_page` com a maior página registrada, a mesma conta
+ * que o servidor usa para liberar o quiz. Sem registro nenhum, 0.
+ */
+export async function getCurrentPage(userId: string, bookId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('student_books')
+    .select('current_page')
+    .eq('user_id', userId)
+    .eq('book_id', bookId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.current_page ?? 0;
 }
 
 export async function getStreak(userId: string): Promise<Streak | null> {
@@ -162,6 +179,28 @@ export async function getStudentAnswersForChapter(
     .eq('question.chapter_id', chapterId);
   if (error) throw error;
   return (data ?? []) as Answer[];
+}
+
+/**
+ * Perguntas do capítulo + o que este leitor já respondeu (BER-48). A resposta é
+ * imutável, então o quiz reabre mostrando as avaliações e começa na primeira
+ * pergunta aberta. Se as respostas não carregarem, abre como quiz novo: o servidor
+ * ainda recusa a repetição com 409 e devolve a avaliação que ficou.
+ */
+export async function loadQuizForReader(
+  chapterId: string,
+  userId: string | undefined,
+): Promise<{ questions: Question[]; progress: ExistingQuizProgress }> {
+  const questions = await getQuestionsForChapter(chapterId);
+  let answers: Answer[] = [];
+  if (userId) {
+    try {
+      answers = await getStudentAnswersForChapter(userId, chapterId);
+    } catch {
+      answers = [];
+    }
+  }
+  return { questions, progress: resultsFromExistingAnswers(questions, answers) };
 }
 
 export async function getReadingSessions(userId: string): Promise<ReadingSession[]> {

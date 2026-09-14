@@ -7,23 +7,28 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronRight } from 'lucide-react-native';
-import { getBookWithChapters } from '../../src/api/queries';
+import { ChevronRight, Lock } from 'lucide-react-native';
+import { getBookWithChapters, getCurrentPage } from '../../src/api/queries';
 import { TopBar } from '../../src/components/TopBar';
 import { BookCover } from '../../src/components/BookCover';
 import { Card } from '../../src/components/Card';
 import { SectionLabel } from '../../src/components/SectionLabel';
 import { Press3DButton } from '../../src/components/Press3DButton';
+import { useAuthStore } from '../../src/stores/authStore';
 import { colors, fonts, radii } from '../../src/theme/tokens';
 import { categoryOf } from '../../src/theme/categories';
+import { chapterLockState } from '../../src/utils/chapterGate';
 import type { Book, Chapter } from '../../src/types/database';
 
 export default function BookDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { profile } = useAuthStore();
   const [data, setData] = useState<(Book & { chapters: Chapter[] }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // BER-48: até onde o leitor chegou neste livro. `null` = ainda não se sabe.
+  const [currentPage, setCurrentPage] = useState<number | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -38,6 +43,18 @@ export default function BookDetailScreen() {
 
     return () => { cancelled = true; };
   }, [id]);
+
+  useEffect(() => {
+    if (!id || !profile) return;
+    let cancelled = false;
+
+    getCurrentPage(profile.user_id, id)
+      .then((page) => { if (!cancelled) setCurrentPage(page); })
+      // Sem a página atual a tela não bloqueia nada; a trava de verdade é o servidor.
+      .catch(() => { if (!cancelled) setCurrentPage(null); });
+
+    return () => { cancelled = true; };
+  }, [id, profile?.user_id]);
 
   if (loading) {
     return (
@@ -156,53 +173,75 @@ export default function BookDetailScreen() {
             </Card>
           ) : (
             <Card style={{ overflow: 'hidden', padding: 0 }}>
-              {sortedChapters.map((chapter, index) => (
-                <Pressable
-                  key={chapter.id}
-                  onPress={() => router.push(`/quiz/${chapter.id}`)}
-                  style={({ pressed }) => ({
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    padding: 16,
-                    gap: 14,
-                    borderBottomWidth: index < sortedChapters.length - 1 ? 1 : 0,
-                    borderBottomColor: colors.hairline,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                >
-                  <View style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    backgroundColor: colors.gold,
-                    borderBottomWidth: 3,
-                    borderBottomColor: colors.goldDeep,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}>
-                    <Text style={{
-                      fontFamily: fonts.black,
-                      fontSize: 13,
-                      color: '#fff',
-                    }}>{chapter.number}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{
-                      fontFamily: fonts.bold,
-                      fontSize: 14,
-                      color: colors.text,
-                    }}>{chapter.title ?? `Capítulo ${chapter.number}`}</Text>
-                    <Text style={{
-                      fontFamily: fonts.semi,
-                      fontSize: 12,
-                      color: colors.textMute,
-                      marginTop: 2,
-                    }}>p. {chapter.start_page}–{chapter.end_page}</Text>
-                  </View>
-                  <ChevronRight size={18} color={colors.textMute} />
-                </Pressable>
-              ))}
+              {sortedChapters.map((chapter, index) => {
+                // BER-48: quiz fechado até o leitor chegar ao fim do capítulo. Sem saber
+                // a página atual, não bloqueia — o servidor ainda recusa com 403.
+                const lock = currentPage === null
+                  ? { unlocked: true, pagesLeft: 0 }
+                  : chapterLockState(chapter.end_page, currentPage);
+                const locked = !lock.unlocked;
+                const title = chapter.title ?? `Capítulo ${chapter.number}`;
+
+                return (
+                  <Pressable
+                    key={chapter.id}
+                    onPress={locked ? undefined : () => router.push(`/quiz/${chapter.id}`)}
+                    disabled={locked}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: locked }}
+                    accessibilityLabel={locked
+                      ? `${title}. Quiz fechado: leia até a página ${chapter.end_page}.`
+                      : `${title}. Abrir o quiz.`}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 16,
+                      gap: 14,
+                      borderBottomWidth: index < sortedChapters.length - 1 ? 1 : 0,
+                      borderBottomColor: colors.hairline,
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                  >
+                    <View style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
+                      backgroundColor: locked ? colors.surface : colors.gold,
+                      borderBottomWidth: 3,
+                      borderBottomColor: locked ? colors.surface2 : colors.goldDeep,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <Text style={{
+                        fontFamily: fonts.black,
+                        fontSize: 13,
+                        color: locked ? colors.textMute : '#fff',
+                      }}>{chapter.number}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{
+                        fontFamily: fonts.bold,
+                        fontSize: 14,
+                        color: locked ? colors.textSoft : colors.text,
+                      }}>{title}</Text>
+                      <Text style={{
+                        fontFamily: fonts.semi,
+                        fontSize: 12,
+                        color: colors.textMute,
+                        marginTop: 2,
+                      }}>
+                        {locked
+                          ? `Leia até a p. ${chapter.end_page} para abrir o quiz`
+                          : `p. ${chapter.start_page}–${chapter.end_page}`}
+                      </Text>
+                    </View>
+                    {locked
+                      ? <Lock size={16} color={colors.textMute} strokeWidth={2.2} />
+                      : <ChevronRight size={18} color={colors.textMute} />}
+                  </Pressable>
+                );
+              })}
             </Card>
           )}
         </View>

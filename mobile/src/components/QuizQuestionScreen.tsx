@@ -18,6 +18,8 @@ interface QuizQuestionScreenProps {
   totalQuestions: number;
   answer: string;
   onChangeAnswer: (text: string) => void;
+  /** BER-48: texto que o leitor escreveu quando esta pergunta já tinha resposta salva. */
+  submittedAnswerText?: string;
   evaluating: boolean;
   result: QuestionResult | null;
   onBack: () => void;
@@ -31,6 +33,7 @@ export function QuizQuestionScreen({
   totalQuestions,
   answer,
   onChangeAnswer,
+  submittedAnswerText,
   evaluating,
   result,
   onBack,
@@ -189,7 +192,7 @@ export function QuizQuestionScreen({
                 color: colors.textSoft,
                 fontStyle: 'italic',
                 lineHeight: 20,
-              }}>"{answer || question.question_text}"</Text>
+              }}>"{submittedAnswerText ?? answer}"</Text>
             </View>
 
             {/* BER-42: nota ausente NAO e nota zero. Enquanto a IA nao avaliou, a tela
