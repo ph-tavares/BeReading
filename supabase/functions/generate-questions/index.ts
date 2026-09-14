@@ -6,8 +6,17 @@ import { parseQuestions } from '../_shared/ai-json.ts';
 // BER-65: sem `grade` — o público é leitor adulto, não turma do fundamental.
 import { buildQuestionPrompt } from './prompt.ts';
 import { buildNoContentMessage, hasUsableContent } from '../_shared/content.ts';
+import { buildClaimableFilter, isClaimable } from './claim.ts';
 
 const QUESTION_COUNT = 4;
+
+/** BER-41: outra chamada está gerando este capítulo agora — não gasta IA de novo. */
+function inProgressResponse(): Response {
+  return new Response(JSON.stringify({ data: { in_progress: true }, error: null }), {
+    status: 202,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
 
 // ---------------------------------------------------------------------------
 // AI PROVIDER — OpenAI (default) or Anthropic/Claude (set AI_PROVIDER=anthropic)
@@ -126,21 +135,42 @@ export async function handler(req: Request): Promise<Response> {
     });
   }
 
-  // Incrementar tentativas no status
+  // BER-41: reservar o capítulo antes de gastar IA (ver claim.ts).
+  // Garante a linha de status sem sobrescrever uma que já exista.
+  await supabase.from('chapter_quiz_status').upsert(
+    { chapter_id, status: 'pending' },
+    { onConflict: 'chapter_id', ignoreDuplicates: true },
+  );
+
   const { data: currentStatus } = await supabase
     .from('chapter_quiz_status')
-    .select('attempts')
+    .select('status, attempts, last_attempt_at')
     .eq('chapter_id', chapter_id)
     .single();
 
-  const attempts = (currentStatus?.attempts ?? 0) + 1;
+  const now = Date.now();
+  if (!currentStatus || !isClaimable(currentStatus, now)) {
+    return inProgressResponse();
+  }
 
-  await supabase.from('chapter_quiz_status').upsert({
-    chapter_id,
-    status: 'pending',
-    attempts,
-    last_attempt_at: new Date().toISOString(),
-  }, { onConflict: 'chapter_id' });
+  const previousAttempts = currentStatus.attempts ?? 0;
+  const attempts = previousAttempts + 1;
+
+  // A reserva em si. Só passa quem ainda vê o mesmo `attempts` e uma tentativa
+  // velha (ou nenhuma): duas chamadas simultâneas disputam a mesma linha no
+  // Postgres, e a segunda já não encontra a condição.
+  const { data: claimed } = await supabase
+    .from('chapter_quiz_status')
+    .update({ status: 'pending', attempts, last_attempt_at: new Date(now).toISOString() })
+    .eq('chapter_id', chapter_id)
+    .eq('attempts', previousAttempts)
+    .neq('status', 'generated')
+    .or(buildClaimableFilter(now))
+    .select('chapter_id');
+
+  if (!claimed || claimed.length === 0) {
+    return inProgressResponse();
+  }
 
   // Buscar dados do capítulo e livro
   const { data: chapter } = await supabase
@@ -203,6 +233,27 @@ export async function handler(req: Request): Promise<Response> {
     }
     if (questions.length === 0) {
       throw new Error('LLM não devolveu nenhuma pergunta válida');
+    }
+
+    // BER-41: se a reserva expirou durante a IA e outra chamada já gravou as
+    // perguntas, este lote é descartado em vez de duplicar o quiz.
+    const { data: alreadyGenerated } = await supabase
+      .from('questions')
+      .select('id')
+      .eq('chapter_id', chapter_id)
+      .limit(1);
+
+    if (alreadyGenerated && alreadyGenerated.length > 0) {
+      await supabase.from('chapter_quiz_status').upsert({
+        chapter_id,
+        status: 'generated',
+        attempts,
+        last_attempt_at: new Date().toISOString(),
+      }, { onConflict: 'chapter_id' });
+
+      return new Response(JSON.stringify({ data: { cached: true }, error: null }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     // Salvar perguntas (cache por capítulo — sem student_id)

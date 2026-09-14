@@ -46,6 +46,18 @@ function jsonHeaders(): HeadersInit {
   return { 'Content-Type': 'application/json' };
 }
 
+/**
+ * Um objeto JS só tem as chaves que alguém atribuiu; uma linha do Postgres tem
+ * TODAS as colunas, com `NULL` para as que ninguém preencheu. Código real
+ * distingue `null` de "a chave nem existe" (ex: `isClaimable` em
+ * generate-questions/claim.ts) — sem isso, uma linha nova criada por um insert
+ * parcial (`{chapter_id, status}`) teria `last_attempt_at: undefined`, não
+ * `null`, e essa distinção muda o resultado.
+ */
+const COLUMN_DEFAULTS: Record<string, Record<string, unknown>> = {
+  chapter_quiz_status: { attempts: 0, last_attempt_at: null, error_message: null },
+};
+
 export function startFakeSupabase(options: FakeSupabaseOptions = {}): FakeSupabase {
   const tables: Record<string, Record<string, unknown>[]> = {};
   for (const [name, rows] of Object.entries(options.tables ?? {})) {
@@ -112,7 +124,11 @@ export function startFakeSupabase(options: FakeSupabaseOptions = {}): FakeSupaba
             Object.assign(matched, item);
             affected.push(matched);
           } else {
-            const row = { id: crypto.randomUUID(), ...(item as Record<string, unknown>) };
+            const row = {
+              id: crypto.randomUUID(),
+              ...(COLUMN_DEFAULTS[table] ?? {}),
+              ...(item as Record<string, unknown>),
+            };
             tables[table].push(row);
             affected.push(row);
           }
