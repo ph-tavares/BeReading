@@ -1,24 +1,20 @@
+// Checkout (BER-61, F6 Tarefa 5): confirmacao da assinatura no formato da
+// folha de compra da loja. Com compra in-app quem coleta o pagamento e a App
+// Store ou o Google Play, entao o app nunca tem campo de cartao. Por ora
+// `billing` e a cobranca simulada (BER-79). Premium sem coroa nem dourado
+// (DESIGN.md secao 10); erro em toast, no lugar do Alert.
 import { useState } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, Alert, Platform } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { Crown } from 'lucide-react-native';
-import { TopBar } from '../src/components/TopBar';
-import { Card } from '../src/components/Card';
-import { Press3DButton } from '../src/components/Press3DButton';
-import { QuizMessageScreen, QuizMessageIconBadge } from '../src/components/QuizMessageScreen';
 import { useAuthStore } from '../src/stores/authStore';
 import { useEntitlementStore } from '../src/stores/entitlementStore';
 import { billing } from '../src/api/billing';
 import { formatPrice } from '../src/utils/billing';
-import { colors, fonts } from '../src/theme/tokens';
+import { Button, Card, EmptyState, Glyph, Screen, Text, useToast } from '../src/ui';
+import { color, space } from '../src/theme/tokens';
 
-// BER-61: confirmação da assinatura, no formato da folha de compra da loja —
-// com compra in-app, quem coleta o pagamento é a App Store / Google Play, então
-// o app nunca tem campo de cartão. Por ora `billing` é a cobrança simulada.
-
-/** A confirmação não "pisca": dá o mesmo ritmo de uma compra na loja. */
+/** A confirmacao nao "pisca": da o mesmo ritmo de uma compra na loja. */
 const MIN_PROCESSING_MS = 1200;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -27,7 +23,7 @@ type Step = 'confirm' | 'processing' | 'success';
 
 export default function CheckoutScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const toast = useToast();
   const { session } = useAuthStore();
   const { entitlement, setEntitlement } = useEntitlementStore();
   const [step, setStep] = useState<Step>('confirm');
@@ -36,14 +32,15 @@ export default function CheckoutScreen() {
 
   if (!plan) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <TopBar title="Confirmar assinatura" onBack={() => router.back()} />
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-          <Text style={{ fontFamily: fonts.medium, fontSize: 15, color: colors.textSoft, textAlign: 'center' }}>
-            Plano indisponível no momento.
-          </Text>
-        </View>
-      </View>
+      <Screen title="Confirmar assinatura" onBack={() => router.back()} edges={['top', 'bottom']} contentStyle={styles.centro}>
+        <EmptyState
+          illustration="none"
+          title="Plano indisponível no momento."
+          description="Volte aos planos e tente de novo daqui a pouco."
+          actionLabel="Voltar"
+          onAction={() => router.back()}
+        />
+      </Screen>
     );
   }
 
@@ -59,111 +56,73 @@ export default function CheckoutScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       }
       setStep('success');
-    } catch (e: unknown) {
-      Alert.alert('Não foi possível concluir a assinatura', e instanceof Error ? e.message : 'Tente novamente');
+    } catch {
+      toast.show({ message: 'Não deu pra concluir a assinatura.', detail: 'Nada foi cobrado. Tenta de novo daqui a pouco.', tone: 'danger' });
       setStep('confirm');
     }
   }
 
   if (step === 'success') {
     return (
-      <QuizMessageScreen
-        paddingTop={insets.top + 80}
-        paddingBottom={insets.bottom + 40}
-        icon={
-          <QuizMessageIconBadge background={colors.gold} borderColor={colors.goldDeep}>
-            <Crown size={32} color="#fff" strokeWidth={2.2} />
-          </QuizMessageIconBadge>
-        }
-        title={`Bem-vindo ao ${plan.name}!`}
-        description="Agora você lê quantos livros quiser e responde todos os quizzes, com feedback da IA em cada resposta."
-      >
-        <View style={{ width: '100%' }}>
-          {/* Fecha a confirmação e os planos: volta para onde o leitor estava. */}
-          <Press3DButton onPress={() => router.dismiss(2)} color="gold" size="lg">
-            Continuar
-          </Press3DButton>
-        </View>
-      </QuizMessageScreen>
+      <Screen scroll={false} edges={['top', 'bottom']} contentStyle={styles.centro}>
+        <EmptyState
+          illustration={<Glyph size={40} />}
+          title={`Bem-vindo ao ${plan.name}.`}
+          description="Agora você lê quantos livros quiser e responde todos os quizzes, com feedback da IA em cada resposta."
+          actionLabel="Continuar"
+          // Fecha a confirmacao e os planos: volta pra onde o leitor estava.
+          onAction={() => router.dismiss(2)}
+        />
+      </Screen>
     );
   }
 
   const processing = step === 'processing';
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <TopBar title="Confirmar assinatura" onBack={() => { if (!processing) router.back(); }} />
-      <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 40, gap: 18 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <Card style={{ padding: 18, gap: 16 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <View style={{
-              width: 48,
-              height: 48,
-              borderRadius: 14,
-              backgroundColor: colors.gold,
-              borderBottomWidth: 3,
-              borderBottomColor: colors.goldDeep,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <Crown size={24} color="#fff" strokeWidth={2.2} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: fonts.black, fontSize: 17, color: colors.text }}>
-                BeReading {plan.name}
-              </Text>
-              <Text style={{ fontFamily: fonts.semi, fontSize: 12, color: colors.textMute, marginTop: 2 }}>
-                Assinatura mensal
-              </Text>
-            </View>
+    <Screen
+      title="Confirmar assinatura"
+      onBack={processing ? undefined : () => router.back()}
+      edges={['top', 'bottom']}
+      contentStyle={styles.content}
+    >
+      <Card>
+        <View style={styles.resumo}>
+          <View>
+            <Text variant="subhead">{`BeReading ${plan.name}`}</Text>
+            <Text variant="caption" tone="tertiary">Assinatura mensal</Text>
           </View>
-
-          <View style={{ height: 1, backgroundColor: colors.divider }} />
-
+          <View style={styles.divisoria} />
           <SummaryRow label="Valor" value={`${price}/mês`} />
           <SummaryRow label="Renovação" value="Automática, todo mês" />
-          <SummaryRow label="Conta" value={session?.user.email ?? '—'} />
-          <SummaryRow
-            label="Pagamento"
-            value={Platform.OS === 'ios' ? 'Conta da App Store' : 'Conta do Google Play'}
-          />
-        </Card>
+          <SummaryRow label="Conta" value={session?.user.email ?? 'sem e-mail'} />
+          <SummaryRow label="Pagamento" value={Platform.OS === 'ios' ? 'Conta da App Store' : 'Conta do Google Play'} />
+        </View>
+      </Card>
 
-        <Text style={{
-          fontFamily: fonts.medium,
-          fontSize: 13,
-          color: colors.textMute,
-          lineHeight: 19,
-          textAlign: 'center',
-          paddingHorizontal: 8,
-        }}>
-          Hoje você paga {price}. A assinatura renova automaticamente a cada mês e pode ser
-          cancelada a qualquer momento em Perfil → Gerenciar assinatura.
-        </Text>
+      <Text variant="callout" tone="tertiary" align="center">
+        {`Hoje você paga ${price}. A assinatura renova sozinha a cada mês e dá pra cancelar quando quiser, em Você, na linha do plano.`}
+      </Text>
 
-        <Press3DButton onPress={handleConfirm} disabled={processing} color="gold" size="lg">
-          {processing ? 'Processando…' : `Assinar por ${price}/mês`}
-        </Press3DButton>
-        {processing && <ActivityIndicator color={colors.gold} />}
-      </ScrollView>
-    </View>
+      <Button onPress={handleConfirm} loading={processing}>{`Assinar por ${price}/mês`}</Button>
+    </Screen>
   );
 }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16 }}>
-      <Text style={{ fontFamily: fonts.semi, fontSize: 13, color: colors.textMute }}>{label}</Text>
-      <Text numberOfLines={1} style={{
-        flexShrink: 1,
-        fontFamily: fonts.bold,
-        fontSize: 13,
-        color: colors.text,
-        textAlign: 'right',
-      }}>{value}</Text>
+    <View style={styles.linha}>
+      <Text variant="callout" tone="tertiary">{label}</Text>
+      <Text variant="callout" numberOfLines={1} style={styles.valor}>{value}</Text>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  centro: { flexGrow: 1, justifyContent: 'center' },
+  content: { paddingTop: space.sm, paddingBottom: space.xl, gap: space.lg },
+  resumo: { gap: space.md },
+  divisoria: { height: StyleSheet.hairlineWidth, backgroundColor: color.line },
+  linha: { flexDirection: 'row', justifyContent: 'space-between', gap: space.lg },
+  valor: { flexShrink: 1, textAlign: 'right' },
+});

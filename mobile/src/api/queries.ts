@@ -112,9 +112,31 @@ export async function getAllBadges(): Promise<Badge[]> {
   return data ?? [];
 }
 
+/**
+ * Escapa o valor de dentro de um filtro `.or()` do PostgREST.
+ *
+ * `.or()` recebe uma string só, que o próprio PostgREST despedaça por vírgula
+ * (separador de condições) e parênteses (agrupamento/`in`). Interpolar o termo
+ * de busca cru deixaria `"Machado, Assis"` virar duas condições, ou um `)`
+ * a mais reabrir a sintaxe de agrupamento — não é vazamento de dado de outro
+ * usuário (RLS continua valendo, e o catálogo é público), mas quebra ou
+ * distorce o resultado.
+ *
+ * A saída do PostgREST para isso é aspar o valor: dentro de aspas duplas, `,`
+ * e `(`/`)` deixam de ser separadores e viram texto literal. Dentro das aspas,
+ * os dois caracteres que ainda têm significado são a própria aspa e a barra
+ * invertida — por isso só esses dois são escapados aqui.
+ */
+function escapeOrValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
 export async function getBooks(search?: string): Promise<Book[]> {
   let query = supabase.from('books').select('*').order('title');
-  if (search) query = query.ilike('title', `%${search}%`);
+  if (search) {
+    const safe = escapeOrValue(search);
+    query = query.or(`title.ilike."%${safe}%",author.ilike."%${safe}%"`);
+  }
   const { data, error } = await query;
   if (error) throw error;
   return data ?? [];
@@ -191,6 +213,25 @@ export async function getStudentAnswersForChapter(
     .eq('question.chapter_id', chapterId);
   if (error) throw error;
   return (data ?? []) as Answer[];
+}
+
+/** Resposta do leitor com o `chapter_id` (via join) que o progressStore precisa. */
+export type MyAnswer = Answer & { question: { chapter_id: string } };
+
+/**
+ * Todas as respostas do próprio leitor — o que alimenta o XP derivado em
+ * `src/game/xp.ts` (`comprehension_score`, `evaluation_status`) e, via o join,
+ * o `chapter_id` de cada uma. Só leitura, mesmo formato de consulta que
+ * `getStudentAnswersForChapter`: a RLS já libera porque o filtro é sempre pelo
+ * próprio `user_id`.
+ */
+export async function getMyAnswers(userId: string): Promise<MyAnswer[]> {
+  const { data, error } = await supabase
+    .from('answers')
+    .select('*, question:questions!inner(chapter_id)')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return (data ?? []) as MyAnswer[];
 }
 
 /**

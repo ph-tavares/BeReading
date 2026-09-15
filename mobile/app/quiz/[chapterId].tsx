@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Alert, ActivityIndicator, Pressable, Text } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Sparkles, BookOpen, Crown } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useEntitlementStore } from '../../src/stores/entitlementStore';
 import {
@@ -18,29 +17,33 @@ import {
 import { resultsFromExistingAnswers } from '../../src/utils/quizAnswers';
 import { evaluateAnswer } from '../../src/api/edgeFunctions';
 import { calcAverageScore, countPendingEvaluations } from '../../src/utils/quizUtils';
-import { Press3DButton } from '../../src/components/Press3DButton';
-import { QuizMessageScreen, QuizMessageIconBadge } from '../../src/components/QuizMessageScreen';
-import { QuizQuestionScreen } from '../../src/components/QuizQuestionScreen';
-import { colors, fonts } from '../../src/theme/tokens';
+import { Screen, Skeleton, useToast } from '../../src/ui';
+import { AssistantStateView, QuizConversation } from '../../src/features/quiz-chat';
+import type { QuizStateKey } from '../../src/assistant/lines';
+import { radius, space } from '../../src/theme/tokens';
 import type { Question } from '../../src/types/database';
 import type { QuestionResult } from '../../src/utils/quizUtils';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { pollDelayMs, shouldKeepPolling } from '../../src/utils/quizPolling';
 import { quizScreenStateFor } from '../../src/utils/quizStatus';
 
+// F5 (BER-77): a apresentacao virou conversa com a Orelha (src/features/quiz-chat).
+// A maquina de estados abaixo e a do time e continua identica: carga com cota,
+// polling, resposta imutavel (409), cota no envio (402) e recarga ao voltar dos
+// planos.
+//
 // BER-40: 'still-generating' NAO e 'failed'. Esgotar a janela de espera significa
-// "ainda nao ficou pronto", nao "deu erro" — e a diferenca aparece na tela.
+// "ainda nao ficou pronto", nao "deu erro", e a diferenca aparece na tela.
 // BER-66: 'no-content' tambem NAO e 'failed'. O capitulo nao tem texto cadastrado,
-// entao nao ha o que re-tentar — e mentir ("deu erro") esconde o motivo real.
+// entao nao ha o que re-tentar, e mentir ("deu erro") esconde o motivo real.
 // BER-58: 'quota' tambem NAO e 'failed'. O leitor usou os quizzes do mes no plano
-// gratuito — a tela convida para o Premium em vez de dizer que deu erro.
+// gratuito, e a tela convida para o Premium em vez de dizer que deu erro.
 type ScreenState =
   | 'loading' | 'polling' | 'ready' | 'failed' | 'still-generating' | 'no-content' | 'quota';
 
 export default function QuizScreen() {
   const { chapterId } = useLocalSearchParams<{ chapterId: string }>();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const toast = useToast();
   const { profile } = useAuthStore();
 
   const [screenState, setScreenState] = useState<ScreenState>('loading');
@@ -79,7 +82,7 @@ export default function QuizScreen() {
 
     async function load() {
       try {
-        // BER-58: sem cota no mês, o quiz de um capítulo novo nem abre — o leitor
+        // BER-58: sem cota no mês, o quiz de um capítulo novo nem abre. O leitor
         // vê o convite antes de escrever uma resposta que o servidor recusaria.
         // Se o plano não carregar, segue: a trava de verdade é o evaluate-answer.
         const [status, entitlement] = await Promise.all([
@@ -136,7 +139,7 @@ export default function QuizScreen() {
         } else if (next === 'polling') {
           setPollCount((c) => c + 1);
         } else {
-          // 'failed' ou 'no-content' (BER-66) — parar de esperar, os dois sao finais.
+          // 'failed' ou 'no-content' (BER-66): parar de esperar, os dois sao finais.
           setScreenState(next);
         }
       } catch {
@@ -158,7 +161,7 @@ export default function QuizScreen() {
       const result = await evaluateAnswer(q.id, profile.user_id, answer.trim());
       if (result.alreadyAnswered) {
         // BER-48: a pergunta já tinha resposta (outro aparelho, toque duplo). Vale a
-        // avaliação que ficou no servidor — recarrega as respostas do capítulo.
+        // avaliação que ficou no servidor: recarrega as respostas do capítulo.
         const answers = await getStudentAnswersForChapter(profile.user_id, chapterId!);
         const progress = resultsFromExistingAnswers(questions, answers);
         setResults(progress.results);
@@ -173,8 +176,13 @@ export default function QuizScreen() {
         setScreenState('quota');
         return;
       }
-      const msg = e instanceof Error ? e.message : 'Erro ao avaliar resposta';
-      Alert.alert('Erro', msg);
+      // Toast no lugar do Alert.alert (spec secao 8). O texto digitado fica no
+      // composer, e o leitor manda de novo quando quiser.
+      toast.show({
+        message: 'Não deu pra enviar sua resposta.',
+        detail: 'O que você escreveu continua aqui.',
+        tone: 'danger',
+      });
     } finally {
       setEvaluating(false);
     }
@@ -191,188 +199,92 @@ export default function QuizScreen() {
       router.replace({
         pathname: '/quiz/summary',
         params: {
-          // BER-42: sem nota nenhuma, manda vazio em vez de "0" — a tela distingue
+          // BER-42: sem nota nenhuma, manda vazio em vez de "0": a tela distingue
           // "ainda avaliando" de "tirou zero".
           avgScore: avg === null ? '' : String(avg),
           total: String(questions.length),
           pending: String(pending),
+          // F5: o resumo usa o capitulo para o titulo, o recap e "Rever a conversa".
+          chapterId: chapterId ?? '',
         },
       });
     }
   }
 
-  // States
+  function estado(state: QuizStateKey, detail: string, onPrimary?: () => void) {
+    return (
+      <Screen scroll={false} edges={['top', 'bottom']} contentStyle={styles.centro}>
+        <AssistantStateView
+          state={state}
+          chapterNumber={null}
+          detail={detail}
+          onPrimary={onPrimary}
+          onBack={() => router.back()}
+        />
+      </Screen>
+    );
+  }
 
   if (screenState === 'loading') {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={colors.green} />
-      </View>
+      <Screen scroll={false} edges={['top', 'bottom']} onBack={() => router.back()} title="Quiz" contentStyle={styles.carregando}>
+        <Skeleton width="72%" height={96} borderRadius={radius.card} />
+        <Skeleton width="48%" height={48} borderRadius={radius.card} />
+      </Screen>
     );
   }
 
   if (screenState === 'quota' && quota) {
     const copy = paywallCopy(quota);
-    return (
-      <QuizMessageScreen
-        paddingTop={insets.top + 60}
-        paddingBottom={insets.bottom + 40}
-        icon={
-          <QuizMessageIconBadge background={colors.gold} borderColor={colors.goldDeep}>
-            <Crown size={32} color="#fff" strokeWidth={2.2} />
-          </QuizMessageIconBadge>
-        }
-        title={copy.title}
-        description={copy.hint ? `${copy.description}\n\n${copy.hint}` : copy.description}
-      >
-        <View style={{ width: '100%', gap: 8 }}>
-          <Press3DButton onPress={() => router.push('/planos')} color="gold" Icon={Crown}>
-            Conhecer o Premium
-          </Press3DButton>
-          <Pressable
-            onPress={() => router.back()}
-            style={{ paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' }}
-          >
-            <Text style={{ fontFamily: fonts.medium, fontSize: 14, color: colors.textMute }}>
-              Voltar
-            </Text>
-          </Pressable>
-        </View>
-      </QuizMessageScreen>
+    return estado(
+      'quota',
+      copy.hint ? `${copy.description} ${copy.hint}` : copy.description,
+      () => router.push('/planos'),
     );
   }
 
   if (screenState === 'polling') {
-    return (
-      <QuizMessageScreen
-        paddingTop={insets.top + 60}
-        paddingBottom={insets.bottom + 40}
-        icon={
-          <QuizMessageIconBadge background={colors.purple} borderColor={colors.purpleDeep}>
-            <Sparkles size={32} color="#fff" strokeWidth={2.2} />
-          </QuizMessageIconBadge>
-        }
-        title="Preparando seu quiz"
-        description={'A IA está gerando perguntas\nsobre o capítulo que você leu'}
-        extra={
-          <>
-            <ActivityIndicator color={colors.purple} style={{ marginTop: 28 }} />
-            <Text style={{
-              fontFamily: fonts.medium,
-              fontSize: 12,
-              color: colors.textMute,
-              marginTop: 12,
-            }}>
-              {pollCount > 3 ? 'Quase lá…' : 'Isso pode levar alguns instantes…'}
-            </Text>
-          </>
-        }
-      >
-        <Pressable onPress={() => router.back()} style={{ paddingVertical: 12, paddingHorizontal: 24 }}>
-          <Text style={{ fontFamily: fonts.medium, fontSize: 14, color: colors.textMute }}>
-            Responder depois
-          </Text>
-        </Pressable>
-      </QuizMessageScreen>
-    );
+    return estado('polling', pollCount > 3 ? 'Quase lá.' : 'Leva uns instantes.');
   }
 
   if (screenState === 'still-generating') {
-    return (
-      <QuizMessageScreen
-        paddingTop={insets.top + 60}
-        paddingBottom={insets.bottom + 40}
-        icon={
-          <QuizMessageIconBadge background={colors.purple} borderColor={colors.purpleDeep}>
-            <Sparkles size={32} color="#fff" strokeWidth={2.2} />
-          </QuizMessageIconBadge>
-        }
-        title="Seu quiz ainda está sendo preparado"
-        description="Está demorando mais que o normal, mas as perguntas continuam sendo geradas. Volte em alguns minutos — sua leitura já está registrada."
-      >
-        <View style={{ width: '100%', gap: 8 }}>
-          <Pressable
-            onPress={() => { setPollCount(0); setScreenState('polling'); }}
-            style={{ paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' }}
-          >
-            <Text style={{ fontFamily: fonts.black, fontSize: 15, color: colors.purple }}>
-              Verificar de novo
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => router.back()} style={{ paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' }}>
-            <Text style={{ fontFamily: fonts.medium, fontSize: 14, color: colors.textMute }}>
-              Responder depois
-            </Text>
-          </Pressable>
-        </View>
-      </QuizMessageScreen>
-    );
+    return estado('still-generating', 'Pode fechar e voltar depois.', () => {
+      setPollCount(0);
+      setScreenState('polling');
+    });
   }
 
   // BER-66: o capitulo nao tem texto cadastrado em book_contents. Nao e falha da IA
-  // e nao adianta re-tentar — o que falta e conteudo. A tela diz isso, em vez de
+  // e nao adianta re-tentar: o que falta e conteudo. A tela diz isso, em vez de
   // "deu erro", e nao oferece um botao que sabidamente nao resolve.
   if (screenState === 'no-content') {
-    return (
-      <QuizMessageScreen
-        paddingTop={insets.top + 60}
-        paddingBottom={insets.bottom + 40}
-        icon={
-          <QuizMessageIconBadge background={colors.surface} borderColor={colors.surface2}>
-            <BookOpen size={32} color={colors.textSoft} strokeWidth={2.2} />
-          </QuizMessageIconBadge>
-        }
-        title="Ainda não temos este capítulo"
-        description="Sem o conteúdo do capítulo, qualquer pergunta que a gente fizesse seria chute — e preferimos não fazer isso. Sua leitura já está registrada e continua contando para a sua sequência."
-      >
-        <View style={{ width: '100%', gap: 8 }}>
-          <Pressable
-            onPress={() => router.back()}
-            style={{ paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' }}
-          >
-            <Text style={{ fontFamily: fonts.black, fontSize: 15, color: colors.purple }}>
-              Voltar para o livro
-            </Text>
-          </Pressable>
-        </View>
-      </QuizMessageScreen>
-    );
+    return estado('no-content', 'Sua leitura continua contando pra sua sequência.');
   }
 
   if (screenState === 'failed' || questions.length === 0) {
-    return (
-      <QuizMessageScreen
-        justify="center"
-        paddingTop={32}
-        paddingBottom={32}
-        icon={<Text style={{ fontSize: 48, marginBottom: 16 }}>😔</Text>}
-        title="Perguntas indisponíveis"
-        titleSize={20}
-        titleMarginBottom={8}
-        description={'Tente novamente mais tarde —\nestamos preparando seu quiz.'}
-        descriptionSize={14}
-        descriptionMarginBottom={32}
-      >
-        <View style={{ width: '70%' }}>
-          <Press3DButton onPress={() => router.back()}>Voltar</Press3DButton>
-        </View>
-      </QuizMessageScreen>
-    );
+    return estado('failed', 'Se continuar assim, tenta mais tarde.', () => {
+      setScreenState('loading');
+      setReloadKey((k) => k + 1);
+    });
   }
 
   return (
-    <QuizQuestionScreen
-      question={questions[currentIndex]}
+    <QuizConversation
+      questions={questions}
       currentIndex={currentIndex}
-      totalQuestions={questions.length}
+      results={results}
+      answerTexts={answerTexts}
       answer={answer}
       onChangeAnswer={setAnswer}
-      submittedAnswerText={answerTexts[currentIndex]}
       evaluating={evaluating}
-      result={results[currentIndex] ?? null}
-      onBack={() => router.back()}
       onSubmit={handleSubmit}
       onNext={handleNext}
+      onBack={() => router.back()}
     />
   );
 }
+
+const styles = StyleSheet.create({
+  carregando: { gap: space.md, paddingTop: space.lg },
+  centro: { flexGrow: 1, justifyContent: 'center' },
+});

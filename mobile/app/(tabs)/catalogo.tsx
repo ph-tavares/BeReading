@@ -1,305 +1,178 @@
+// Explorar (spec 7.8, F6 Tarefa 2). Busca por titulo ou autor com debounce de
+// 300 ms, generos reais em chips, destaque do primeiro livro nao comecado e
+// linhas com estado. Comecar passa pela Edge Function reading-list (BER-58),
+// com PaywallSheet no 402 e toast no lugar do Alert.
 import { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  Pressable,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Search, X, Plus, CheckCheck } from 'lucide-react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Search } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
+import { useEntitlementStore } from '../../src/stores/entitlementStore';
 import { ProfileErrorState } from '../../src/components/ProfileErrorState';
+import { PaywallSheet } from '../../src/components/PaywallSheet';
 import { getBooks, getStudentBooks } from '../../src/api/queries';
 import { startReadingBook } from '../../src/api/edgeFunctions';
-import { PaywallSheet } from '../../src/components/PaywallSheet';
-import { useEntitlementStore } from '../../src/stores/entitlementStore';
 import { isQuotaExceededError, type QuotaExceeded } from '../../src/utils/billing';
-import { BookCover } from '../../src/components/BookCover';
-import { Chip } from '../../src/components/Chip';
-import { SectionLabel } from '../../src/components/SectionLabel';
-import { CATEGORIES, categoryOf } from '../../src/theme/categories';
-import { coverFromId } from '../../src/theme/bookCover';
-import { colors, fonts, radii } from '../../src/theme/tokens';
+import { Banner, Chip, EmptyState, Field, Screen, Skeleton, Text, useToast } from '../../src/ui';
+import {
+  ExploreBookRow, FeaturedBook, exploreState, featuredBook, filterByGenre, genresOf,
+} from '../../src/features/explore';
+import { radius, space } from '../../src/theme/tokens';
 import type { Book } from '../../src/types/database';
 
+const DEBOUNCE_MS = 300;
+
 export default function CatalogoScreen() {
-  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const toast = useToast();
   const { profile, profileStatus } = useAuthStore();
-  const [search, setSearch] = useState('');
-  const [cat, setCat] = useState<string>('all');
+  const userId = profile?.user_id ?? null;
+
   const [books, setBooks] = useState<Book[]>([]);
-  const [myBookIds, setMyBookIds] = useState<Set<string>>(new Set());
+  const [statusById, setStatusById] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [addingId, setAddingId] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [search, setSearch] = useState('');
+  const [genre, setGenre] = useState<string | null>(null);
+  const [startingId, setStartingId] = useState<string | null>(null);
   const [paywall, setPaywall] = useState<QuotaExceeded | null>(null);
 
   useEffect(() => {
-    // BER-45: sem o setLoading(false) aqui, o `loading` inicial `true` nunca
-    // virava false quando o perfil falhava — e a aba girava para sempre.
-    if (!profile) { setLoading(false); return; }
+    // BER-45: sem perfil, o carregamento inicial nunca terminaria.
+    if (!userId) { setLoading(false); return; }
     let cancelled = false;
+    setError(false);
 
-    async function loadInitial() {
-      try {
-        const [allBooks, myBooks] = await Promise.all([
-          getBooks(),
-          getStudentBooks(profile!.user_id),
-        ]);
+    Promise.all([getBooks(), getStudentBooks(userId)])
+      .then(([todos, meus]) => {
         if (cancelled) return;
-        setBooks(allBooks);
-        setMyBookIds(new Set(myBooks.map((sb) => sb.book_id)));
-      } catch {
-        // lista vazia
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
+        setBooks(todos);
+        setStatusById(Object.fromEntries(meus.map((sb) => [sb.book_id, sb.status])));
+      })
+      .catch(() => { if (!cancelled) setError(true); })
+      .finally(() => { if (!cancelled) setLoading(false); });
 
-    loadInitial();
     return () => { cancelled = true; };
-  }, [profile]);
+  }, [userId, reloadKey]);
 
   useEffect(() => {
     if (loading) return;
     let cancelled = false;
-    const timer = setTimeout(async () => {
-      try {
-        const result = await getBooks(search || undefined);
-        if (!cancelled) setBooks(result);
-      } catch {
-        // mantém lista atual em caso de erro
-      }
-    }, 300);
+    const timer = setTimeout(() => {
+      getBooks(search.trim() || undefined)
+        .then((resultado) => { if (!cancelled) setBooks(resultado); })
+        // Falha na busca mantem a lista atual: o leitor tenta de novo digitando.
+        .catch(() => {});
+    }, DEBOUNCE_MS);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [search, loading]);
 
-  async function handleAdd(book: Book) {
-    if (!profile || addingId) return;
-    setAddingId(book.id);
+  async function handleStart(book: Book) {
+    if (!userId || startingId) return;
+    setStartingId(book.id);
     try {
-      // BER-58: começar um livro passa pelo servidor, que aplica o limite do plano.
       await startReadingBook(book.id);
-      setMyBookIds((prev) => new Set([...prev, book.id]));
+      setStatusById((atual) => ({ ...atual, [book.id]: 'reading' }));
       useEntitlementStore.getState().refresh();
-      Alert.alert('Adicionado!', `"${book.title}" está na sua lista de leitura.`);
+      toast.show({ message: `${book.title} entrou na sua estante.`, detail: 'Registre a primeira leitura quando quiser.', tone: 'positive' });
     } catch (e: unknown) {
       if (isQuotaExceededError(e)) {
         setPaywall(e.quota);
         return;
       }
-      const msg = e instanceof Error ? e.message : 'Tente novamente';
-      Alert.alert('Erro', msg);
+      toast.show({ message: 'Não deu pra começar esse livro.', detail: 'Tenta de novo daqui a pouco.', tone: 'danger' });
     } finally {
-      setAddingId(null);
+      setStartingId(null);
     }
   }
 
-  const filtered = books.filter((b) => {
-    if (cat === 'all') return true;
-    const c = categoryOf(b.genre);
-    return c?.id === cat;
-  });
-
-  const selectedCat = CATEGORIES.find((c) => c.id === cat);
-
-  // BER-45: o perfil nao carregou. Antes isto era um spinner eterno.
   if (profileStatus === 'error') return <ProfileErrorState />;
 
+  const generos = genresOf(books);
+  const generoAtivo = genre !== null && generos.includes(genre) ? genre : null;
+  const lista = filterByGenre(books, generoAtivo);
+  const destaque = search.trim() === '' && generoAtivo === null ? featuredBook(books, statusById) : null;
+  const linhas = destaque ? lista.filter((b) => b.id !== destaque.id) : lista;
+
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <ScrollView
-        contentContainerStyle={{
-          paddingTop: insets.top + 8,
-          paddingBottom: 120,
-        }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={{
-          paddingHorizontal: 20,
-          paddingBottom: 16,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.hairline,
-        }}>
-          <Text style={{
-            fontFamily: fonts.black,
-            fontSize: 28,
-            color: colors.text,
-            letterSpacing: -0.5,
-          }}>Explorar</Text>
-          <Text style={{
-            fontFamily: fonts.semi,
-            fontSize: 13,
-            color: colors.textMute,
-            marginTop: 2,
-          }}>Encontre sua próxima aventura</Text>
+    <Screen title="Explorar" subtitle="Seu próximo livro está aqui." contentStyle={styles.content}>
+      <Field
+        label="Buscar"
+        icon={Search}
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Título ou autor"
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="search"
+      />
 
-          {/* Search */}
-          <View style={{
-            marginTop: 18,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 10,
-            paddingHorizontal: 16,
-            height: 52,
-            backgroundColor: colors.bgRaise,
-            borderRadius: radii.md,
-            borderWidth: 1,
-            borderColor: colors.hairline,
-          }}>
-            <Search size={18} color={colors.textMute} />
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Busque por título ou autor…"
-              placeholderTextColor={colors.textMute}
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={{
-                flex: 1,
-                color: colors.text,
-                fontFamily: fonts.medium,
-                fontSize: 14,
-              }}
+      {error ? (
+        <Banner tone="danger" message="Não deu pra carregar o catálogo." onRetry={() => { setLoading(true); setReloadKey((k) => k + 1); }} />
+      ) : null}
+
+      {loading ? (
+        <View style={styles.lista}>
+          <Skeleton width="100%" height={180} borderRadius={radius.card} />
+          <Skeleton width="100%" height={64} />
+          <Skeleton width="100%" height={64} />
+        </View>
+      ) : (
+        <>
+          {generos.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+              <Chip label="Todos" selected={generoAtivo === null} onPress={() => setGenre(null)} />
+              {generos.map((g) => (
+                <Chip key={g} label={g} selected={generoAtivo === g} onPress={() => setGenre(g)} />
+              ))}
+            </ScrollView>
+          ) : null}
+
+          {destaque ? (
+            <FeaturedBook
+              book={destaque}
+              starting={startingId === destaque.id}
+              onStart={() => handleStart(destaque)}
+              onOpen={() => router.push(`/book/${destaque.id}`)}
             />
-            {search.length > 0 && (
-              <Pressable
-                onPress={() => setSearch('')}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <X size={16} color={colors.textMute} />
-              </Pressable>
-            )}
-          </View>
-        </View>
+          ) : null}
 
-        {/* Categorias */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingHorizontal: 20,
-            paddingVertical: 16,
-            gap: 8,
-          }}
-        >
-          <Chip active={cat === 'all'} onPress={() => setCat('all')} color={colors.text}>
-            Todos
-          </Chip>
-          {CATEGORIES.map((c) => (
-            <Chip
-              key={c.id}
-              active={cat === c.id}
-              onPress={() => setCat(c.id)}
-              color={c.color}
-              Icon={c.Icon}
-            >
-              {c.label}
-            </Chip>
-          ))}
-        </ScrollView>
-
-        <View style={{ paddingHorizontal: 20 }}>
-          <SectionLabel>
-            {cat === 'all' ? 'Todos os livros' : selectedCat?.label ?? 'Livros'}
-          </SectionLabel>
-
-          {loading ? (
-            <View style={{ paddingVertical: 60, alignItems: 'center' }}>
-              <ActivityIndicator size="large" color={colors.green} />
+          {lista.length === 0 && !error ? (
+            <EmptyState
+              illustration="none"
+              title={search.trim() ? 'Nada com esse nome por aqui.' : 'Nenhum livro nesse gênero ainda.'}
+              description={search.trim() ? 'Tente outro título ou autor.' : 'Escolha outro gênero ou veja todos.'}
+            />
+          ) : linhas.length > 0 ? (
+            <View>
+              <Text variant="label" tone="secondary" style={styles.secao}>
+                {generoAtivo ?? (search.trim() ? 'Resultados' : 'Todos os livros')}
+              </Text>
+              {linhas.map((b, i) => (
+                <ExploreBookRow
+                  key={b.id}
+                  book={b}
+                  state={exploreState(statusById, b.id)}
+                  starting={startingId === b.id}
+                  onOpen={() => router.push(`/book/${b.id}`)}
+                  onStart={() => handleStart(b)}
+                  last={i === linhas.length - 1}
+                />
+              ))}
             </View>
-          ) : filtered.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: 60 }}>
-              <Text style={{ fontSize: 40 }}>🔍</Text>
-              <Text style={{
-                fontFamily: fonts.bold,
-                fontSize: 15,
-                color: colors.textSoft,
-                marginTop: 12,
-              }}>Nenhum livro encontrado</Text>
-              {search.length > 0 && (
-                <Text style={{
-                  fontFamily: fonts.medium,
-                  fontSize: 13,
-                  color: colors.textMute,
-                  marginTop: 4,
-                }}>Tente outro termo de busca</Text>
-              )}
-            </View>
-          ) : (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
-              {filtered.map((b) => {
-                const added = myBookIds.has(b.id);
-                const { color, deep } = coverFromId(b.id);
-                return (
-                  <View key={b.id} style={{ width: '47%', marginBottom: 10 }}>
-                    <View style={{ aspectRatio: 0.7, marginBottom: 10 }}>
-                      <BookCover
-                        book={b}
-                        size="md"
-                        style={{ width: '100%', height: '100%' }}
-                      />
-                    </View>
-                    <Text numberOfLines={2} style={{
-                      fontFamily: fonts.black,
-                      fontSize: 13,
-                      color: colors.text,
-                      lineHeight: 16,
-                    }}>{b.title}</Text>
-                    <Text numberOfLines={1} style={{
-                      fontFamily: fonts.semi,
-                      fontSize: 11,
-                      color: colors.textMute,
-                      marginTop: 2,
-                    }}>{b.author}</Text>
-                    <Pressable
-                      onPress={() => handleAdd(b)}
-                      disabled={added || addingId === b.id}
-                      style={({ pressed }) => ({
-                        marginTop: 10,
-                        height: 38,
-                        borderRadius: 14,
-                        backgroundColor: added ? `${color}22` : color,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexDirection: 'row',
-                        gap: 6,
-                        borderBottomWidth: added ? 0 : 3,
-                        borderBottomColor: deep,
-                        opacity: pressed && !added ? 0.85 : 1,
-                      })}
-                    >
-                      {addingId === b.id ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : added ? (
-                        <>
-                          <CheckCheck size={13} color={color} strokeWidth={3} />
-                          <Text style={{ fontFamily: fonts.black, fontSize: 12, color }}>
-                            Na estante
-                          </Text>
-                        </>
-                      ) : (
-                        <>
-                          <Plus size={14} color="#fff" strokeWidth={2.6} />
-                          <Text style={{ fontFamily: fonts.black, fontSize: 12, color: '#fff' }}>
-                            Começar
-                          </Text>
-                        </>
-                      )}
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </View>
-      </ScrollView>
+          ) : null}
+        </>
+      )}
 
       <PaywallSheet quota={paywall} onDismiss={() => setPaywall(null)} />
-    </View>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  content: { paddingTop: space.sm, gap: space.lg },
+  lista: { gap: space.md },
+  chips: { gap: space.sm },
+  secao: { marginBottom: space.xs },
+});

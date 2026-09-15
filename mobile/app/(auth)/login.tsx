@@ -1,149 +1,78 @@
+// Login (spec 7.10, F6 Tarefa 4). Estante de lombadas, marcador e wordmark no
+// topo; erro inline no campo, no lugar do Alert. O botao continua desabilitado
+// ate ter e-mail e senha (regra de antes).
 import { useState } from 'react';
-import {
-  View,
-  Text,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Image,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Compass, Lock, ArrowRight, Plus } from 'lucide-react-native';
+import { Lock, Mail } from 'lucide-react-native';
 import { supabase } from '../../src/lib/supabase';
-import { BrandHeader } from '../../src/components/BrandHeader';
-import { AuthField } from '../../src/components/AuthField';
-import { Press3DButton } from '../../src/components/Press3DButton';
-import { GhostButton } from '../../src/components/GhostButton';
-import { colors, fonts } from '../../src/theme/tokens';
+import { Button, Field, Screen } from '../../src/ui';
+import { AuthHero, loginErrorMessage } from '../../src/features/auth';
+import { space } from '../../src/theme/tokens';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const preenchido = email.trim() !== '' && password !== '';
 
   async function handleLogin() {
-    if (!email.trim() || !password) {
-      Alert.alert('Campos obrigatórios', 'Preencha email e senha para continuar');
-      return;
-    }
+    if (!preenchido || loading) return;
+    setErro(null);
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
-    if (error) Alert.alert('Não foi possível entrar', error.message);
+    if (error) setErro(loginErrorMessage(error.message));
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.bg }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingTop: insets.top,
-          paddingBottom: insets.bottom + 280,
-        }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={{ padding: 24, paddingTop: 24 }}>
-          <BrandHeader />
-        </View>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Screen edges={['top', 'bottom']} contentStyle={styles.content}>
+        <AuthHero />
 
-        <View style={{ paddingHorizontal: 24, paddingTop: 14 }}>
-          <Text style={{
-            fontFamily: fonts.black,
-            fontSize: 28,
-            color: colors.text,
-            letterSpacing: -0.5,
-            textAlign: 'center',
-            marginBottom: 6,
-          }}>Bem-vindo de volta!</Text>
-          <Text style={{
-            fontFamily: fonts.semi,
-            fontSize: 13.5,
-            color: colors.textMute,
-            textAlign: 'center',
-            marginBottom: 26,
-          }}>A saga continua de onde você parou.</Text>
-
-          <AuthField
+        <View>
+          <Field
             label="E-mail"
-            Icon={Compass}
+            icon={Mail}
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(t) => { setEmail(t); setErro(null); }}
             placeholder="seu@email.com"
             autoCapitalize="none"
+            autoCorrect={false}
             keyboardType="email-address"
             autoComplete="email"
+            textContentType="emailAddress"
             returnKeyType="next"
           />
-          <AuthField
+          <Field
             label="Senha"
-            Icon={Lock}
+            icon={Lock}
             value={password}
-            onChangeText={setPassword}
-            placeholder="••••••••"
+            onChangeText={(t) => { setPassword(t); setErro(null); }}
+            placeholder="Sua senha"
             secureTextEntry
             autoComplete="password"
+            textContentType="password"
             returnKeyType="done"
             onSubmitEditing={handleLogin}
+            error={erro ?? undefined}
           />
-
-          <View style={{ marginTop: 8 }}>
-            <Press3DButton
-              onPress={handleLogin}
-              disabled={loading || !email.trim() || !password}
-              Icon={ArrowRight}
-              size="lg"
-            >
-              {loading ? 'Entrando…' : 'Entrar'}
-            </Press3DButton>
-          </View>
-
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 10,
-            marginVertical: 20,
-          }}>
-            <View style={{ flex: 1, height: 1, backgroundColor: colors.hairline }} />
-            <Text style={{
-              fontFamily: fonts.bold,
-              fontSize: 10.5,
-              color: colors.textMute,
-              letterSpacing: 1.2,
-            }}>OU</Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: colors.hairline }} />
-          </View>
-
-          <GhostButton onPress={() => router.push('/(auth)/signup')} Icon={Plus}>
-            Criar conta nova
-          </GhostButton>
         </View>
-      </ScrollView>
 
-      {/* Mascote — bottom-left */}
-      <View pointerEvents="none" style={{
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        width: 260,
-        height: 260,
-      }}>
-        <Image
-          source={require('../../assets/images/mascot1.png')}
-          style={{ width: '100%', height: '100%' }}
-          resizeMode="contain"
-        />
-      </View>
+        <View style={styles.acoes}>
+          <Button onPress={handleLogin} loading={loading} disabled={!preenchido}>Entrar</Button>
+          <Button variant="ghost" onPress={() => router.push('/(auth)/signup')}>Criar conta</Button>
+        </View>
+      </Screen>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  content: { gap: space.xxl, paddingBottom: space.xl },
+  acoes: { gap: space.sm },
+});

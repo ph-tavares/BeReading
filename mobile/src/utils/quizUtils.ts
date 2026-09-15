@@ -29,34 +29,5 @@ export function countPendingEvaluations(results: QuestionResult[]): number {
   return results.filter((r) => !hasScore(r)).length;
 }
 
-export interface ScoreConfig {
-  emoji: string;
-  label: string;
-  message: string;
-  color: string;
-}
-
-export function getScoreConfig(score: number): ScoreConfig {
-  if (score >= 80) {
-    return {
-      emoji: '🏆',
-      label: 'Excelente!',
-      message: 'Você demonstrou ótima compreensão do capítulo. Continue assim!',
-      color: '#10B981',
-    };
-  }
-  if (score >= 60) {
-    return {
-      emoji: '✅',
-      label: 'Bom trabalho!',
-      message: 'Você entendeu bem o capítulo. A leitura atenta faz toda a diferença.',
-      color: '#4F46E5',
-    };
-  }
-  return {
-    emoji: '📚',
-    label: 'Continue lendo!',
-    message: 'Cada capítulo lido é um passo a mais na sua jornada. Continue praticando!',
-    color: '#F59E0B',
-  };
-}
+// getScoreConfig (emoji, rótulo e cor por faixa de nota) saiu na F9: a fala da
+// nota agora é a scoreLine do assistente (src/assistant/lines.ts).

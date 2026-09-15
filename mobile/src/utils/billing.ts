@@ -138,7 +138,7 @@ export function paywallCopy(quota: QuotaExceeded): PaywallCopy {
     return {
       title: `Você já está lendo ${plural(limit, 'livro', 'livros')}`,
       description: `No plano gratuito dá para acompanhar ${plural(limit, 'livro', 'livros')} ao mesmo tempo. Com o Premium, você lê quantos quiser.`,
-      hint: 'Prefere trocar? Tire um livro da leitura na página dele — o progresso fica salvo.',
+      hint: 'Prefere trocar? Tire um livro da leitura na página dele. O progresso fica salvo.',
     };
   }
 

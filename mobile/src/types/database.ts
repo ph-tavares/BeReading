@@ -39,8 +39,22 @@ export interface Chapter {
   book_id: string;
   number: number;
   title: string | null;
-  start_page: number;
-  end_page: number;
+  /**
+   * Nulos desde a BER-72, e o tipo dizia que não eram.
+   *
+   * A migration `20260911180000_ber72_chapters_pages_optional.sql` derrubou o
+   * `not null` das duas colunas: nem Open Library nem Google Books expõem
+   * paginação por capítulo, então exigir isso tornava impossível cadastrar
+   * livro fora do catálogo curado.
+   *
+   * O tipo continuou prometendo `number`, e o custo disso não é teórico. Em
+   * `src/utils/pendingQuizzes.ts`, `currentPage >= chapter.end_page` com nulo
+   * vira `currentPage >= 0`, que é sempre verdadeiro: capítulo sem paginação
+   * conta como concluído e libera o quiz. É fallback defensável, mas ninguém
+   * decidiu isso, e o tipo é que escondia a decisão.
+   */
+  start_page: number | null;
+  end_page: number | null;
 }
 
 export interface StudentBook {

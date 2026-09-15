@@ -1,42 +1,43 @@
+// Detalhe do livro (spec 7.4, F5 Tarefa 7). A logica e a do time: pagina atual
+// e status em student_books (BER-48, BER-58), tirar e voltar a ler pela Edge
+// Function reading-list, PaywallSheet no 402. A composicao vem do sistema novo
+// e de src/features/book. Rolar ate o capitulo atual e header que colapsa sao
+// motion (F7).
 import { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { BookmarkMinus, BookmarkPlus, ChevronRight, Lock } from 'lucide-react-native';
-import { getBookWithChapters, getStudentBookEntry } from '../../src/api/queries';
+import { BookOpen } from 'lucide-react-native';
+import { getBookWithChapters, getMyAnswers, getStudentBookEntry } from '../../src/api/queries';
 import { startReadingBook, stopReadingBook } from '../../src/api/edgeFunctions';
-import { GhostButton } from '../../src/components/GhostButton';
 import { PaywallSheet } from '../../src/components/PaywallSheet';
 import { useEntitlementStore } from '../../src/stores/entitlementStore';
-import { isQuotaExceededError, type QuotaExceeded } from '../../src/utils/billing';
-import { TopBar } from '../../src/components/TopBar';
-import { BookCover } from '../../src/components/BookCover';
-import { Card } from '../../src/components/Card';
-import { SectionLabel } from '../../src/components/SectionLabel';
-import { Press3DButton } from '../../src/components/Press3DButton';
 import { useAuthStore } from '../../src/stores/authStore';
-import { colors, fonts, radii } from '../../src/theme/tokens';
-import { categoryOf } from '../../src/theme/categories';
-import { chapterLockState } from '../../src/utils/chapterGate';
+import { isQuotaExceededError, type QuotaExceeded } from '../../src/utils/billing';
+import {
+  Button, Cover, EmptyState, ProgressBar, Screen, Skeleton, Tag, Text, confirmDestructive, useToast,
+} from '../../src/ui';
+import { ChapterRow, answersByChapter, chapterStates } from '../../src/features/book';
+import { radius, space } from '../../src/theme/tokens';
 import type { Book, Chapter, StudentBook } from '../../src/types/database';
+
+const LARGURA_DA_CAPA = 100; // spec 7.4 e DESIGN.md secao 5 (Cover).
+const ALTURA_DA_CAPA = (LARGURA_DA_CAPA * 3) / 2;
 
 export default function BookDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const toast = useToast();
   const { profile } = useAuthStore();
+  const userId = profile?.user_id ?? null;
+
   const [data, setData] = useState<(Book & { chapters: Chapter[] }) | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
   // BER-48: até onde o leitor chegou neste livro. `null` = ainda não se sabe.
   const [currentPage, setCurrentPage] = useState<number | null>(null);
   // BER-58: se o livro está em leitura, tirado da leitura ou nunca começado (`null`).
   const [readingStatus, setReadingStatus] = useState<StudentBook['status'] | null>(null);
+  const [notas, setNotas] = useState<Record<string, (number | null)[]>>({});
   const [updatingList, setUpdatingList] = useState(false);
   const [paywall, setPaywall] = useState<QuotaExceeded | null>(null);
 
@@ -46,19 +47,17 @@ export default function BookDetailScreen() {
 
     getBookWithChapters(id)
       .then((d) => { if (!cancelled) setData(d); })
-      .catch(() => {
-        if (!cancelled) setError('Não foi possível carregar o livro.');
-      })
+      .catch(() => { if (!cancelled) setError(true); })
       .finally(() => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
   }, [id]);
 
   useEffect(() => {
-    if (!id || !profile) return;
+    if (!id || !userId) return;
     let cancelled = false;
 
-    getStudentBookEntry(profile.user_id, id)
+    getStudentBookEntry(userId, id)
       .then((entry) => {
         if (cancelled) return;
         setCurrentPage(entry?.current_page ?? 0);
@@ -67,11 +66,17 @@ export default function BookDetailScreen() {
       // Sem a página atual a tela não bloqueia nada; a trava de verdade é o servidor.
       .catch(() => { if (!cancelled) setCurrentPage(null); });
 
+    // As notas por capitulo (spec 7.4). Sem elas, capitulo lido aparece como
+    // quiz esperando, e o quiz reabre com o que ja foi respondido (BER-48).
+    getMyAnswers(userId)
+      .then((respostas) => { if (!cancelled) setNotas(answersByChapter(respostas)); })
+      .catch(() => { if (!cancelled) setNotas({}); });
+
     return () => { cancelled = true; };
-  }, [id, profile?.user_id]);
+  }, [id, userId]);
 
   // BER-58: no plano gratuito só dá para acompanhar alguns livros por vez. Tirar
-  // um da leitura libera a vaga e guarda a página — voltar continua de onde parou.
+  // um da leitura libera a vaga e guarda a página; voltar continua de onde parou.
   async function updateReadingList(action: 'start' | 'stop') {
     if (!id || updatingList) return;
     setUpdatingList(true);
@@ -84,7 +89,7 @@ export default function BookDetailScreen() {
         setPaywall(e.quota);
         return;
       }
-      Alert.alert('Não foi possível atualizar sua estante', e instanceof Error ? e.message : 'Tente novamente');
+      toast.show({ message: 'Não deu pra atualizar sua estante.', detail: 'Tenta de novo daqui a pouco.', tone: 'danger' });
     } finally {
       setUpdatingList(false);
     }
@@ -92,219 +97,120 @@ export default function BookDetailScreen() {
 
   function handleStopReading() {
     if (updatingList) return;
-    Alert.alert(
-      'Tirar da leitura?',
-      `Seu progresso fica salvo${currentPage ? ` na página ${currentPage}` : ''}. O livro sai da sua estante e a vaga fica livre para outro — dá para voltar a ele quando quiser.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Tirar da leitura', style: 'destructive', onPress: () => updateReadingList('stop') },
-      ],
-    );
+    confirmDestructive({
+      title: 'Tirar da leitura?',
+      message: `Seu progresso fica salvo${currentPage ? ` na página ${currentPage}` : ''}. O livro sai da sua estante e libera a vaga pra outro, e dá pra voltar a ele quando quiser.`,
+      confirmLabel: 'Tirar da leitura',
+      onConfirm: () => { void updateReadingList('stop'); },
+    });
   }
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={colors.green} />
-      </View>
+      <Screen edges={['top', 'bottom']} onBack={() => router.back()} contentStyle={styles.carregando}>
+        <Skeleton width={LARGURA_DA_CAPA} height={ALTURA_DA_CAPA} borderRadius={radius.tag} />
+        <Skeleton width="60%" height={28} />
+        <Skeleton width="100%" height={56} borderRadius={radius.card} />
+      </Screen>
     );
   }
 
   if (error || !data) {
+    // Sem o voltar do cabecalho: o "Voltar" do estado ja e a saida, e dois
+    // botoes com o mesmo nome confundem quem usa leitor de tela.
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <TopBar title="Livro" onBack={() => router.back()} />
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-          <Text style={{ fontSize: 40, marginBottom: 12 }}>😔</Text>
-          <Text style={{
-            fontFamily: fonts.medium,
-            fontSize: 15,
-            color: colors.textSoft,
-            textAlign: 'center',
-            marginBottom: 20,
-          }}>{error ?? 'Livro não encontrado'}</Text>
-          <View style={{ width: '60%' }}>
-            <Press3DButton onPress={() => router.back()}>Voltar</Press3DButton>
-          </View>
-        </View>
-      </View>
+      <Screen scroll={false} edges={['top', 'bottom']} contentStyle={styles.centro}>
+        <EmptyState
+          illustration="none"
+          title="Não deu pra abrir esse livro."
+          description="Confere a conexão e tenta de novo."
+          actionLabel="Voltar"
+          onAction={() => router.back()}
+        />
+      </Screen>
     );
   }
 
-  const sortedChapters = [...data.chapters].sort((a, b) => a.number - b.number);
-  const category = categoryOf(data.genre);
+  const capitulos = [...data.chapters].sort((a, b) => a.number - b.number);
+  const estados = chapterStates(capitulos, currentPage, notas);
+  const pagina = currentPage ?? 0;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <TopBar title="Livro" onBack={() => router.back()} />
-      <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 20 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Hero com capa + info */}
-        <View style={{ alignItems: 'center', gap: 16, paddingTop: 8 }}>
-          <BookCover book={data} size="lg" glow />
-          <View style={{ alignItems: 'center', gap: 6 }}>
-            <Text style={{
-              fontFamily: fonts.black,
-              fontSize: 22,
-              color: colors.text,
-              letterSpacing: -0.3,
-              textAlign: 'center',
-              lineHeight: 27,
-            }}>{data.title}</Text>
-            <Text style={{
-              fontFamily: fonts.semi,
-              fontSize: 14,
-              color: colors.textMute,
-            }}>{data.author}</Text>
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 10,
-              marginTop: 4,
-            }}>
-              {category && (
-                <View style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 3,
-                  borderRadius: 999,
-                  backgroundColor: `${category.color}22`,
-                  borderWidth: 1,
-                  borderColor: `${category.color}55`,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 5,
-                }}>
-                  <category.Icon size={12} color={category.color} strokeWidth={2.4} />
-                  <Text style={{
-                    fontFamily: fonts.black,
-                    fontSize: 10.5,
-                    color: category.color,
-                    letterSpacing: 1.2,
-                    textTransform: 'uppercase',
-                  }}>{category.label}</Text>
-                </View>
-              )}
-              <Text style={{
-                fontFamily: fonts.semi,
-                fontSize: 12,
-                color: colors.textMute,
-              }}>{data.total_pages} páginas</Text>
+    <Screen scroll={false} edges={['top', 'bottom']} onBack={() => router.back()} contentStyle={styles.flex}>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.conteudo} showsVerticalScrollIndicator={false}>
+        <View style={styles.hero}>
+          <Cover book={data} width={LARGURA_DA_CAPA} />
+          <View style={styles.info}>
+            <Text variant="title">{data.title}</Text>
+            <Text variant="callout" tone="secondary">{data.author}</Text>
+            <View style={styles.tags}>
+              {data.genre ? <Tag label={data.genre} /> : null}
+              <Tag label={`${data.total_pages} páginas`} />
             </View>
           </View>
         </View>
 
-        {readingStatus === 'reading' && (
-          <GhostButton onPress={handleStopReading} Icon={BookmarkMinus}>
-            {updatingList ? 'Atualizando…' : 'Tirar da leitura'}
-          </GhostButton>
-        )}
-        {readingStatus === 'dropped' && (
-          <Press3DButton onPress={() => updateReadingList('start')} disabled={updatingList} Icon={BookmarkPlus}>
-            {updatingList ? 'Atualizando…' : 'Voltar a ler'}
-          </Press3DButton>
-        )}
+        {readingStatus ? (
+          <View style={styles.progresso}>
+            <ProgressBar
+              progress={data.total_pages > 0 ? pagina / data.total_pages : 0}
+              accessibilityLabel={`Página ${pagina} de ${data.total_pages}`}
+            />
+            <Text variant="caption" tone="tertiary">{`pág. ${pagina} de ${data.total_pages}`}</Text>
+          </View>
+        ) : null}
 
-        {/* Capítulos */}
+        {readingStatus === 'reading' ? (
+          <Button variant="ghost" onPress={handleStopReading} loading={updatingList}>Tirar da leitura</Button>
+        ) : null}
+        {readingStatus === 'dropped' ? (
+          <Button variant="secondary" onPress={() => { void updateReadingList('start'); }} loading={updatingList}>
+            Voltar a ler
+          </Button>
+        ) : null}
+
         <View>
-          <SectionLabel
-            right={
-              <Text style={{
-                fontFamily: fonts.black,
-                fontSize: 11,
-                color: colors.green,
-              }}>{sortedChapters.length}</Text>
-            }
-          >
-            {sortedChapters.length === 1 ? 'Capítulo' : 'Capítulos'}
-          </SectionLabel>
-
-          {sortedChapters.length === 0 ? (
-            <Card style={{ padding: 24, alignItems: 'center' }}>
-              <Text style={{
-                fontFamily: fonts.medium,
-                fontSize: 14,
-                color: colors.textMute,
-              }}>Capítulos ainda não disponíveis</Text>
-            </Card>
+          <Text variant="label" tone="secondary" style={styles.secao}>
+            {capitulos.length === 1 ? 'Capítulo' : 'Capítulos'}
+          </Text>
+          {capitulos.length === 0 ? (
+            <Text variant="callout" tone="tertiary">Os capítulos desse livro ainda não chegaram.</Text>
           ) : (
-            <Card style={{ overflow: 'hidden', padding: 0 }}>
-              {sortedChapters.map((chapter, index) => {
-                // BER-48: quiz fechado até o leitor chegar ao fim do capítulo. Sem saber
-                // a página atual, não bloqueia — o servidor ainda recusa com 403.
-                const lock = currentPage === null
-                  ? { unlocked: true, pagesLeft: 0 }
-                  : chapterLockState(chapter.end_page, currentPage);
-                const locked = !lock.unlocked;
-                const title = chapter.title ?? `Capítulo ${chapter.number}`;
-
-                return (
-                  <Pressable
-                    key={chapter.id}
-                    onPress={locked ? undefined : () => router.push(`/quiz/${chapter.id}`)}
-                    disabled={locked}
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: locked }}
-                    accessibilityLabel={locked
-                      ? `${title}. Quiz fechado: leia até a página ${chapter.end_page}.`
-                      : `${title}. Abrir o quiz.`}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      padding: 16,
-                      gap: 14,
-                      borderBottomWidth: index < sortedChapters.length - 1 ? 1 : 0,
-                      borderBottomColor: colors.hairline,
-                      opacity: pressed ? 0.7 : 1,
-                    })}
-                  >
-                    <View style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 10,
-                      backgroundColor: locked ? colors.surface : colors.gold,
-                      borderBottomWidth: 3,
-                      borderBottomColor: locked ? colors.surface2 : colors.goldDeep,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}>
-                      <Text style={{
-                        fontFamily: fonts.black,
-                        fontSize: 13,
-                        color: locked ? colors.textMute : '#fff',
-                      }}>{chapter.number}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{
-                        fontFamily: fonts.bold,
-                        fontSize: 14,
-                        color: locked ? colors.textSoft : colors.text,
-                      }}>{title}</Text>
-                      <Text style={{
-                        fontFamily: fonts.semi,
-                        fontSize: 12,
-                        color: colors.textMute,
-                        marginTop: 2,
-                      }}>
-                        {locked
-                          ? `Leia até a p. ${chapter.end_page} para abrir o quiz`
-                          : `p. ${chapter.start_page}–${chapter.end_page}`}
-                      </Text>
-                    </View>
-                    {locked
-                      ? <Lock size={16} color={colors.textMute} strokeWidth={2.2} />
-                      : <ChevronRight size={18} color={colors.textMute} />}
-                  </Pressable>
-                );
-              })}
-            </Card>
+            capitulos.map((capitulo, i) => (
+              <ChapterRow
+                key={capitulo.id}
+                chapter={capitulo}
+                state={estados[capitulo.id]}
+                onOpenQuiz={(capituloId) => router.push(`/quiz/${capituloId}`)}
+                last={i === capitulos.length - 1}
+              />
+            ))
           )}
         </View>
       </ScrollView>
 
+      {readingStatus === 'reading' ? (
+        <View style={styles.barra}>
+          <Button icon={BookOpen} onPress={() => router.push({ pathname: '/register-reading', params: { bookId: data.id } })}>
+            Registrar leitura
+          </Button>
+        </View>
+      ) : null}
+
       <PaywallSheet quota={paywall} onDismiss={() => setPaywall(null)} />
-    </View>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  carregando: { gap: space.lg, paddingTop: space.lg },
+  centro: { flexGrow: 1, justifyContent: 'center' },
+  conteudo: { gap: space.xl, paddingVertical: space.lg },
+  hero: { flexDirection: 'row', alignItems: 'flex-start', gap: space.lg },
+  info: { flex: 1, gap: space.xs },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.xs },
+  progresso: { gap: space.xs },
+  secao: { marginBottom: space.sm },
+  barra: { paddingVertical: space.md },
+});

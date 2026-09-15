@@ -29,13 +29,15 @@ produto. O design spec escolar está arquivado em `docs/history/`.
 Caminho do dado no loop principal:
 
 ```
-app/register-reading.tsx
+app/register-reading.tsx (sheet)
   → edgeFunctions.registerReadingSession()        (JWT do usuário)
   → edge register-reading-session                 (service_role)
       grava reading_session, recalcula streak e student_books,
       detecta capítulo completo e dispara, via dispatchBackground():
         → generate-questions   (4 perguntas, cache por capítulo)
         → award-badges
+  → capítulo fechado: app/chapter-complete.tsx (conquista; abre o quiz, ou
+    convida ao Premium se a cota do mês acabou)
   → app faz polling de chapter_quiz_status até 'generated'
   → cada resposta → evaluate-answer → score + feedback
 retry-pending-quizzes (pg_cron, horário) é a rede de segurança dos dois passos de IA.
@@ -181,7 +183,9 @@ Na prática:
   irmão com nome de domínio — `prompt.ts`, `submission.ts`, `claim.ts`,
   `reading.ts`, `filter.ts`. O `handler.test.ts` faz `await import('./index.ts')`
   e exercita o `handler` de verdade contra o `fakeSupabase`. No app, a regra sai
-  da tela para `src/utils/`. É o que torna os 432 testes possíveis.
+  da tela para `src/utils/`, ou, nas telas do redesign (BER-77), para o
+  `logic.ts` da feature em `src/features/<tela>/`, com XP e nível em `src/game/`.
+  É o que torna esses testes possíveis.
 - **Branch:** `tipo/ber-XX-descricao` (`feat`, `fix`, `docs`, `chore`, `refactor`,
   `test`, `ci`). Trunk-based em `main`, PR pequeno.
 - **PR:** preencha `.github/pull_request_template.md` — resumo, issue do Linear,

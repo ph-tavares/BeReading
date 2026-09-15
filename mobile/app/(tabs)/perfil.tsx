@@ -1,386 +1,222 @@
+// Voce (spec 7.9, F6 Tarefa 3). Anel com monograma e nivel, tres numeros,
+// mapa de constancia de 12 semanas, conquistas com progresso, plano e conta.
+// A logica do time continua: plano (BER-61), turma, sair e excluir conta
+// (BER-62), agora com Sheet e confirmacao destrutiva do sistema.
 import { useCallback, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  ActivityIndicator,
-  RefreshControl,
-  Pressable,
-  Alert,
-} from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BookOpen, Trophy, Award } from 'lucide-react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
-import { ProfileErrorState } from '../../src/components/ProfileErrorState';
-import { ClassroomGateModal } from '../../src/components/ClassroomGateModal';
-import { BadgeGrid } from '../../src/components/BadgeGrid';
-import { PagesChart } from '../../src/components/PagesChart';
-import { Card } from '../../src/components/Card';
-import { Press3DButton } from '../../src/components/Press3DButton';
-import { SectionLabel } from '../../src/components/SectionLabel';
-import { LottieSlot } from '../../src/components/LottieSlot';
-import { PlanCard } from '../../src/components/PlanCard';
 import { useEntitlementStore } from '../../src/stores/entitlementStore';
-import { Flame } from 'lucide-react-native';
-import {
-  getStreak,
-  getStudentBadges,
-  getAllBadges,
-  getStudentBooks,
-  getReadingSessions,
-} from '../../src/api/queries';
+import { useProgressStore } from '../../src/stores/progressStore';
+import { ProfileErrorState } from '../../src/components/ProfileErrorState';
+import { getAllBadges, getStudentBooks } from '../../src/api/queries';
 import { deleteAccount } from '../../src/api/edgeFunctions';
 import { supabase } from '../../src/lib/supabase';
-import { colors, fonts, radii } from '../../src/theme/tokens';
-import type { Streak, Badge, StudentBadge, StudentBook, ReadingSession } from '../../src/types/database';
+import { planSummary } from '../../src/utils/billing';
+import { effectiveStreak } from '../../src/game/streak';
+import { decorateBadges, type DecoratedBadge } from '../../src/game/badges';
+import { formatXp } from '../../src/game/xp';
+import { Banner, ListRow, Screen, Skeleton, Text, confirmDestructive, useToast } from '../../src/ui';
+import {
+  BadgeList, BadgeSheet, ClassroomSheet, ConstancyMap, ProfileHeader, StatsRow,
+  badgeStatsFrom, constancyWeeks, overallAverage,
+} from '../../src/features/profile';
+import { color, radius, space } from '../../src/theme/tokens';
+import type { Badge } from '../../src/types/database';
+
+const SEM_STREAK = { current_streak: 0, last_read_date: null as string | null };
 
 export default function PerfilScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
+  const toast = useToast();
   const { profile, profileStatus, clear } = useAuthStore();
+  const userId = profile?.user_id ?? null;
   const entitlement = useEntitlementStore((s) => s.entitlement);
-  const [streak, setStreak] = useState<Streak | null>(null);
-  const [studentBadges, setStudentBadges] = useState<(StudentBadge & { badge: Badge })[]>([]);
+  const { sessions, answers, badges, streak, xp, level, refresh } = useProgressStore();
+
   const [allBadges, setAllBadges] = useState<Badge[]>([]);
-  const [studentBooks, setStudentBooks] = useState<StudentBook[]>([]);
-  const [sessions, setSessions] = useState<ReadingSession[]>([]);
+  const [booksFinished, setBooksFinished] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showGateModal, setShowGateModal] = useState(false);
-  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [error, setError] = useState(false);
+  const [badgeAberta, setBadgeAberta] = useState<DecoratedBadge | null>(null);
+  const [turmaAberta, setTurmaAberta] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+
+  const load = useCallback(async (id: string) => {
+    setError(false);
+    // BER-61: o plano nao segura o resto da tela, carrega em paralelo.
+    useEntitlementStore.getState().refresh();
+    try {
+      const [, todas, livros] = await Promise.all([refresh(id), getAllBadges(), getStudentBooks(id)]);
+      setAllBadges(todas);
+      setBooksFinished(livros.filter((b) => b.status === 'finished').length);
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [refresh]);
 
   useFocusEffect(
     useCallback(() => {
-      // BER-45: sem o setLoading(false) aqui, o `loading` inicial `true` nunca
-      // virava false quando o perfil falhava — e a aba girava para sempre.
-      if (!profile) { setLoading(false); return; }
-      let cancelled = false;
-
-      (async () => {
-        try {
-          await loadData(profile.user_id, (fn) => { if (!cancelled) fn(); });
-        } catch {
-          // mantém estado vazio em erro de rede
-        } finally {
-          if (!cancelled) setLoading(false);
-        }
-      })();
-
-      return () => { cancelled = true; };
-    }, [profile]),
+      // BER-45: sem perfil, o carregamento nunca terminaria.
+      if (!userId) { setLoading(false); return; }
+      load(userId);
+    }, [userId, load]),
   );
 
-  async function loadData(
-    studentId: string,
-    guard: (fn: () => void) => void = (fn) => fn(),
-  ) {
-    // BER-61: o card do plano não segura o resto do perfil — carrega em paralelo.
-    useEntitlementStore.getState().refresh();
-    const [s, sb, ab, books, sess] = await Promise.all([
-      getStreak(studentId),
-      getStudentBadges(studentId),
-      getAllBadges(),
-      getStudentBooks(studentId),
-      getReadingSessions(studentId),
-    ]);
-    guard(() => {
-      setStreak(s);
-      setStudentBadges(sb);
-      setAllBadges(ab);
-      setStudentBooks(books as StudentBook[]);
-      setSessions(sess);
+  const onRefresh = useCallback(() => {
+    if (!userId) return;
+    setRefreshing(true);
+    load(userId);
+  }, [userId, load]);
+
+  function handleLogout() {
+    confirmDestructive({
+      title: 'Sair da conta?',
+      message: 'Seu progresso fica salvo. É só entrar de novo com seu e-mail e senha.',
+      confirmLabel: 'Sair',
+      onConfirm: async () => {
+        await supabase.auth.signOut();
+        clear();
+      },
     });
   }
 
-  async function handleRefresh() {
-    if (!profile) return;
-    setRefreshing(true);
-    try {
-      await loadData(profile.user_id);
-    } catch {
-      // mantém dados atuais
-    } finally {
-      setRefreshing(false);
-    }
-  }
-
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    clear();
-  }
-
-  // BER-62: exigência de loja (Apple/Google) e direito de eliminação (LGPD Art.
-  // 18) — confirmação explícita antes de uma ação que não tem volta.
+  // BER-62: exigencia de loja e direito de eliminacao (LGPD Art. 18). Confirmacao
+  // explicita antes de uma acao que nao tem volta.
   function handleDeleteAccount() {
-    Alert.alert(
-      'Excluir sua conta?',
-      'Isso apaga sua sequência, medalhas, respostas e progresso de leitura para sempre. Não é possível desfazer.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir conta',
-          style: 'destructive',
-          onPress: async () => {
-            setDeletingAccount(true);
-            try {
-              await deleteAccount();
-              await supabase.auth.signOut();
-              clear();
-            } catch (e: unknown) {
-              const msg = e instanceof Error ? e.message : 'Erro ao excluir a conta';
-              Alert.alert('Não foi possível excluir sua conta', msg);
-            } finally {
-              setDeletingAccount(false);
-            }
-          },
-        },
-      ],
-    );
+    if (excluindo) return;
+    confirmDestructive({
+      title: 'Excluir sua conta?',
+      message: 'Isso apaga sua sequência, conquistas, respostas e progresso de leitura para sempre. Não dá pra desfazer.',
+      confirmLabel: 'Excluir conta',
+      onConfirm: async () => {
+        setExcluindo(true);
+        try {
+          await deleteAccount();
+          await supabase.auth.signOut();
+          clear();
+        } catch {
+          toast.show({ message: 'Não deu pra excluir sua conta.', detail: 'Tenta de novo daqui a pouco.', tone: 'danger' });
+        } finally {
+          setExcluindo(false);
+        }
+      },
+    });
   }
 
-  const totalPages = sessions.reduce((sum, s) => sum + s.pages_read, 0);
-  const booksFinished = studentBooks.filter((b) => b.status === 'finished').length;
-  const earnedCount = studentBadges.length;
-  const totalSession = sessions.reduce((s, v) => s + v.pages_read, 0);
-
-  // BER-45: o perfil nao carregou. Antes isto era um spinner eterno.
   if (profileStatus === 'error') return <ProfileErrorState />;
 
-  if (loading) {
+  if (!profile || loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={colors.green} />
-      </View>
+      <Screen title="Você" contentStyle={styles.content}>
+        <View style={styles.carregandoTopo}>
+          <Skeleton width={84} height={84} borderRadius={radius.pill} />
+          <Skeleton width="50%" height={28} />
+        </View>
+        <Skeleton width="100%" height={72} borderRadius={radius.control} />
+        <Skeleton width="100%" height={120} borderRadius={radius.card} />
+      </Screen>
     );
   }
 
-  const initial = profile?.display_name?.charAt(0).toUpperCase() ?? '?';
+  const streakEfetiva = effectiveStreak(streak ?? SEM_STREAK);
+  const totalPages = sessions.reduce((soma, s) => soma + s.pages_read, 0);
+  const media = overallAverage(answers);
+  const semanas = constancyWeeks(sessions);
+  const conquistas = decorateBadges(
+    allBadges,
+    badges,
+    badgeStatsFrom({
+      sessionCount: sessions.length,
+      streak: streakEfetiva,
+      answerCount: answers.length,
+      booksFinished,
+      totalPages,
+    }),
+  );
+  const ganhas = conquistas.filter((b) => b.earned).length;
+  const plano = entitlement ? planSummary(entitlement) : null;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <ScrollView
-        contentContainerStyle={{
-          paddingTop: insets.top + 8,
-          paddingBottom: 120,
-        }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.green} />
-        }
-      >
-        {/* Header com avatar + stats */}
-        <View style={{ paddingHorizontal: 20, paddingBottom: 24 }}>
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 14,
-            marginBottom: 18,
-          }}>
-            <View style={{
-              width: 64,
-              height: 64,
-              borderRadius: 22,
-              backgroundColor: colors.purple,
-              borderBottomWidth: 6,
-              borderBottomColor: colors.purpleDeep,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <Text style={{
-                fontFamily: fonts.black,
-                fontSize: 26,
-                color: '#fff',
-              }}>{initial}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text numberOfLines={1} style={{
-                fontFamily: fonts.black,
-                fontSize: 22,
-                color: colors.text,
-                letterSpacing: -0.3,
-              }}>{profile?.display_name ?? 'Leitor'}</Text>
-              <Text style={{
-                fontFamily: fonts.semi,
-                fontSize: 12,
-                color: colors.textMute,
-                marginTop: 2,
-              }}>Leitor BeReading</Text>
-            </View>
-            <Pressable
-              onPress={handleLogout}
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 7,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: colors.hairline,
-              }}
-            >
-              <Text style={{
-                fontFamily: fonts.bold,
-                fontSize: 13,
-                color: colors.textSoft,
-              }}>Sair</Text>
-            </Pressable>
-          </View>
+    <Screen title="Você" refreshing={refreshing} onRefresh={onRefresh} contentStyle={styles.content}>
+      {error ? <Banner tone="danger" message="Não deu pra atualizar seus dados. Puxe pra tentar de novo." onRetry={onRefresh} /> : null}
 
-          {/* Streak banner */}
-          <Card style={{
-            padding: 14,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 14,
-          }}>
-            <LottieSlot
-              name="flame-streak"
-              size={48}
-              fallback={<Flame size={48} color={colors.flame} fill={colors.flame} strokeWidth={2} />}
-            />
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                <Text style={{
-                  fontFamily: fonts.black,
-                  fontSize: 32,
-                  color: colors.flame,
-                  letterSpacing: -1,
-                }}>{streak?.current_streak ?? 0}</Text>
-                <Text style={{
-                  fontFamily: fonts.bold,
-                  fontSize: 14,
-                  color: colors.text,
-                }}>dias em chama</Text>
-              </View>
-              {(streak?.longest_streak ?? 0) > 0 && (
-                <Text style={{
-                  fontFamily: fonts.semi,
-                  fontSize: 11,
-                  color: colors.textMute,
-                  marginTop: 2,
-                }}>recorde pessoal: {streak?.longest_streak} dias</Text>
-              )}
-            </View>
-          </Card>
+      <ProfileHeader name={profile.display_name} level={level} xp={xp} />
+
+      <StatsRow
+        items={[
+          { value: String(streakEfetiva), label: streakEfetiva === 1 ? 'dia seguido' : 'dias seguidos' },
+          { value: formatXp(totalPages), label: 'páginas' },
+          { value: media === null ? 'sem nota' : String(media), label: 'média geral' },
+        ]}
+      />
+
+      <View style={styles.secao}>
+        <Text variant="subhead">Constância</Text>
+        <ConstancyMap weeks={semanas} />
+      </View>
+
+      <View style={styles.secao}>
+        <View style={styles.secaoTopo}>
+          <Text variant="subhead">Conquistas</Text>
+          <Text variant="caption" tone="tertiary">{`${ganhas} de ${conquistas.length}`}</Text>
         </View>
+        {conquistas.length === 0 ? (
+          <Text variant="callout" tone="tertiary">As conquistas aparecem aqui assim que chegarem.</Text>
+        ) : (
+          <BadgeList badges={conquistas} onPressBadge={setBadgeAberta} />
+        )}
+      </View>
 
-        <View style={{ paddingHorizontal: 20, gap: 20 }}>
-          <PlanCard entitlement={entitlement} onPress={() => router.push('/planos')} />
-
-          {/* Heroic stats */}
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <HeroicStat value={totalPages} label="páginas" Icon={BookOpen} color={colors.green} />
-            <HeroicStat value={booksFinished} label="livros" Icon={Trophy} color={colors.gold} />
-            <HeroicStat value={earnedCount} label="badges" Icon={Award} color={colors.purple} />
-          </View>
-
-          {/* Reading chart */}
-          <Card style={{ padding: 16 }}>
-            <SectionLabel
-              right={
-                <Text style={{
-                  fontFamily: fonts.black,
-                  fontSize: 11,
-                  color: colors.green,
-                }}>{totalSession} pág.</Text>
-              }
-            >
-              Últimos 14 dias
-            </SectionLabel>
-            <PagesChart sessions={sessions} />
-          </Card>
-
-          {/* Badges */}
-          <Card style={{ padding: 16 }}>
-            <SectionLabel
-              right={
-                <Text style={{
-                  fontFamily: fonts.black,
-                  fontSize: 11,
-                  color: colors.textMute,
-                }}>{earnedCount}/{allBadges.length}</Text>
-              }
-            >
-              Conquistas
-            </SectionLabel>
-            {allBadges.length === 0 ? (
-              <Text style={{
-                fontFamily: fonts.medium,
-                fontSize: 13,
-                color: colors.textMute,
-                textAlign: 'center',
-                paddingVertical: 12,
-              }}>Nenhuma conquista disponível ainda</Text>
-            ) : (
-              <BadgeGrid allBadges={allBadges} earnedBadges={studentBadges} />
-            )}
-          </Card>
-
-          {!profile?.classroom_id && (
-            <Press3DButton onPress={() => setShowGateModal(true)} color="gold">
-              Entrar em uma turma
-            </Press3DButton>
-          )}
-
-          <ClassroomGateModal
-            visible={showGateModal}
-            onDismiss={() => setShowGateModal(false)}
-            onSuccess={() => setShowGateModal(false)}
+      {plano ? (
+        <View style={styles.secao}>
+          <Text variant="subhead">Plano</Text>
+          <ListRow
+            title={plano.title}
+            subtitle={plano.lines.join(' · ')}
+            trailing={<ChevronRight size={20} color={color.text3} />}
+            onPress={() => router.push('/planos')}
+            accessibilityLabel={`${plano.title}. ${plano.lines.join('. ')}. Ver planos.`}
+            last
           />
-
-          <Pressable
-            onPress={handleDeleteAccount}
-            disabled={deletingAccount}
-            style={{ alignItems: 'center', paddingVertical: 16, opacity: deletingAccount ? 0.5 : 1 }}
-          >
-            <Text style={{
-              fontFamily: fonts.bold,
-              fontSize: 13,
-              color: colors.textMute,
-            }}>{deletingAccount ? 'Excluindo conta…' : 'Excluir conta'}</Text>
-          </Pressable>
         </View>
-      </ScrollView>
-    </View>
+      ) : null}
+
+      <View style={styles.secao}>
+        <Text variant="subhead">Conta</Text>
+        {!profile.classroom_id ? (
+          <ListRow
+            title="Entrar em uma turma"
+            subtitle="Com o código do seu professor"
+            trailing={<ChevronRight size={20} color={color.text3} />}
+            onPress={() => setTurmaAberta(true)}
+          />
+        ) : null}
+        <ListRow title="Sair" tone="destructive" onPress={handleLogout} />
+        <ListRow title="Excluir conta" tone="destructive" loading={excluindo} onPress={handleDeleteAccount} last />
+      </View>
+
+      <BadgeSheet badge={badgeAberta} onDismiss={() => setBadgeAberta(null)} />
+      <ClassroomSheet
+        visible={turmaAberta}
+        onDismiss={() => setTurmaAberta(false)}
+        onSuccess={() => {
+          setTurmaAberta(false);
+          toast.show({ message: 'Você entrou na turma.', tone: 'positive' });
+        }}
+      />
+    </Screen>
   );
 }
 
-function HeroicStat({
-  value,
-  label,
-  Icon,
-  color,
-}: {
-  value: number;
-  label: string;
-  Icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>;
-  color: string;
-}) {
-  return (
-    <View style={{
-      flex: 1,
-      paddingVertical: 14,
-      paddingHorizontal: 8,
-      backgroundColor: colors.bgRaise,
-      borderRadius: radii.md,
-      borderWidth: 1,
-      borderColor: colors.hairline,
-      alignItems: 'center',
-      gap: 4,
-    }}>
-      <Icon size={18} color={color} strokeWidth={2.2} />
-      <Text style={{
-        fontFamily: fonts.black,
-        fontSize: 22,
-        color: colors.text,
-        letterSpacing: -0.5,
-      }}>{value}</Text>
-      <Text style={{
-        fontFamily: fonts.bold,
-        fontSize: 10,
-        color: colors.textMute,
-        letterSpacing: 0.5,
-        textTransform: 'uppercase',
-      }}>{label}</Text>
-    </View>
-  );
-}
+const styles = StyleSheet.create({
+  content: { paddingTop: space.sm, gap: space.xxl },
+  carregandoTopo: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
+  secao: { gap: space.md },
+  secaoTopo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+});

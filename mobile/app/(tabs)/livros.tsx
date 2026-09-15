@@ -1,246 +1,169 @@
-import { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  RefreshControl,
-  ActivityIndicator,
-  Image,
-} from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Compass, CheckCheck } from 'lucide-react-native';
+// Estante (spec 7.7, F6 Tarefa 1). Lendo e Lidos num Segmented, pull-to-refresh
+// mantido, vazio com lombadas. O limite do gratuito (BER-58) aparece como texto
+// no subtitulo, nunca como barra (DESIGN.md secao 10).
+import { useCallback, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuthStore } from '../../src/stores/authStore';
-import { getStudentBooks } from '../../src/api/queries';
 import { useEntitlementStore } from '../../src/stores/entitlementStore';
-import { BookCard } from '../../src/components/BookCard';
-import { BookCover } from '../../src/components/BookCover';
-import { Press3DButton } from '../../src/components/Press3DButton';
-import { SectionLabel } from '../../src/components/SectionLabel';
+import { getBookWithChapters, getMyAnswers, getStudentBooks } from '../../src/api/queries';
+import type { MyAnswer } from '../../src/api/queries';
 import { sectionBooksByStatus } from '../../src/utils/bookUtils';
-import { colors, fonts } from '../../src/theme/tokens';
-import type { StudentBook, Book } from '../../src/types/database';
+import { Banner, EmptyState, Screen, Segmented, Skeleton, Text } from '../../src/ui';
+import { FinishedShelf, ShelfBookRow, bookAverage, readProgress, shelfSubtitle } from '../../src/features/shelf';
+import { radius, space } from '../../src/theme/tokens';
+import type { Book, StudentBook } from '../../src/types/database';
+
+type Entry = StudentBook & { book: Book };
+type Aba = 'lendo' | 'lidos';
 
 export default function LivrosScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { profile } = useAuthStore();
-  const [books, setBooks] = useState<(StudentBook & { book: Book })[]>([]);
+  const entitlement = useEntitlementStore((s) => s.entitlement);
+
+  const [books, setBooks] = useState<Entry[] | null>(null);
+  const [averages, setAverages] = useState<Record<string, number | null>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const entitlement = useEntitlementStore((s) => s.entitlement);
+  const [error, setError] = useState(false);
+  const [aba, setAba] = useState<Aba>('lendo');
+
+  const load = useCallback(async (userId: string) => {
+    setError(false);
+    useEntitlementStore.getState().refresh();
+    try {
+      const entries = await getStudentBooks(userId);
+      setBooks(entries);
+
+      // A media dos lidos precisa dos capitulos de cada livro. Falhar aqui so
+      // esconde a media, nunca a estante.
+      const lidos = entries.filter((e) => e.status === 'finished');
+      if (lidos.length === 0) {
+        setAverages({});
+        return;
+      }
+      try {
+        const [respostas, capitulos] = await Promise.all([
+          getMyAnswers(userId),
+          Promise.all(lidos.map((e) => getBookWithChapters(e.book.id).catch(() => null))),
+        ]);
+        setAverages(mediasPorLivro(lidos, capitulos, respostas));
+      } catch {
+        setAverages({});
+      }
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       if (!profile) { setLoading(false); return; }
-      let cancelled = false;
-      setError(null);
-      useEntitlementStore.getState().refresh();
-
-      getStudentBooks(profile.user_id)
-        .then((data) => { if (!cancelled) setBooks(data); })
-        .catch(() => {
-          if (!cancelled) setError('Não foi possível carregar seus livros.');
-        })
-        .finally(() => { if (!cancelled) setLoading(false); });
-
-      return () => { cancelled = true; };
-    }, [profile]),
+      load(profile.user_id);
+    }, [profile, load]),
   );
 
-  async function handleRefresh() {
+  const onRefresh = useCallback(() => {
     if (!profile) return;
     setRefreshing(true);
-    setError(null);
-    try {
-      const data = await getStudentBooks(profile.user_id);
-      setBooks(data);
-    } catch {
-      setError('Não foi possível carregar seus livros.');
-    } finally {
-      setRefreshing(false);
-    }
-  }
+    load(profile.user_id);
+  }, [profile, load]);
 
-  const { reading, finished } = sectionBooksByStatus(books);
-  const hasBooks = reading.length > 0 || finished.length > 0;
-  // BER-58: no gratuito, mostra quantas vagas de leitura simultânea existem.
+  const { reading, finished } = sectionBooksByStatus(books ?? []);
   const maxBooks = entitlement?.plan === 'free' ? entitlement.limits.max_active_books : null;
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={colors.green} />
-      </View>
+      <Screen title="Estante" contentStyle={styles.content}>
+        <Skeleton width="100%" height={44} borderRadius={radius.control} />
+        <Skeleton width="100%" height={78} borderRadius={radius.card} />
+        <Skeleton width="100%" height={78} borderRadius={radius.card} />
+      </Screen>
+    );
+  }
+
+  const banner = error
+    ? <Banner tone="danger" message="Não deu pra carregar sua estante. Puxe pra atualizar." onRetry={onRefresh} />
+    : null;
+
+  if (books !== null && reading.length === 0 && finished.length === 0) {
+    return (
+      <Screen title="Estante" refreshing={refreshing} onRefresh={onRefresh} contentStyle={styles.content}>
+        {banner}
+        <EmptyState
+          title="Sua estante está vazia."
+          description="Escolha um livro em Explorar e comece a registrar sua leitura."
+          actionLabel="Explorar livros"
+          onAction={() => router.push('/(tabs)/catalogo')}
+        />
+      </Screen>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <ScrollView
-        contentContainerStyle={{
-          paddingTop: insets.top + 8,
-          paddingBottom: 120,
-        }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={colors.green}
-          />
-        }
-      >
-        {/* Header */}
-        <View style={{
-          paddingHorizontal: 20,
-          paddingBottom: 16,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.hairline,
-        }}>
-          <Text style={{
-            fontFamily: fonts.black,
-            fontSize: 28,
-            color: colors.text,
-            letterSpacing: -0.5,
-          }}>Estante</Text>
-          <Text style={{
-            fontFamily: fonts.semi,
-            fontSize: 13,
-            color: colors.textMute,
-            marginTop: 2,
-          }}>
-            {reading.length}{maxBooks !== null ? ` de ${maxBooks}` : ''} em leitura · {finished.length} finalizado{finished.length !== 1 ? 's' : ''}
-          </Text>
-        </View>
+    <Screen
+      title="Estante"
+      subtitle={books === null ? undefined : shelfSubtitle(reading.length, maxBooks)}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      contentStyle={styles.content}
+    >
+      {banner}
+      <Segmented
+        options={[
+          { value: 'lendo', label: `Lendo · ${reading.length}` },
+          { value: 'lidos', label: `Lidos · ${finished.length}` },
+        ]}
+        value={aba}
+        onChange={(v) => setAba(v as Aba)}
+      />
 
-        <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
-          {error && (
-            <View style={{
-              backgroundColor: 'rgba(244,63,94,0.1)',
-              borderWidth: 1,
-              borderColor: 'rgba(244,63,94,0.3)',
-              borderRadius: 12,
-              padding: 12,
-              marginBottom: 16,
-            }}>
-              <Text style={{ fontFamily: fonts.medium, color: colors.rose, fontSize: 13, textAlign: 'center' }}>
-                {error}
-              </Text>
-            </View>
-          )}
-
-          {!hasBooks ? (
-            <View style={{ alignItems: 'center', paddingVertical: 48, gap: 12 }}>
-              <Image
-                source={require('../../assets/images/mascot1.png')}
-                style={{ width: 140, height: 140 }}
-                resizeMode="contain"
+      {aba === 'lendo' ? (
+        reading.length === 0 ? (
+          <Text variant="callout" tone="tertiary">Nenhum livro em leitura agora. Explorar tem o próximo.</Text>
+        ) : (
+          <View>
+            {reading.map((e, i) => (
+              <ShelfBookRow
+                key={e.id}
+                book={e.book}
+                currentPage={e.current_page}
+                progress={readProgress(e)}
+                onPress={() => router.push(`/book/${e.book.id}`)}
+                last={i === reading.length - 1}
               />
-              <Text style={{
-                fontFamily: fonts.black,
-                fontSize: 18,
-                color: colors.text,
-              }}>Sua estante está vazia</Text>
-              <Text style={{
-                fontFamily: fonts.medium,
-                fontSize: 14,
-                color: colors.textMute,
-                textAlign: 'center',
-                lineHeight: 21,
-                paddingHorizontal: 20,
-                marginBottom: 8,
-              }}>
-                Explore o Catálogo e adicione livros para começar
-              </Text>
-              <View style={{ width: '70%' }}>
-                <Press3DButton
-                  onPress={() => router.push('/(tabs)/catalogo')}
-                  Icon={Compass}
-                >
-                  Ver Catálogo
-                </Press3DButton>
-              </View>
-            </View>
-          ) : (
-            <>
-              {reading.length > 0 && (
-                <View style={{ marginBottom: 26 }}>
-                  <SectionLabel
-                    right={
-                      <Text style={{
-                        fontFamily: fonts.black,
-                        fontSize: 11,
-                        color: colors.green,
-                      }}>{reading.length}</Text>
-                    }
-                  >
-                    Lendo agora
-                  </SectionLabel>
-                  <View style={{ gap: 12 }}>
-                    {reading.map((sb) => (
-                      <BookCard key={sb.id} studentBook={sb} book={sb.book} />
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {finished.length > 0 && (
-                <View style={{ marginBottom: 16 }}>
-                  <SectionLabel
-                    right={
-                      <Text style={{
-                        fontFamily: fonts.black,
-                        fontSize: 11,
-                        color: colors.gold,
-                      }}>{finished.length}</Text>
-                    }
-                  >
-                    Troféus
-                  </SectionLabel>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 14, paddingBottom: 6 }}
-                  >
-                    {finished.map((sb) => (
-                      <View key={sb.id} style={{ width: 120, alignItems: 'center' }}>
-                        <View style={{ position: 'relative' }}>
-                          <BookCover book={sb.book} size="md" glow />
-                          <View style={{
-                            position: 'absolute',
-                            top: -8,
-                            right: -8,
-                            width: 32,
-                            height: 32,
-                            borderRadius: 12,
-                            backgroundColor: colors.gold,
-                            borderBottomWidth: 3,
-                            borderBottomColor: colors.goldDeep,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}>
-                            <CheckCheck size={16} color="#fff" strokeWidth={3} />
-                          </View>
-                        </View>
-                        <Text numberOfLines={2} style={{
-                          fontFamily: fonts.bold,
-                          fontSize: 12,
-                          color: colors.text,
-                          marginTop: 8,
-                          textAlign: 'center',
-                          lineHeight: 15,
-                        }}>{sb.book.title}</Text>
-                      </View>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-            </>
-          )}
-        </View>
-      </ScrollView>
-    </View>
+            ))}
+          </View>
+        )
+      ) : finished.length === 0 ? (
+        <Text variant="callout" tone="tertiary">Os livros que você terminar ficam aqui.</Text>
+      ) : (
+        <FinishedShelf
+          items={finished.map((e) => ({ book: e.book, average: averages[e.book.id] ?? null }))}
+          onPressBook={(id) => router.push(`/book/${id}`)}
+        />
+      )}
+    </Screen>
   );
 }
+
+function mediasPorLivro(
+  lidos: Entry[],
+  capitulos: ({ chapters: { id: string }[] } | null)[],
+  respostas: MyAnswer[],
+): Record<string, number | null> {
+  const medias: Record<string, number | null> = {};
+  lidos.forEach((e, i) => {
+    const doLivro = capitulos[i];
+    medias[e.book.id] = doLivro ? bookAverage(respostas, doLivro.chapters.map((c) => c.id)) : null;
+  });
+  return medias;
+}
+
+const styles = StyleSheet.create({
+  content: { paddingTop: space.sm, gap: space.xl },
+});

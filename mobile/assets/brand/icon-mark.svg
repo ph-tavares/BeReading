@@ -1,0 +1,23 @@
+<!--
+  SVG-fonte do icone do app (Tarefa 5, rodada de correcao 1: achado 1). NAO e'
+  o mesmo arquivo que glyph.svg: aquele e' o assistente (com os dois olhos,
+  usado dentro do app por src/assistant/Glyph.tsx) e continua intocado. Este
+  aqui e' so a silhueta do marcador, sem os olhos, pros PNGs de icon/splash/
+  favicon/adaptive-icon — em 1024px os dois pontos dominavam a composicao e
+  liam como fantasma, nao como marcador de pagina. Um icone de app ser versao
+  simplificada da marca e' normal, nao inconsistencia (ver Glyph.tsx pro
+  personagem completo).
+
+  Tambem afinado ~15% mais estreito que o glyph.svg (largura do desenho 17 de
+  24, contra 20 de 24) e com o raio do topo um pouco menor: o formato largo e
+  de topo bem arredondado contribuia pra leitura de cabeca mesmo sem os
+  olhos. O ponto central do entalhe (x=12) continua no centro do viewBox,
+  entao a forma se mantem simetrica.
+
+  Mesmo viewBox 24x32 do glyph.svg de proposito, pra reaproveitar os mesmos
+  calculos de margem/zona segura dos HTMLs de geracao (nao versionados, ver
+  o relatorio da F3 em .superpowers/sdd/).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32">
+  <path d="M3.5 3.4A3.4 3.4 0 0 1 6.9 0h10.2A3.4 3.4 0 0 1 20.5 3.4V30l-8.5-6.5L3.5 30Z" fill="#F0A83A" />
+</svg>

@@ -1,64 +1,44 @@
-import { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  Alert,
-  Animated,
-  Easing,
-  Pressable,
-  ScrollView,
-} from 'react-native';
+// Confirmar e-mail (spec 7.10, F6 Tarefa 4). Toda a logica da BER-43 continua
+// identica; o que muda e a apresentacao: ping ambar mais lento, avisos inline
+// no lugar dos Alerts e contador de 60 s no "Reenviar".
+import { useEffect, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Mail, Info, CheckCircle, RefreshCw } from 'lucide-react-native';
 import { supabase } from '../../src/lib/supabase';
 import { usePendingAuthStore } from '../../src/stores/pendingAuthStore';
-import { Press3DButton } from '../../src/components/Press3DButton';
-import { GhostButton } from '../../src/components/GhostButton';
-import { colors, fonts, radii } from '../../src/theme/tokens';
+import { Banner, Button, Screen, Text, useToast } from '../../src/ui';
+import { EmailPing, RESEND_COOLDOWN_S, resendLabel } from '../../src/features/auth';
+import { space } from '../../src/theme/tokens';
 import {
   classifyRefreshResult,
   classifySignInError,
   shouldClearPendingPassword,
 } from '../../src/utils/confirmEmail';
 
+type Aviso = { tone: 'danger' | 'info'; message: string; paraLogin?: boolean };
+
+const AINDA_NAO = 'Seu e-mail ainda não foi confirmado. Abra o link e tente de novo.';
+
 export default function ConfirmEmailScreen() {
-  const insets = useSafeAreaInsets();
   const { email } = useLocalSearchParams<{ email?: string }>();
   const router = useRouter();
+  const toast = useToast();
+  const { pendingPassword, clearPendingPassword } = usePendingAuthStore();
   const [checking, setChecking] = useState(false);
   const [resending, setResending] = useState(false);
-  const { pendingPassword, clearPendingPassword } = usePendingAuthStore();
-
-  // Animação ping do envelope (2 camadas defasadas)
-  const ping1 = useRef(new Animated.Value(0)).current;
-  const ping2 = useRef(new Animated.Value(0)).current;
+  const [aviso, setAviso] = useState<Aviso | null>(null);
+  // O e-mail acabou de sair no cadastro: o primeiro reenvio ja espera o contador.
+  const [restante, setRestante] = useState(RESEND_COOLDOWN_S);
 
   useEffect(() => {
-    const make = (v: Animated.Value, delay: number) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(v, {
-            toValue: 1,
-            duration: 2000,
-            easing: Easing.bezier(0, 0, 0.2, 1),
-            useNativeDriver: true,
-          }),
-          Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
-        ]),
-      );
-    const a = make(ping1, 0);
-    const b = make(ping2, 400);
-    a.start();
-    b.start();
-    return () => {
-      a.stop();
-      b.stop();
-    };
-  }, [ping1, ping2]);
+    if (restante <= 0) return;
+    const timer = setTimeout(() => setRestante((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [restante]);
 
   async function handleAlreadyConfirmed() {
+    if (checking) return;
+    setAviso(null);
     setChecking(true);
 
     if (email && pendingPassword) {
@@ -67,7 +47,7 @@ export default function ConfirmEmailScreen() {
 
       // BER-43: a senha guardada so e descartada DEPOIS de entrar. Antes ela era
       // apagada aqui em cima, e o segundo toque em "Ja confirmei" caia no branch
-      // sem senha — que mandava o usuario para o login para redigitar tudo.
+      // sem senha, que mandava o usuario para o login para redigitar tudo.
       const outcome = classifySignInError(error);
       if (shouldClearPendingPassword(outcome)) {
         clearPendingPassword();
@@ -75,10 +55,10 @@ export default function ConfirmEmailScreen() {
       }
 
       if (outcome === 'not-confirmed') {
-        Alert.alert('Email ainda não confirmado', 'Verifique sua caixa de entrada e tente novamente.');
+        setAviso({ tone: 'info', message: AINDA_NAO });
         return;
       }
-      Alert.alert('Erro ao fazer login', error!.message);
+      setAviso({ tone: 'danger', message: 'Não deu pra entrar agora. Tenta de novo.' });
       return;
     }
 
@@ -90,169 +70,70 @@ export default function ConfirmEmailScreen() {
         return;
       case 'session_revoked':
         // BER-43: antes ia direto para o login, sem dizer por que. Quem confirmou
-        // pelo navegador perde a sessao do app — o destino esta certo, o silencio
+        // pelo navegador perde a sessao do app. O destino esta certo, o silencio
         // e que nao estava.
-        Alert.alert(
-          'Entre com sua conta',
-          'Seu e-mail foi confirmado em outro lugar e esta sessão expirou. É só entrar com o e-mail e a senha que você acabou de cadastrar.',
-          [{ text: 'Ir para o login', onPress: () => router.replace('/(auth)/login') }],
-        );
+        setAviso({
+          tone: 'info',
+          message: 'Seu e-mail foi confirmado em outro lugar e esta sessão expirou. É só entrar com o e-mail e a senha que você acabou de cadastrar.',
+          paraLogin: true,
+        });
         return;
       default:
-        Alert.alert('Email ainda não confirmado', 'Verifique sua caixa de entrada e tente novamente.');
+        setAviso({ tone: 'info', message: AINDA_NAO });
     }
   }
 
   async function handleResend() {
+    if (resending || restante > 0) return;
     if (!email) {
-      Alert.alert('Reenviar email', 'Volte à tela de cadastro e tente novamente.');
+      setAviso({ tone: 'info', message: 'Volte ao cadastro e tente de novo.' });
       return;
     }
+    setAviso(null);
     setResending(true);
     const { error } = await supabase.auth.resend({ type: 'signup', email });
     setResending(false);
     if (error) {
-      Alert.alert('Erro ao reenviar', error.message);
+      setAviso({ tone: 'danger', message: 'Não deu pra reenviar o e-mail. Tenta de novo.' });
     } else {
-      Alert.alert('Email reenviado', 'Verifique sua caixa de entrada.');
+      setRestante(RESEND_COOLDOWN_S);
+      toast.show({ message: 'E-mail reenviado.', detail: 'Confere a caixa de entrada e o spam.', tone: 'positive' });
     }
   }
 
-  const ringStyle = (v: Animated.Value) => ({
-    position: 'absolute' as const,
-    inset: 0 as any,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 36,
-    backgroundColor: colors.sky,
-    transform: [{
-      scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 1.9] }),
-    }],
-    opacity: v.interpolate({ inputRange: [0, 0.8, 1], outputRange: [0.55, 0, 0] }),
-  });
-
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingTop: insets.top,
-          paddingBottom: insets.bottom + 30,
-          paddingHorizontal: 24,
-        }}
-      >
-        <View style={{ paddingVertical: 20 }}>
-          <Pressable
-            onPress={() => router.back()}
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: 12,
-              backgroundColor: colors.bgRaise,
-              borderWidth: 1,
-              borderColor: colors.hairline,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <ArrowLeft size={16} color={colors.text} strokeWidth={2.2} />
-          </Pressable>
-        </View>
+    <Screen onBack={() => router.back()} edges={['top', 'bottom']} contentStyle={styles.content}>
+      <EmailPing />
 
-        <View style={{ flex: 1, alignItems: 'stretch', paddingTop: 20 }}>
-          {/* Envelope with ping */}
-          <View style={{ alignItems: 'center', marginBottom: 28 }}>
-            <View style={{ width: 130, height: 130 }}>
-              <Animated.View style={ringStyle(ping1)} />
-              <Animated.View style={ringStyle(ping2)} />
-              <View style={{
-                width: 130,
-                height: 130,
-                borderRadius: 36,
-                backgroundColor: colors.sky,
-                borderBottomWidth: 4,
-                borderBottomColor: colors.skyDeep,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                <Mail size={58} color="#fff" strokeWidth={2} />
-              </View>
-            </View>
-          </View>
+      <View style={styles.textos}>
+        <Text variant="title" align="center">Confirme seu e-mail</Text>
+        <Text variant="body" tone="secondary" align="center">
+          Enviamos um link pro seu e-mail. Abra e toque nele pra ativar sua conta.
+        </Text>
+        {email ? <Text variant="subhead" align="center">{email}</Text> : null}
+        <Text variant="callout" tone="tertiary" align="center">
+          Não chegou em alguns minutos? Olha no spam ou em promoções.
+        </Text>
+      </View>
 
-          <Text style={{
-            fontFamily: fonts.black,
-            fontSize: 24,
-            color: colors.text,
-            letterSpacing: -0.5,
-            textAlign: 'center',
-            marginBottom: 10,
-            lineHeight: 29,
-          }}>Confirme seu e-mail</Text>
+      {aviso ? <Banner tone={aviso.tone} message={aviso.message} /> : null}
 
-          <Text style={{
-            fontFamily: fonts.medium,
-            fontSize: 14,
-            color: colors.textSoft,
-            lineHeight: 21,
-            textAlign: 'center',
-            marginBottom: 18,
-          }}>
-            Enviamos um link mágico pro seu e-mail.{'\n'}
-            Abre e clica pra ativar sua conta.
-          </Text>
-
-          {email && (
-            <Text style={{
-              fontFamily: fonts.bold,
-              fontSize: 13,
-              color: colors.text,
-              textAlign: 'center',
-              marginBottom: 18,
-            }}>{email}</Text>
-          )}
-
-          <View style={{
-            backgroundColor: colors.bgRaise,
-            borderWidth: 1,
-            borderColor: colors.hairline,
-            borderRadius: radii.md,
-            padding: 14,
-            marginBottom: 28,
-            flexDirection: 'row',
-            gap: 10,
-            alignItems: 'flex-start',
-          }}>
-            <Info size={16} color={colors.sky} strokeWidth={2} style={{ marginTop: 2 }} />
-            <Text style={{
-              fontFamily: fonts.medium,
-              fontSize: 12.5,
-              color: colors.textMute,
-              lineHeight: 18,
-              flex: 1,
-            }}>
-              Não chegou em alguns minutos? Dá uma olhada na caixa de <Text style={{ color: colors.text, fontFamily: fonts.bold }}>spam</Text> ou promoções.
-            </Text>
-          </View>
-
-          <View style={{ gap: 10 }}>
-            <Press3DButton
-              onPress={handleAlreadyConfirmed}
-              disabled={checking}
-              Icon={CheckCircle}
-              size="lg"
-              color="sky"
-            >
-              {checking ? 'Verificando…' : 'Já confirmei'}
-            </Press3DButton>
-            <GhostButton onPress={handleResend} Icon={RefreshCw}>
-              {resending ? 'Reenviando…' : 'Reenviar e-mail'}
-            </GhostButton>
-          </View>
-        </View>
-      </ScrollView>
-    </View>
+      <View style={styles.acoes}>
+        {aviso?.paraLogin ? (
+          <Button onPress={() => router.replace('/(auth)/login')}>Ir para o login</Button>
+        ) : (
+          <Button onPress={handleAlreadyConfirmed} loading={checking}>Já confirmei</Button>
+        )}
+        <Button variant="ghost" onPress={handleResend} loading={resending} disabled={restante > 0}>
+          {resendLabel(restante)}
+        </Button>
+      </View>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  content: { gap: space.xl, paddingTop: space.xl, paddingBottom: space.xl },
+  textos: { gap: space.sm },
+  acoes: { gap: space.sm },
+});

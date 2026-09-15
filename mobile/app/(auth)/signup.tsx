@@ -1,42 +1,32 @@
+// Criar conta (spec 7.10, F6 Tarefa 4). "Bora começar.", indicador de quanto
+// falta pra senha de 6 e o botao desabilitado ate valer (regra de antes).
+// E-mail ja cadastrado e erro do servidor aparecem na tela, sem Alert.
 import { useState } from 'react';
-import {
-  View,
-  Text,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Image,
-  Pressable,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { User, Compass, Lock, ArrowRight, ArrowLeft } from 'lucide-react-native';
+import { Lock, Mail, User } from 'lucide-react-native';
 import { supabase } from '../../src/lib/supabase';
 import { usePendingAuthStore } from '../../src/stores/pendingAuthStore';
-import { BrandHeader } from '../../src/components/BrandHeader';
-import { AuthField } from '../../src/components/AuthField';
-import { Press3DButton } from '../../src/components/Press3DButton';
-import { colors, fonts, radii } from '../../src/theme/tokens';
+import { Banner, Button, Field, Glyph, Screen, Text } from '../../src/ui';
+import { canSignup, isEmailAlreadyRegistered, passwordHint } from '../../src/features/auth';
+import { space } from '../../src/theme/tokens';
 
 export default function SignupScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const setPendingPassword = usePendingAuthStore((s) => s.setPendingPassword);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const setPendingPassword = usePendingAuthStore((s) => s.setPendingPassword);
+  const [emailExistente, setEmailExistente] = useState(false);
+  const [erroGeral, setErroGeral] = useState<string | null>(null);
+
+  const valido = canSignup(name, email, password);
 
   async function handleSignup() {
-    if (!name.trim() || !email.trim() || !password) {
-      Alert.alert('Campos obrigatórios', 'Preencha todos os campos para continuar');
-      return;
-    }
-    if (password.length < 6) {
-      Alert.alert('Senha fraca', 'A senha deve ter pelo menos 6 caracteres');
-      return;
-    }
+    if (!valido || loading) return;
+    setEmailExistente(false);
+    setErroGeral(null);
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
@@ -44,147 +34,83 @@ export default function SignupScreen() {
       options: { data: { display_name: name.trim() } },
     });
     setLoading(false);
+
     if (error) {
-      Alert.alert('Não foi possível criar conta', error.message);
-    } else if (Array.isArray(data.user?.identities) && data.user!.identities.length === 0) {
-      Alert.alert('Email já cadastrado', 'Este email já possui uma conta. Faça login para entrar.');
+      setErroGeral('Não deu pra criar sua conta agora. Tenta de novo.');
+    } else if (isEmailAlreadyRegistered(data)) {
+      setEmailExistente(true);
     } else {
       setPendingPassword(password);
-      router.push({
-        pathname: '/(auth)/confirm-email',
-        params: { email: email.trim() },
-      });
+      router.push({ pathname: '/(auth)/confirm-email', params: { email: email.trim() } });
     }
   }
 
-  const valid = name.trim().length >= 2 && email.includes('@') && password.length >= 6;
-
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.bg }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingTop: insets.top,
-          paddingBottom: insets.bottom + 30,
-        }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={{
-          padding: 20,
-          paddingTop: 20,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <Pressable
-            onPress={() => router.back()}
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: 12,
-              backgroundColor: colors.bgRaise,
-              borderWidth: 1,
-              borderColor: colors.hairline,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <ArrowLeft size={16} color={colors.text} strokeWidth={2.2} />
-          </Pressable>
-          <BrandHeader />
-          <View style={{ width: 38 }} />
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Screen onBack={() => router.back()} edges={['top', 'bottom']} contentStyle={styles.content}>
+        <View style={styles.topo}>
+          <Glyph size={28} />
+          <Text variant="display">Bora começar.</Text>
+          <Text variant="body" tone="secondary">Em menos de um minuto você está lendo.</Text>
         </View>
 
-        {/* Mascote centralizado */}
-        <View style={{
-          padding: 18,
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: 200,
-        }}>
-          <Image
-            source={require('../../assets/images/mascot2.png')}
-            style={{ height: 200, maxWidth: '100%' }}
-            resizeMode="contain"
-          />
-        </View>
-
-        <View style={{ padding: 24, paddingTop: 10 }}>
-          <Text style={{
-            fontFamily: fonts.black,
-            fontSize: 24,
-            color: colors.text,
-            letterSpacing: -0.5,
-            textAlign: 'center',
-            marginBottom: 6,
-          }}>Começa a sua saga</Text>
-          <Text style={{
-            fontFamily: fonts.semi,
-            fontSize: 13.5,
-            color: colors.textMute,
-            textAlign: 'center',
-            marginBottom: 22,
-          }}>Em menos de 1 minuto você está lendo.</Text>
-
-          <AuthField
+        <View>
+          <Field
             label="Nome"
-            Icon={User}
+            icon={User}
             value={name}
             onChangeText={setName}
-            placeholder="Como te chamamos?"
+            placeholder="Como a gente te chama?"
             autoCapitalize="words"
             autoComplete="name"
             returnKeyType="next"
           />
-          <AuthField
+          <Field
             label="E-mail"
-            Icon={Compass}
+            icon={Mail}
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(t) => { setEmail(t); setEmailExistente(false); }}
             placeholder="seu@email.com"
             autoCapitalize="none"
+            autoCorrect={false}
             keyboardType="email-address"
             autoComplete="email"
             returnKeyType="next"
+            error={emailExistente ? 'Esse e-mail já tem conta. Entre com ele.' : undefined}
           />
-          <AuthField
+          <Field
             label="Senha"
-            Icon={Lock}
+            icon={Lock}
             value={password}
             onChangeText={setPassword}
-            placeholder="Mínimo 6 caracteres"
+            placeholder="Sua senha"
             secureTextEntry
             autoComplete="new-password"
             returnKeyType="done"
             onSubmitEditing={handleSignup}
+            hint={passwordHint(password.length)}
           />
+        </View>
 
-          <Text style={{
-            fontFamily: fonts.medium,
-            fontSize: 11,
-            color: colors.textMute,
-            textAlign: 'center',
-            marginBottom: 14,
-            lineHeight: 16,
-          }}>
+        {erroGeral ? <Banner tone="danger" message={erroGeral} /> : null}
+
+        <View style={styles.acoes}>
+          <Text variant="caption" tone="tertiary" align="center">
             Ao continuar, você aceita os termos de uso e a política de privacidade.
           </Text>
-
-          <Press3DButton
-            onPress={handleSignup}
-            disabled={loading || !valid}
-            Icon={ArrowRight}
-            size="lg"
-            color="purple"
-          >
-            {loading ? 'Criando conta…' : 'Criar conta'}
-          </Press3DButton>
+          <Button onPress={handleSignup} loading={loading} disabled={!valido}>Criar conta</Button>
+          {emailExistente ? (
+            <Button variant="ghost" onPress={() => router.replace('/(auth)/login')}>Ir pro login</Button>
+          ) : null}
         </View>
-      </ScrollView>
+      </Screen>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  content: { gap: space.xl, paddingBottom: space.xl },
+  topo: { gap: space.sm },
+  acoes: { gap: space.sm },
+});

@@ -52,6 +52,24 @@ describe('filterReachedChapters', () => {
     expect(reached.map((c) => c.number)).toEqual([1, 2, 3]);
   });
 
+  // BER-72 deixou start_page/end_page nulos em `chapters`, porque nenhuma fonte
+  // publica de metadado tem paginacao por capitulo. Ate agora o tipo dizia
+  // `number` e este caso passava por coercao silenciosa (`x >= null` vira
+  // `x >= 0`, sempre verdadeiro). Virou decisao escrita, e este teste existe pra
+  // que mudar de ideia seja uma escolha, nao um efeito colateral.
+  it('capitulo sem paginacao conta como alcancado, e isso e' + "'" + ' decisao, nao acidente', () => {
+    const semPaginas = {
+      id: 'c-sp', book_id: 'b1', number: 1, title: 'Cap 1',
+      start_page: null, end_page: null,
+    } satisfies Chapter;
+
+    expect(filterReachedChapters([semPaginas], [studentBook('b1', 1)])).toEqual([semPaginas]);
+    // Mesmo com o leitor na primeira pagina: nao ha como saber se terminou.
+    expect(filterReachedChapters([semPaginas], [studentBook('b1', 0)])).toEqual([semPaginas]);
+    // Mas continua valendo a regra de so contar livro que o leitor tem.
+    expect(filterReachedChapters([semPaginas], [studentBook('b2', 999)])).toEqual([]);
+  });
+
   it('sem livros ou sem capítulos, não sobra nada', () => {
     expect(filterReachedChapters([chapter('c1', 'b1', 1, 20)], [])).toEqual([]);
     expect(filterReachedChapters([], [studentBook('b1', 100)])).toEqual([]);

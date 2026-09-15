@@ -1,0 +1,178 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BeReading · redesign · mockup</title>
+<style>:root{--bg-primary:#1d1d1f;--bg-secondary:#2d2d2f;--bg-tertiary:#3d3d3f;--border:#424245;--text-primary:#f5f5f7;--text-secondary:#a1a1a6;--text-tertiary:#636366;--accent:#0a84ff;--selected-bg:rgba(10,132,255,.15);--selected-border:#0a84ff}*{box-sizing:border-box}body{margin:0;padding:2rem;background:var(--bg-primary);color:var(--text-primary);font-family:system-ui,-apple-system,sans-serif;line-height:1.5}h2{font-size:1.5rem;font-weight:600;margin:0 0 .5rem}h3{font-size:1.1rem;font-weight:600;margin:0 0 .25rem}.subtitle{color:var(--text-secondary);margin-bottom:1.5rem}.label{font-size:.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em}.options{display:flex;flex-direction:column;gap:.75rem}.option{background:var(--bg-secondary);border:2px solid var(--border);border-radius:12px;padding:1rem 1.25rem;display:flex;gap:1rem}.option .letter{background:var(--bg-tertiary);width:1.75rem;height:1.75rem;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0}.option .content p{color:var(--text-secondary);font-size:.85rem;margin:0}</style>
+<script>function toggleSelect(){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<svg width="0" height="0" style="position:absolute"><defs>
+  <symbol id="glyph" viewBox="0 0 24 32"><path d="M2 4.5A4.5 4.5 0 0 1 6.5 0h11A4.5 4.5 0 0 1 22 4.5V30l-10-6.5L2 30Z" fill="#F0A83A"/><circle cx="8.6" cy="10" r="1.7" fill="#1B1206"/><circle cx="15.4" cy="10" r="1.7" fill="#1B1206"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+</defs></svg>
+<style>
+  .av { --bg:#12100E; --s1:#1B1916; --s2:#25221E; --s3:#302C27; --line:rgba(243,237,226,.08); --line2:rgba(243,237,226,.14);
+        --t1:#F3EDE2; --t2:#B9B0A3; --t3:#978E82; --acc:#F0A83A; --accInk:#1B1206; --accSoft:rgba(240,168,58,.14); --pos:#8CC28F;
+        --ser:'Newsreader', Georgia, serif; --ui:'Hanken Grotesk', system-ui, sans-serif; max-width: 1320px; margin: 0 auto; }
+  .kick { font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: .4rem; }
+  .lead { color: var(--text-secondary); max-width: 880px; margin-bottom: 1.4rem; font-size: .95rem; }
+  .voice { background: var(--bg); color: var(--t1); font-family: var(--ui); border-radius: 18px; padding: 22px 26px; margin-bottom: 2rem; }
+  .voice h3 { font-family: var(--ser); font-weight: 500; font-size: 22px; margin: 0 0 4px; }
+  .voice .sub { color: var(--t2); font-size: 13.5px; margin: 0 0 14px; }
+  .vt { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .vt th { text-align: left; font-size: 11.5px; color: var(--t3); font-weight: 600; padding: 0 12px 8px 0; }
+  .vt td { padding: 9px 12px 9px 0; border-top: 1px solid var(--line); vertical-align: top; color: var(--t2); }
+  .vt td.k { color: var(--t3); font-size: 12px; white-space: nowrap; }
+  .vt td.old { color: #EE7B67; } .vt td.sob { color: var(--t3); } .vt td.new { color: var(--t1); font-weight: 500; }
+  .rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-top: 14px; font-size: 12.5px; color: var(--t2); }
+  .rules div { background: var(--s1); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; line-height: 1.45; }
+  .rules b { color: var(--t1); font-weight: 600; }
+
+  .opts { display: grid; grid-template-columns: repeat(3, minmax(290px, 1fr)); gap: 20px; }
+  @media (max-width: 1050px) { .opts { grid-template-columns: 1fr; justify-items: center; } }
+  .op { cursor: pointer; border: 2px solid transparent; border-radius: 18px; padding: 12px; transition: border-color .15s, background .15s; }
+  .op:hover { border-color: var(--border); } .op.selected { border-color: var(--selected-border); background: var(--selected-bg); }
+  .op h3 { font-size: 1rem; margin: 0 0 2px; display: flex; gap: 8px; align-items: center; }
+  .op h3 .lt { width: 24px; height: 24px; border-radius: 6px; background: var(--bg-tertiary); display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; }
+  .op.selected h3 .lt { background: var(--accent); color: #fff; }
+  .op .tag { font-size: .8rem; color: var(--text-secondary); margin: 0 0 10px; min-height: 2.5em; }
+  .rec { font-size: .64rem; font-weight: 700; color: #16a34a; letter-spacing: .05em; }
+
+  .ph { width: 290px; height: 610px; border-radius: 42px; border: 7px solid #050505; overflow: hidden; position: relative; margin: 0 auto;
+        box-shadow: 0 22px 46px rgba(0,0,0,.28); background: var(--bg); color: var(--t1); font-family: var(--ui); }
+  .ph * { box-sizing: border-box; }
+  .ph svg.ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .sb { height: 32px; display: flex; justify-content: space-between; align-items: flex-end; padding: 0 22px 4px; font-size: 10.5px; font-weight: 600; font-family: -apple-system, system-ui, sans-serif; }
+  .qh { display: flex; align-items: center; gap: 10px; padding: 10px 16px 12px; }
+  .qh .x { width: 34px; height: 34px; border-radius: 11px; background: var(--s1); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
+  .seg { flex: 1; display: flex; gap: 4px; } .seg i { flex: 1; height: 4px; border-radius: 2px; background: var(--s2); } .seg i.on { background: var(--t1); } .seg i.cur { background: var(--acc); }
+  .qh .n { font-size: 11px; color: var(--t3); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .glyph { width: 20px; height: 27px; flex: none; }
+  .who { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--acc); }
+
+  /* chat */
+  .chat { padding: 4px 14px 0; display: flex; flex-direction: column; gap: 10px; }
+  .msg { display: flex; gap: 8px; align-items: flex-end; }
+  .bub { background: var(--s1); border: 1px solid var(--line); border-radius: 18px 18px 18px 6px; padding: 10px 12px; font-size: 13px; line-height: 1.45; color: var(--t1); max-width: 222px; }
+  .bub.q { font-family: var(--ser); font-size: 16px; line-height: 1.3; }
+  .me { justify-content: flex-end; } .me .bub { background: var(--s3); border-color: var(--line2); border-radius: 18px 18px 6px 18px; color: var(--t1); }
+  .score { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; color: var(--acc); background: var(--accSoft); border-radius: 999px; padding: 3px 9px; margin-top: 7px; font-variant-numeric: tabular-nums; }
+  .typing { display: inline-flex; gap: 4px; padding: 12px 14px; } .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--t3); }
+  .composer { position: absolute; left: 12px; right: 12px; bottom: 26px; height: 46px; border-radius: 23px; background: var(--s1); border: 1px solid var(--line2); display: flex; align-items: center; padding: 0 6px 0 16px; font-size: 13px; color: var(--t3); }
+  .composer span.s { margin-left: auto; width: 34px; height: 34px; border-radius: 50%; background: var(--acc); color: var(--accInk); display: flex; align-items: center; justify-content: center; }
+  .composer.next { background: var(--acc); color: var(--accInk); justify-content: center; font-weight: 700; font-size: 14px; padding: 0; gap: 8px; }
+
+  /* form */
+  .form { padding: 6px 18px 0; }
+  .pill { display: inline-flex; font-size: 11.5px; font-weight: 600; color: var(--t2); background: var(--s1); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+  .qt { font-family: var(--ser); font-size: 21px; line-height: 1.28; font-weight: 500; margin: 12px 0 14px; }
+  .ans { font-family: var(--ser); font-style: italic; font-size: 14px; line-height: 1.5; color: var(--t2); padding: 0 0 12px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .dv h5 { margin: 0 0 6px; font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  .dv p { font-size: 13.5px; line-height: 1.5; margin: 0; color: var(--t1); }
+  .card { background: var(--s1); border: 1px solid var(--line); border-radius: 18px; padding: 12px 14px; }
+  .home { margin-top: 12px; }
+  .homecap { font-size: .76rem; color: var(--text-secondary); margin: 14px 0 6px 4px; font-weight: 600; }
+  .hc { width: 290px; margin: 0 auto; background: var(--bg); border-radius: 18px; padding: 14px; font-family: var(--ui); color: var(--t1); }
+  .notes { font-size: .78rem; color: var(--text-secondary); line-height: 1.5; margin-top: 12px; }
+  .notes ul { margin: 4px 0 0 16px; } .notes b { color: var(--text-primary); }
+</style>
+
+<div class="av">
+  <div class="kick">Correção de rota · público 18–24 · assistente como foco</div>
+  <h2>Voz jovem sem ser infantil, e o assistente com presença</h2>
+  <p class="lead">O visual aprovado continua. O que muda é quem fala e como fala. Referência de registro: <b>Spotify Wrapped, BookTok e Duolingo adulto</b>, não Duolingo infantil. Primeiro a voz revisada, depois 3 formas de dar presença ao assistente, que é o que responde, comenta e provoca a reflexão.</p>
+
+  <div class="voice">
+    <h3>Voz revisada</h3>
+    <p class="sub">Três registros lado a lado: o de hoje, o sóbrio que eu tinha proposto e o jovem de agora.</p>
+    <table class="vt">
+      <tr><th></th><th>hoje (juvenil)</th><th>proposta sóbria</th><th>18–24</th></tr>
+      <tr><td class="k">saudação</td><td class="old">Salve, Guilherme ✦</td><td class="sob">Boa noite, Guilherme</td><td class="new">E aí, Guilherme</td></tr>
+      <tr><td class="k">sequência</td><td class="old">4 dias em chama</td><td class="sob">4 dias seguidos. Leia hoje para chegar a 5</td><td class="new">4 dias seguidos. Lê hoje e vira 5</td></tr>
+      <tr><td class="k">sequência em risco</td><td class="old">(não existe)</td><td class="sob">Leia hoje para manter a sequência</td><td class="new">Faltam 3h pra sua sequência zerar. Uma página já conta</td></tr>
+      <tr><td class="k">capítulo fechado</td><td class="old">Capítulo completo! (Alert)</td><td class="sob">Capítulo concluído</td><td class="new">Capítulo 4, fechado. Bora ver o que ficou?</td></tr>
+      <tr><td class="k">devolutiva</td><td class="old">Feedback do mestre</td><td class="sob">Devolutiva</td><td class="new">(o assistente fala em 1ª pessoa, ver abaixo)</td></tr>
+      <tr><td class="k">nota alta</td><td class="old">PERFEITO</td><td class="sob">nota no canto</td><td class="new">Mandou bem. 92</td></tr>
+      <tr><td class="k">nota baixa</td><td class="old">SEGUE ASSIM</td><td class="sob">nota no canto</td><td class="new">Quase. Olha esse detalhe que passou</td></tr>
+      <tr><td class="k">subiu de nível</td><td class="old">(não existe)</td><td class="sob">Nível 5 · Leitor de fôlego</td><td class="new">Nível 5. Agora você é Maratonista</td></tr>
+      <tr><td class="k">vazio</td><td class="old">Sua estante está vazia 🐒</td><td class="sob">Sua estante está esperando o primeiro livro</td><td class="new">Estante vazia, por enquanto. Escolhe o primeiro</td></tr>
+      <tr><td class="k">erro de rede</td><td class="old">Erro (Alert)</td><td class="sob">Sem conexão</td><td class="new">Caiu a internet. O que você registrou tá salvo</td></tr>
+    </table>
+    <div class="rules">
+      <div><b>Pode:</b> "pra", "tá", "bora", "mandou bem", frase curta, humor seco, ironia leve sobre o próprio livro.</div>
+      <div><b>Não pode:</b> emoji na interface, gíria datada ou de meme ("sextou", "é os guri"), exclamação em série, tratar o leitor como criança.</div>
+      <div><b>Títulos de nível:</b> 1 Primeira página · 2 Curioso · 3 Engatado · 4 Constante · 5 Maratonista · 6 Devorador · 7 Rato de biblioteca · 8+ Lenda da estante</div>
+    </div>
+  </div>
+
+  <h2 style="font-size:1.3rem">Como o assistente aparece?</h2>
+  <p class="lead" style="margin-bottom:1rem">Hoje ele não existe como presença: o quiz é um formulário e a devolutiva é um card "do mestre". Nas 3 opções, o momento mostrado é o mesmo, a pergunta 2 do capítulo 4 já respondida, com o mesmo dado real (pergunta, resposta, nota e devolutiva que o <code>evaluate-answer</code> já devolve). Nenhuma exige backend novo. O nome "Orelha" é provisório: é a orelha do livro, onde alguém te apresenta a obra.</p>
+
+  <div class="opts">
+    <!-- A -->
+    <div class="op" data-choice="a" onclick="toggleSelect(this)">
+      <h3><span class="lt">A</span>Conversa com o assistente <span class="rec">RECOMENDADO</span></h3>
+      <p class="tag">O quiz vira um papo: ele pergunta, você responde, ele comenta e puxa a reflexão. É o formato em que um jovem de 18–24 já vive.</p>
+      <div class="ph">
+        <div class="sb"><span>21:14</span><span>●●● ▮</span></div>
+        <div class="qh"><span class="x"><svg class="ic"><use href="#i-x"/></svg></span><div class="seg"><i class="on"></i><i class="cur"></i><i></i><i></i></div><span class="n">2/4</span></div>
+        <div class="chat">
+          <div class="who"><svg class="glyph"><use href="#glyph"/></svg>Orelha · capítulo 4</div>
+          <div class="msg"><div class="bub q">Por que os Vogons destroem a Terra, segundo o capitão?</div></div>
+          <div class="msg me"><div class="bub">Porque ela tava no caminho de uma via expressa hiperespacial. E os planos tavam disponíveis há 50 anos</div></div>
+          <div class="msg"><div class="bub">Mandou bem. Você pegou o ponto: a Terra some por <b>burocracia</b>, não por maldade. É aí que mora a piada do Adams.<br><span class="score">92 · +18 XP</span></div></div>
+          <div class="msg"><div class="bub" style="padding:10px 12px;color:var(--t2)">Próxima é de reflexão, sem resposta certa.</div></div>
+        </div>
+        <div class="composer next">Próxima pergunta<svg class="ic"><use href="#i-arrow"/></svg></div>
+      </div>
+      <div class="homecap">Na Hoje, o assistente puxa assunto:</div>
+      <div class="hc"><div class="who" style="margin-bottom:8px"><svg class="glyph"><use href="#glyph"/></svg>Orelha</div><div style="font-size:14px;line-height:1.45">Você fechou o capítulo 3 ontem e deixou 4 perguntas pra trás. Leva uns minutos.</div><div style="margin-top:10px;font-size:13px;font-weight:600;color:var(--acc)">Responder agora</div></div>
+      <div class="notes"><ul><li><b>Foco no assistente:</b> máximo. Ele ganha voz, rosto (o marcador) e ritmo.</li><li>Enquanto a IA avalia: "digitando" (três pontos) no lugar do spinner. O estado "avaliação em processamento" (BER-42) vira mensagem.</li><li>Risco: a devolutiva longa em bolha fica cansativa, então a bolha tem limite de largura e o texto em 13–14.</li></ul></div>
+    </div>
+
+    <!-- B -->
+    <div class="op" data-choice="b" onclick="toggleSelect(this)">
+      <h3><span class="lt">B</span>Assistente como narrador</h3>
+      <p class="tag">O quiz continua página por pergunta, com a leitura em serifa. O assistente assina a devolutiva e aparece na Hoje e nas conquistas.</p>
+      <div class="ph">
+        <div class="sb"><span>21:14</span><span>●●● ▮</span></div>
+        <div class="qh"><span class="x"><svg class="ic"><use href="#i-x"/></svg></span><div class="seg"><i class="on"></i><i class="cur"></i><i></i><i></i></div><span class="n">2/4</span></div>
+        <div class="form">
+          <span class="pill">Compreensão</span>
+          <div class="qt">Por que os Vogons destroem a Terra, segundo o capitão?</div>
+          <div class="ans">"Porque ela tava no caminho de uma via expressa hiperespacial. E os planos tavam disponíveis há 50 anos."</div>
+          <div class="card dv">
+            <h5><span class="who"><svg class="glyph" style="width:16px;height:21px"><use href="#glyph"/></svg>Orelha comentou</span><span class="score" style="margin:0">92 · +18 XP</span></h5>
+            <p>Mandou bem. Você pegou o ponto: a Terra some por burocracia, não por maldade. É aí que mora a piada do Adams.</p>
+          </div>
+        </div>
+        <div class="composer next">Próxima pergunta<svg class="ic"><use href="#i-arrow"/></svg></div>
+      </div>
+      <div class="homecap">Na Hoje:</div>
+      <div class="hc"><div style="display:flex;gap:10px;align-items:center"><svg class="glyph"><use href="#glyph"/></svg><div style="font-size:14px;line-height:1.4;flex:1">4 perguntas do capítulo 3 esperando</div><span style="font-size:13px;font-weight:600;color:var(--acc)">Responder</span></div></div>
+      <div class="notes"><ul><li><b>Foco no assistente:</b> médio. Ele comenta, mas quem conduz é a página.</li><li>Mais editorial e mais próximo da direção aprovada.</li><li>Risco: para 18–24, fica com cara de "prova", que é exatamente o que afasta.</li></ul></div>
+    </div>
+
+    <!-- C -->
+    <div class="op" data-choice="c" onclick="toggleSelect(this)">
+      <h3><span class="lt">C</span>Assistente discreto</h3>
+      <p class="tag">Sem persona. A IA é uma função do app: pergunta, nota e devolutiva sem nome nem rosto.</p>
+      <div class="ph">
+        <div class="sb"><span>21:14</span><span>●●● ▮</span></div>
+        <div class="qh"><span class="x"><svg class="ic"><use href="#i-x"/></svg></span><div class="seg"><i class="on"></i><i class="cur"></i><i></i><i></i></div><span class="n">2/4</span></div>
+        <div class="form">
+          <span class="pill">Compreensão</span>
+          <div class="qt">Por que os Vogons destroem a Terra, segundo o capitão?</div>
+          <div class="ans">"Porque ela tava no caminho de uma via expressa hiperespacial. E os planos tavam disponíveis há 50 anos."</div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px"><span style="font-size:34px;font-weight:700;letter-spacing:-1px;font-variant-numeric:tabular-nums">92</span><span style="font-size:13px;color:var(--t2)">compreensão</span><span class="score" style="margin:0 0 0 auto">+18 XP</span></div>
+          <p style="font-size:13.5px;line-height:1.5;margin:0;color:var(--t2)">Você pegou o ponto: a Terra some por burocracia, não por maldade.</p>
+        </div>
+        <div class="composer next">Próxima pergunta<svg class="ic"><use href="#i-arrow"/></svg></div>
+      </div>
+      <div class="homecap">Na Hoje:</div>
+      <div class="hc"><div style="display:flex;justify-content:space-between;align-items:center;font-size:14px"><span>Quiz do capítulo 3</span><span style="font-size:13px;font-weight:600;color:var(--acc)">Responder</span></div></div>
+      <div class="notes"><ul><li><b>Foco no assistente:</b> mínimo. Conflita com o "assistente como foco".</li><li>O mais limpo e o mais fácil de manter.</li><li>O produto vira "app de quiz", sem diferencial perceptível.</li></ul></div>
+    </div>
+  </div>
+
+  <p class="lead" style="margin-top:1.5rem"><b>Sobre o marcador com dois pontos:</b> ele é o único "personagem" do sistema. É âmbar, geométrico e cabe em 16 px. Tem estados de motion discretos: pisca quando você abre o quiz, respira enquanto a IA avalia e dá um aceno na conquista. Ele substitui o mascote sem voltar para o cartoon. Se preferir sem os olhos, ele vira só o marcador.</p>
+</div>

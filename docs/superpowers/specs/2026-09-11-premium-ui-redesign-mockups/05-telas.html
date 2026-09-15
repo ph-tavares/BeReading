@@ -1,0 +1,407 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BeReading · redesign · mockup</title>
+<style>:root{--bg-primary:#1d1d1f;--bg-secondary:#2d2d2f;--bg-tertiary:#3d3d3f;--border:#424245;--text-primary:#f5f5f7;--text-secondary:#a1a1a6;--text-tertiary:#636366;--accent:#0a84ff;--selected-bg:rgba(10,132,255,.15);--selected-border:#0a84ff}*{box-sizing:border-box}body{margin:0;padding:2rem;background:var(--bg-primary);color:var(--text-primary);font-family:system-ui,-apple-system,sans-serif;line-height:1.5}h2{font-size:1.5rem;font-weight:600;margin:0 0 .5rem}h3{font-size:1.1rem;font-weight:600;margin:0 0 .25rem}.subtitle{color:var(--text-secondary);margin-bottom:1.5rem}.label{font-size:.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em}.options{display:flex;flex-direction:column;gap:.75rem}.option{background:var(--bg-secondary);border:2px solid var(--border);border-radius:12px;padding:1rem 1.25rem;display:flex;gap:1rem}.option .letter{background:var(--bg-tertiary);width:1.75rem;height:1.75rem;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0}.option .content p{color:var(--text-secondary);font-size:.85rem;margin:0}</style>
+<script>function toggleSelect(){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<svg width="0" height="0" style="position:absolute"><defs>
+  <symbol id="glyph" viewBox="0 0 24 32"><path d="M2 4.5A4.5 4.5 0 0 1 6.5 0h11A4.5 4.5 0 0 1 22 4.5V30l-10-6.5L2 30Z" fill="#F0A83A"/><circle cx="8.6" cy="10" r="1.7" fill="#1B1206"/><circle cx="15.4" cy="10" r="1.7" fill="#1B1206"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-lib" viewBox="0 0 24 24"><rect width="8" height="18" x="3" y="3" rx="1"/><path d="M7 3v18"/><path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z"/></symbol>
+  <symbol id="i-cmp" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/></symbol>
+  <symbol id="i-usr" viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-pages" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 13H8"/><path d="M16 17H8"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+  <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+</defs></svg>
+<style>
+  .tl { --bg:#12100E; --s1:#1B1916; --s2:#25221E; --s3:#302C27; --line:rgba(243,237,226,.08); --line2:rgba(243,237,226,.14);
+        --t1:#F3EDE2; --t2:#B9B0A3; --t3:#978E82; --acc:#F0A83A; --accInk:#1B1206; --accSoft:rgba(240,168,58,.14); --pos:#8CC28F; --posSoft:rgba(140,194,143,.14); --neg:#EE7B67;
+        --ser:'Newsreader', Georgia, serif; --ui:'Hanken Grotesk', system-ui, sans-serif; max-width: 1400px; margin: 0 auto; }
+  .kick { font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: .4rem; }
+  .lead { color: var(--text-secondary); max-width: 900px; margin-bottom: 1rem; font-size: .95rem; }
+  .grp { margin-top: 1.6rem; } .grp > h3 { font-size: 1.05rem; margin: 0 0 .6rem; }
+  .row { display: flex; gap: 16px; overflow-x: auto; padding: 4px 2px 14px; align-items: flex-start; }
+  .col { flex: 0 0 292px; }
+  .cap { font-size: .8rem; font-weight: 600; margin: 0 0 8px 4px; }
+  .ph { width: 284px; height: 600px; border-radius: 40px; border: 7px solid #050505; overflow: hidden; position: relative; margin: 0 auto;
+        box-shadow: 0 20px 44px rgba(0,0,0,.28); background: var(--bg); color: var(--t1); font-family: var(--ui); }
+  .ph * { box-sizing: border-box; }
+  .ph svg.ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .sb { height: 32px; display: flex; justify-content: space-between; align-items: flex-end; padding: 0 22px 4px; font-size: 10.5px; font-weight: 600; font-family: -apple-system, system-ui, sans-serif; position: relative; z-index: 2; }
+  .bd { padding: 8px 16px 0; }
+  .glyph { width: 18px; height: 24px; flex: none; }
+  .ib { width: 34px; height: 34px; border-radius: 11px; background: var(--s1); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
+  .nav { display: flex; align-items: center; gap: 10px; padding: 6px 14px 8px; }
+  .ttl { font-family: var(--ser); font-size: 28px; font-weight: 500; letter-spacing: -.3px; line-height: 1.05; }
+  .sub { font-size: 12.5px; color: var(--t2); margin-top: 3px; }
+  .cov { border-radius: 3px 7px 7px 3px; display: flex; flex-direction: column; justify-content: space-between; position: relative; flex: none; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 14px 26px rgba(0,0,0,.45); overflow: hidden; }
+  .cov::before { content: ''; position: absolute; left: 5px; top: 0; bottom: 0; width: 1px; background: rgba(0,0,0,.28); }
+  .cov .ct { font-family: var(--ser); font-weight: 500; color: #F6E9D4; line-height: 1.08; }
+  .cov .ca { letter-spacing: .8px; text-transform: uppercase; color: rgba(246,233,212,.72); border-top: 1px solid rgba(246,233,212,.35); font-weight: 600; }
+  .bar { height: 4px; border-radius: 2px; background: var(--s2); overflow: hidden; } .bar i { display: block; height: 100%; background: var(--t1); border-radius: 2px; }
+  .btn { height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; font-size: 15px; }
+  .pri { background: var(--acc); color: var(--accInk); } .sec { background: var(--s2); color: var(--t1); border: 1px solid var(--line2); } .gho { color: var(--t2); }
+  .tb { position: absolute; left: 0; right: 0; bottom: 0; height: 74px; border-top: 1px solid var(--line); background: rgba(27,25,22,.92); display: flex; padding: 9px 6px 0; }
+  .tb .it { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; font-weight: 500; color: var(--t3); }
+  .tb .it.on { color: var(--t1); } .tb .ind { position: absolute; bottom: 7px; left: 50%; transform: translateX(-50%); width: 100px; height: 4px; border-radius: 3px; background: var(--t1); }
+  .sticky { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 16px 28px; background: linear-gradient(to top, var(--bg) 70%, rgba(18,16,14,0)); }
+  .notes { font-size: .76rem; color: var(--text-secondary); line-height: 1.5; margin-top: 10px; }
+  .notes ul { margin: 0 0 0 16px; } .notes b { color: var(--text-primary); } .notes li { margin-bottom: 3px; }
+
+  /* livro */
+  .bkhero { display: flex; gap: 14px; align-items: flex-end; padding: 4px 16px 0; }
+  .chips { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .tag { font-size: 11.5px; font-weight: 600; color: var(--t2); background: var(--s1); border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; }
+  .chl { margin-top: 14px; }
+  .ch { display: flex; align-items: center; gap: 11px; padding: 10px 16px; border-top: 1px solid var(--line); }
+  .ch .num { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 700; flex: none; font-variant-numeric: tabular-nums; }
+  .ch .num.done { background: var(--s2); color: var(--t1); } .ch .num.cur { background: var(--acc); color: var(--accInk); } .ch .num.lock { background: transparent; border: 1px dashed var(--line2); color: var(--t3); }
+  .ch .tt { font-size: 14px; font-weight: 600; } .ch .ss { font-size: 11.5px; color: var(--t3); margin-top: 1px; }
+  .ch .rt { margin-left: auto; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ch .rt.q { color: var(--acc); font-weight: 600; } .ch.dim .tt { color: var(--t2); }
+
+  /* chat */
+  .chat { padding: 4px 12px 0; display: flex; flex-direction: column; gap: 9px; }
+  .who { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--acc); }
+  .msg { display: flex; } .me { justify-content: flex-end; }
+  .bub { background: var(--s1); border: 1px solid var(--line); border-radius: 18px 18px 18px 6px; padding: 9px 12px; font-size: 13px; line-height: 1.45; max-width: 220px; }
+  .bub.q { font-family: var(--ser); font-size: 15.5px; line-height: 1.3; }
+  .me .bub { background: var(--s3); border-color: var(--line2); border-radius: 18px 18px 6px 18px; }
+  .typing { display: inline-flex; gap: 4px; padding: 12px 14px; } .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--t3); display: block; }
+  .typing i:nth-child(2) { opacity: .7; } .typing i:nth-child(3) { opacity: .4; }
+  .kind { font-size: 11px; font-weight: 600; color: var(--t3); margin: 4px 0 -3px 2px; }
+  .composer { position: absolute; left: 10px; right: 10px; bottom: 24px; min-height: 46px; border-radius: 23px; background: var(--s1); border: 1px solid var(--line2); display: flex; align-items: flex-end; padding: 6px 6px 6px 14px; font-size: 13px; }
+  .composer .tx { flex: 1; padding: 6px 0; line-height: 1.4; color: var(--t1); } .composer .tx.ph2 { color: var(--t3); }
+  .composer .s { width: 34px; height: 34px; border-radius: 50%; background: var(--acc); color: var(--accInk); display: flex; align-items: center; justify-content: center; flex: none; }
+  .qh { display: flex; align-items: center; gap: 10px; padding: 6px 14px 10px; }
+  .seg { flex: 1; display: flex; gap: 4px; } .seg i { flex: 1; height: 4px; border-radius: 2px; background: var(--s2); } .seg i.on { background: var(--t1); } .seg i.cur { background: var(--acc); }
+  .qh .n { font-size: 11px; color: var(--t3); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* resumo */
+  .ring { position: relative; flex: none; } .ring svg { transform: rotate(-90deg); display: block; }
+  .ring .in { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+  .rec { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--line); font-size: 12.5px; }
+  .rec .sc { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; } .rec .sc.pend { color: var(--t3); font-weight: 500; }
+
+  /* estante/explorar */
+  .seg2 { display: flex; background: var(--s1); border: 1px solid var(--line); border-radius: 11px; padding: 3px; margin-top: 12px; font-size: 12.5px; font-weight: 600; }
+  .seg2 span { flex: 1; text-align: center; padding: 7px 0; border-radius: 8px; color: var(--t2); } .seg2 span.on { background: var(--s3); color: var(--t1); }
+  .brow { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: center; }
+  .shelf { display: flex; gap: 12px; align-items: flex-end; padding: 14px 4px 0; border-bottom: 6px solid var(--s2); margin-top: 10px; }
+  .search { height: 44px; border-radius: 14px; background: var(--s2); border: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 0 12px; color: var(--t3); font-size: 13.5px; margin-top: 12px; }
+  .fchips { display: flex; gap: 6px; margin-top: 10px; overflow: hidden; }
+  .fchip { height: 32px; padding: 0 12px; border-radius: 999px; display: inline-flex; align-items: center; font-size: 12.5px; font-weight: 500; border: 1px solid var(--line2); color: var(--t2); white-space: nowrap; }
+  .fchip.on { background: var(--t1); color: var(--bg); border-color: var(--t1); font-weight: 600; }
+  .feat { margin-top: 14px; border-radius: 20px; overflow: hidden; background: linear-gradient(135deg, #2A1717, #1B1916 70%); border: 1px solid var(--line); padding: 14px; display: flex; gap: 12px; }
+  .add { font-size: 12.5px; font-weight: 600; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; gap: 5px; padding: 0 12px; }
+
+  /* voce */
+  .stats { display: flex; margin-top: 16px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .stats div { flex: 1; padding: 11px 0; text-align: center; } .stats div + div { border-left: 1px solid var(--line); }
+  .stats b { display: block; font-size: 19px; font-weight: 700; letter-spacing: -.4px; font-variant-numeric: tabular-nums; } .stats span { font-size: 11px; color: var(--t3); }
+  .heat { display: grid; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(7, 1fr); grid-auto-flow: column; gap: 3px; margin-top: 8px; height: 104px; }
+  .heat i { border-radius: 3px; background: var(--s2); } .heat i.l1 { background: rgba(240,168,58,.3); } .heat i.l2 { background: rgba(240,168,58,.6); } .heat i.l3 { background: var(--acc); }
+  .medrow { display: flex; gap: 10px; margin-top: 10px; }
+  .med { width: 58px; text-align: center; font-size: 10px; color: var(--t2); line-height: 1.25; }
+  .med .e { width: 44px; height: 44px; border-radius: 50%; margin: 0 auto 5px; display: flex; align-items: center; justify-content: center; }
+  .med.on .e { background: radial-gradient(circle at 50% 35%, #3A2E1C, #231C13); border: 1.5px solid var(--acc); color: var(--acc); }
+  .med.off .e { border: 1.5px dashed var(--line2); color: var(--t3); }
+  .med .e svg.ic { width: 18px; height: 18px; }
+  .set { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .set span.r { margin-left: auto; color: var(--t3); font-size: 12.5px; display: flex; align-items: center; gap: 4px; }
+
+  /* auth */
+  .wm { font-family: var(--ser); font-size: 34px; font-weight: 500; letter-spacing: -.6px; }
+  .fld label { display: block; font-size: 12.5px; font-weight: 600; color: var(--t2); margin-bottom: 6px; }
+  .fld .box { height: 48px; border-radius: 14px; background: var(--s2); border: 1px solid var(--line); display: flex; align-items: center; padding: 0 14px; font-size: 14px; color: var(--t3); }
+  .fld .box.f { border-color: var(--t2); color: var(--t1); box-shadow: 0 0 0 3px rgba(243,237,226,.08); }
+  .fld { margin-bottom: 12px; }
+  .spines { display: flex; align-items: flex-end; gap: 4px; height: 150px; margin: 0 -16px; padding: 0 16px; overflow: hidden; }
+  .spines span { border-radius: 3px 3px 0 0; flex: none; }
+</style>
+
+<div class="tl">
+  <div class="kick">Seção 3 de 4 · Fluxos e telas secundárias</div>
+  <h2>Livro, quiz em conversa, estante, explorar, você e a entrada</h2>
+  <p class="lead">Mesmo sistema, aplicado ao resto. Dados reais do banco: Mochileiro com 215 pág. e 8 capítulos (cap. 5 = p. 86–110), leitor na pág. 96, caps. 1–4 lidos, quiz do cap. 3 pendente. O catálogo tem 3 livros, com gêneros Ficção Científica, Distopia e Fantasia.</p>
+
+  <!-- ================= LIVRO + QUIZ ================= -->
+  <div class="grp"><h3>Livro e quiz</h3>
+  <div class="row">
+
+    <div class="col"><div class="cap">Detalhe do livro</div>
+      <div class="ph">
+        <div class="sb"><span>21:14</span><span>●●● ▮</span></div>
+        <div class="nav"><span class="ib"><svg class="ic"><use href="#i-back"/></svg></span></div>
+        <div class="bkhero">
+          <div class="cov" style="width:100px;height:150px;padding:11px 10px 10px 13px;background:#5E2A2A"><div class="ct" style="font-size:14px">O Guia do Mochileiro das Galáxias</div><div class="ca" style="font-size:7.5px;padding-top:5px">Douglas Adams</div></div>
+          <div style="flex:1;min-width:0;padding-bottom:4px">
+            <div style="font-family:var(--ser);font-size:21px;line-height:1.1;font-weight:500">O Guia do Mochileiro das Galáxias</div>
+            <div style="font-size:12.5px;color:var(--t2);margin-top:4px">Douglas Adams</div>
+            <div class="chips"><span class="tag">Ficção científica</span><span class="tag">215 pág.</span></div>
+          </div>
+        </div>
+        <div style="padding:14px 16px 0">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--t2);font-variant-numeric:tabular-nums"><span>pág. 96 de 215</span><span>45%</span></div>
+          <div class="bar" style="margin-top:6px"><i style="width:45%"></i></div>
+        </div>
+        <div class="chl">
+          <div class="ch"><span class="num done"><svg class="ic" style="width:14px;height:14px;stroke-width:2.6"><use href="#i-check"/></svg></span><div><div class="tt">Capítulo 2</div><div class="ss">quiz feito · p. 21–40</div></div><span class="rt">88</span></div>
+          <div class="ch"><span class="num done"><svg class="ic" style="width:14px;height:14px;stroke-width:2.6"><use href="#i-check"/></svg></span><div><div class="tt">Capítulo 3</div><div class="ss">lido · 4 perguntas esperando</div></div><span class="rt q">Responder</span></div>
+          <div class="ch"><span class="num done"><svg class="ic" style="width:14px;height:14px;stroke-width:2.6"><use href="#i-check"/></svg></span><div><div class="tt">Capítulo 4</div><div class="ss">quiz feito · p. 61–85</div></div><span class="rt">92</span></div>
+          <div class="ch"><span class="num cur">5</span><div><div class="tt">Capítulo 5</div><div class="ss" style="color:var(--acc)">lendo · faltam 14 pág.</div></div></div>
+          <div class="ch dim"><span class="num lock">6</span><div><div class="tt">Capítulo 6</div><div class="ss">leia até a p. 140 pro quiz abrir</div></div><svg class="ic" style="margin-left:auto;color:var(--t3);width:15px;height:15px"><use href="#i-lock"/></svg></div>
+        </div>
+        <div class="sticky"><div class="btn pri"><svg class="ic"><use href="#i-book"/></svg>Registrar leitura</div></div>
+      </div>
+      <div class="notes"><ul>
+        <li><b>Capítulo com estado</b>, que era o buraco da auditoria: feito (com nota), lido com quiz pendente, lendo (faltam X) e trancado. O trancado é o <code>chapterGate</code> da BER-48.</li>
+        <li>A barra fixa com "Registrar leitura" abre o mesmo sheet, já com este livro.</li>
+        <li>A lista rola até o capítulo atual ao abrir. Com header grande que colapsa no scroll, o título do livro sobe para a barra.</li>
+      </ul></div>
+    </div>
+
+    <div class="col"><div class="cap">Quiz · preparando (polling)</div>
+      <div class="ph">
+        <div class="sb"><span>21:15</span><span>●●● ▮</span></div>
+        <div class="qh"><span class="ib"><svg class="ic"><use href="#i-x"/></svg></span><div class="seg"><i></i><i></i><i></i><i></i></div><span class="n">cap. 5</span></div>
+        <div class="chat">
+          <div class="who"><svg class="glyph"><use href="#glyph"/></svg>Orelha</div>
+          <div class="msg"><div class="bub">Tô relendo o capítulo 5 pra montar suas perguntas.</div></div>
+          <div class="msg"><div class="bub" style="padding:0"><span class="typing"><i></i><i></i><i></i></span></div></div>
+          <div class="msg"><div class="bub" style="color:var(--t2)">Costuma levar menos de um minuto.</div></div>
+        </div>
+        <div style="position:absolute;left:16px;right:16px;bottom:26px"><div class="btn gho">Responder depois</div></div>
+      </div>
+      <div class="notes"><ul>
+        <li><b>Os 6 estados da BER-40/66 viram falas da Orelha</b>, sem trocar a lógica (<code>quizScreenStateFor</code>, <code>pollDelayMs</code>):</li>
+        <li><i>still-generating:</i> "Tá demorando mais que o normal. Sua leitura já tá salva, te aviso na Hoje." + Verificar de novo.</li>
+        <li><i>no-content:</i> "Ainda não tenho esse capítulo. Pergunta sem ler seria chute, e eu não chuto." + Voltar pro livro.</li>
+        <li><i>failed:</i> "Deu ruim do meu lado. Tenta de novo daqui a pouco." Sem emoji 😔.</li>
+      </ul></div>
+    </div>
+
+    <div class="col"><div class="cap">Quiz · reflexão aberta</div>
+      <div class="ph">
+        <div class="sb"><span>21:17</span><span>●●● ▮</span></div>
+        <div class="qh"><span class="ib"><svg class="ic"><use href="#i-x"/></svg></span><div class="seg"><i class="on"></i><i class="on"></i><i class="on"></i><i class="cur"></i></div><span class="n">4/4</span></div>
+        <div class="chat">
+          <div class="msg"><div class="bub" style="color:var(--t2)">Boa. Três de três. Agora a última, e essa não tem resposta certa.</div></div>
+          <div class="kind">Reflexão</div>
+          <div class="msg"><div class="bub q">Se a Terra fosse demolida amanhã por um erro de papelada, o que você ia querer ter lido antes?</div></div>
+        </div>
+        <div class="composer" style="bottom:24px"><div class="tx">Acho que eu ia querer ter terminado 1984, porque ia ser irônico demais morrer por burocracia sem ter</div><span class="s"><svg class="ic"><use href="#i-send"/></svg></span></div>
+      </div>
+      <div class="notes"><ul>
+        <li><b>Compreensão e reflexão</b> ficam marcadas por um rótulo discreto acima da bolha, no lugar das pílulas azul e roxa.</li>
+        <li>O composer cresce até 5 linhas. O botão só ativa com texto, e o teclado nunca cobre o que você digita.</li>
+        <li>Resposta já dada (BER-48) reabre como <b>histórico da conversa</b> e continua na primeira pergunta aberta.</li>
+      </ul></div>
+    </div>
+
+    <div class="col"><div class="cap">Quiz · resumo</div>
+      <div class="ph">
+        <div class="sb"><span>21:19</span><span>●●● ▮</span></div>
+        <div class="bd" style="text-align:center;padding-top:26px">
+          <div class="who" style="justify-content:center"><svg class="glyph"><use href="#glyph"/></svg>Orelha</div>
+          <div style="font-family:var(--ser);font-size:28px;font-weight:500;line-height:1.1;margin:10px 0 4px">Capítulo 5, entendido.</div>
+          <div style="font-size:13px;color:var(--t2)">Mandou bem nesse. Bora pro 6?</div>
+          <div class="ring" style="width:120px;height:120px;margin:18px auto 0"><svg width="120" height="120"><circle cx="60" cy="60" r="52" fill="none" stroke="#25221E" stroke-width="9"/><circle cx="60" cy="60" r="52" fill="none" stroke="#F0A83A" stroke-width="9" stroke-linecap="round" stroke-dasharray="281 327"/></svg>
+            <div class="in"><span style="font-size:32px;font-weight:700;letter-spacing:-1px;line-height:1">86</span><span style="font-size:11px;color:var(--t3)">média</span></div></div>
+          <div style="display:inline-flex;margin-top:12px;font-size:12.5px;font-weight:700;color:var(--acc);background:var(--accSoft);border-radius:999px;padding:4px 11px">+52 XP</div>
+        </div>
+        <div style="padding:12px 16px 0">
+          <div class="rec"><span style="color:var(--t3)">1</span><span>Por que o Arthur…</span><span class="sc">92</span></div>
+          <div class="rec"><span style="color:var(--t3)">2</span><span>O que o Zaphod…</span><span class="sc">80</span></div>
+          <div class="rec"><span style="color:var(--t3)">4</span><span>Reflexão</span><span class="sc pend">avaliando…</span></div>
+        </div>
+        <div style="position:absolute;left:16px;right:16px;bottom:26px;display:flex;flex-direction:column;gap:4px"><div class="btn pri">Continuar lendo</div><div class="btn gho">Rever a conversa</div></div>
+      </div>
+      <div class="notes"><ul>
+        <li>A frase de fechamento sai de um <b>conjunto fixo por faixa de nota</b> (evolução do <code>getScoreConfig</code>), não de IA. Só a devolutiva de cada pergunta é gerada.</li>
+        <li>A média só existe quando há nota (BER-42). Resposta ainda sem nota aparece como "avaliando…" e fica fora da média, com texto dizendo isso.</li>
+        <li>O XP do quiz é derivado das notas que já existem (nota ÷ 5), e as pendentes entram quando forem avaliadas.</li>
+        <li>Conquista nova (ex.: "Capítulo Completo") aparece como faixa acima dos botões, com haptic.</li>
+      </ul></div>
+    </div>
+  </div></div>
+
+  <!-- ================= ESTANTE / EXPLORAR / VOCÊ ================= -->
+  <div class="grp"><h3>Estante, Explorar e Você</h3>
+  <div class="row">
+
+    <div class="col"><div class="cap">Estante</div>
+      <div class="ph">
+        <div class="sb"><span>21:20</span><span>●●● ▮</span></div>
+        <div class="bd">
+          <div class="ttl">Estante</div>
+          <div class="seg2"><span class="on">Lendo · 1</span><span>Lidos · 1</span></div>
+          <div class="brow">
+            <div class="cov" style="width:52px;height:78px;padding:6px;background:#5E2A2A"><div class="ct" style="font-size:8px">O Guia do Mochileiro…</div></div>
+            <div style="flex:1;min-width:0"><div style="font-family:var(--ser);font-size:16px;font-weight:500;line-height:1.15">O Guia do Mochileiro das Galáxias</div><div style="font-size:11.5px;color:var(--t3);margin:3px 0 8px">cap. 5 de 8 · pág. 96 de 215</div><div class="bar"><i style="width:45%"></i></div></div>
+          </div>
+          <div style="font-size:12px;font-weight:600;color:var(--t3);margin-top:22px">Na prateleira</div>
+          <div class="shelf">
+            <div class="cov" style="width:62px;height:93px;padding:7px;background:#22324F"><div class="ct" style="font-size:11px">1984</div><div class="ca" style="font-size:5.5px;padding-top:3px">Orwell</div></div>
+            <div style="font-size:11.5px;color:var(--t3);padding-bottom:8px;line-height:1.4">lido em ago · média 90<br><span style="color:var(--acc);font-weight:600">conquista: Livro Finalizado</span></div>
+          </div>
+        </div>
+        <div class="tb"><div class="it"><svg class="ic"><use href="#i-home"/></svg>Hoje</div><div class="it on"><svg class="ic"><use href="#i-lib"/></svg>Estante</div><div class="it"><svg class="ic"><use href="#i-cmp"/></svg>Explorar</div><div class="it"><svg class="ic"><use href="#i-usr"/></svg>Você</div><span class="ind"></span></div>
+      </div>
+      <div class="notes"><ul>
+        <li>Segmented <b>Lendo / Lidos</b>. "Troféus" com check dourado sai. Os lidos ficam numa <b>prateleira</b> de capas, com a média do livro quando existir.</li>
+        <li>Pull-to-refresh mantido. Vazio = estado de lombadas da Seção 1.</li>
+      </ul></div>
+    </div>
+
+    <div class="col"><div class="cap">Explorar</div>
+      <div class="ph">
+        <div class="sb"><span>21:21</span><span>●●● ▮</span></div>
+        <div class="bd">
+          <div class="ttl">Explorar</div>
+          <div class="search"><svg class="ic"><use href="#i-search"/></svg>Título ou autor</div>
+          <div class="fchips"><span class="fchip on">Todos</span><span class="fchip">Ficção científica</span><span class="fchip">Distopia</span><span class="fchip">Fantasia</span></div>
+          <div class="feat">
+            <div class="cov" style="width:74px;height:111px;padding:9px 8px 8px 11px;background:#2F4A3A"><div class="ct" style="font-size:13px">Coraline</div><div class="ca" style="font-size:6.5px;padding-top:4px">Neil Gaiman</div></div>
+            <div style="flex:1;display:flex;flex-direction:column">
+              <div style="font-size:11.5px;font-weight:600;color:var(--acc)">Curtinho · 162 pág.</div>
+              <div style="font-family:var(--ser);font-size:20px;font-weight:500;margin-top:3px">Coraline</div>
+              <div style="font-size:12px;color:var(--t2)">Neil Gaiman · Fantasia</div>
+              <div class="add pri" style="margin-top:auto;align-self:flex-start"><svg class="ic" style="width:14px;height:14px;stroke-width:2.4"><use href="#i-plus"/></svg>Começar</div>
+            </div>
+          </div>
+          <div class="brow" style="border-top:1px solid var(--line);margin-top:14px">
+            <div class="cov" style="width:44px;height:66px;background:#22324F;padding:5px"><div class="ct" style="font-size:8px">1984</div></div>
+            <div style="flex:1"><div style="font-size:14px;font-weight:600">1984</div><div style="font-size:11.5px;color:var(--t3)">George Orwell · Distopia · 328 pág.</div></div>
+            <span class="add" style="color:var(--pos);background:var(--posSoft)"><svg class="ic" style="width:14px;height:14px;stroke-width:2.6"><use href="#i-check"/></svg>Lido</span>
+          </div>
+          <div class="brow">
+            <div class="cov" style="width:44px;height:66px;background:#5E2A2A;padding:5px"><div class="ct" style="font-size:7px">O Guia…</div></div>
+            <div style="flex:1"><div style="font-size:14px;font-weight:600">O Guia do Mochileiro…</div><div style="font-size:11.5px;color:var(--t3)">Douglas Adams · 215 pág.</div></div>
+            <span class="add" style="color:var(--t2);background:var(--s2)">Lendo</span>
+          </div>
+        </div>
+        <div class="tb"><div class="it"><svg class="ic"><use href="#i-home"/></svg>Hoje</div><div class="it"><svg class="ic"><use href="#i-lib"/></svg>Estante</div><div class="it on"><svg class="ic"><use href="#i-cmp"/></svg>Explorar</div><div class="it"><svg class="ic"><use href="#i-usr"/></svg>Você</div><span class="ind"></span></div>
+      </div>
+      <div class="notes"><ul>
+        <li><b>Chips derivados dos gêneros reais</b>, o que conserta o filtro, que hoje zera a lista com qualquer categoria.</li>
+        <li><b>Destaque</b> = o livro do catálogo que o leitor ainda não começou. Com 3 livros, a tela não finge ter uma loja.</li>
+        <li>"Começar" dá toast + haptic, no lugar do <code>Alert</code> "Adicionado!". O item vira "Lendo" com transição.</li>
+        <li>ISBN (BER-72) fica como slot futuro na busca, fora do escopo.</li>
+      </ul></div>
+    </div>
+
+    <div class="col"><div class="cap">Você</div>
+      <div class="ph">
+        <div class="sb"><span>21:22</span><span>●●● ▮</span></div>
+        <div class="bd">
+          <div style="display:flex;gap:14px;align-items:center;margin-top:4px">
+            <div class="ring" style="width:84px;height:84px"><svg width="84" height="84"><circle cx="42" cy="42" r="36" fill="none" stroke="#25221E" stroke-width="7"/><circle cx="42" cy="42" r="36" fill="none" stroke="#F0A83A" stroke-width="7" stroke-linecap="round" stroke-dasharray="203 226"/></svg>
+              <div class="in"><span style="font-family:var(--ser);font-size:30px;font-weight:500">G</span></div></div>
+            <div><div style="font-family:var(--ser);font-size:24px;font-weight:500;line-height:1.05">Guilherme</div><div style="font-size:12.5px;color:var(--acc);font-weight:600;margin-top:4px">Nível 4 · Constante</div><div style="font-size:11.5px;color:var(--t3);margin-top:2px;font-variant-numeric:tabular-nums">1.980 / 2.200 XP</div></div>
+          </div>
+          <div class="stats"><div><b>5</b><span>dias seguidos</span></div><div><b>312</b><span>páginas</span></div><div><b>86</b><span>média</span></div></div>
+          <div style="font-size:12px;font-weight:600;color:var(--t3);margin-top:14px;display:flex;justify-content:space-between"><span>Constância · 12 semanas</span><span>recorde 9 dias</span></div>
+          <div class="heat">
+            <i></i><i></i><i class="l1"></i><i></i><i></i><i></i><i></i> <i></i><i class="l1"></i><i></i><i class="l2"></i><i></i><i></i><i></i> <i></i><i></i><i></i><i class="l1"></i><i class="l1"></i><i></i><i></i> <i class="l2"></i><i></i><i></i><i></i><i class="l1"></i><i></i><i></i>
+            <i></i><i class="l1"></i><i class="l2"></i><i class="l1"></i><i></i><i></i><i></i> <i class="l1"></i><i class="l3"></i><i></i><i></i><i class="l2"></i><i class="l1"></i><i></i> <i></i><i></i><i class="l1"></i><i class="l2"></i><i class="l1"></i><i></i><i></i> <i class="l2"></i><i class="l1"></i><i></i><i class="l1"></i><i class="l3"></i><i class="l2"></i><i></i>
+            <i></i><i class="l1"></i><i class="l1"></i><i class="l2"></i><i></i><i></i><i class="l1"></i> <i class="l2"></i><i class="l3"></i><i class="l1"></i><i class="l2"></i><i class="l1"></i><i></i><i></i> <i class="l1"></i><i class="l2"></i><i class="l2"></i><i class="l3"></i><i class="l1"></i><i class="l2"></i><i class="l1"></i> <i class="l2"></i><i class="l3"></i><i class="l2"></i><i class="l3"></i><i class="l2"></i><i></i><i></i>
+          </div>
+          <div style="font-size:12px;font-weight:600;color:var(--t3);margin-top:14px;display:flex;justify-content:space-between"><span>Conquistas</span><span>3 de 9</span></div>
+          <div class="medrow">
+            <div class="med on"><div class="e"><svg class="ic"><use href="#i-pages"/></svg></div>Primeira Página</div>
+            <div class="med on"><div class="e"><svg class="ic"><use href="#i-msg"/></svg></div>Capítulo Completo</div>
+            <div class="med on"><div class="e"><svg class="ic"><use href="#i-trophy"/></svg></div>Livro Finalizado</div>
+            <div class="med off"><div class="e"><svg class="ic"><use href="#i-flame"/></svg></div>Leitor de 7 dias<br><span style="color:var(--acc)">5/7</span></div>
+          </div>
+        </div>
+        <div class="tb"><div class="it"><svg class="ic"><use href="#i-home"/></svg>Hoje</div><div class="it"><svg class="ic"><use href="#i-lib"/></svg>Estante</div><div class="it"><svg class="ic"><use href="#i-cmp"/></svg>Explorar</div><div class="it on"><svg class="ic"><use href="#i-usr"/></svg>Você</div><span class="ind"></span></div>
+      </div>
+      <div class="notes"><ul>
+        <li><b>Mapa de constância</b> de 12 semanas (<code>reading_sessions</code>), no lugar do gráfico de barras de 14 dias. Mostra hábito melhor que volume.</li>
+        <li>Conquistas com progresso real ("5/7"). Tocar abre um sheet com descrição e data.</li>
+        <li>Abaixo, a <b>lista de conta</b>: Entrar em uma turma (sai do botão dourado de destaque, mas continua existindo) e Sair, em vermelho, com diálogo de confirmação.</li>
+      </ul></div>
+    </div>
+  </div></div>
+
+  <!-- ================= ENTRADA ================= -->
+  <div class="grp"><h3>Entrada</h3>
+  <div class="row">
+
+    <div class="col"><div class="cap">Login</div>
+      <div class="ph">
+        <div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+        <div class="spines">
+          <span style="width:26px;height:120px;background:#5E2A2A"></span><span style="width:18px;height:96px;background:#22324F"></span><span style="width:30px;height:138px;background:#2F4A3A"></span><span style="width:20px;height:108px;background:#7A5A1E"></span><span style="width:24px;height:128px;background:#4A2F4F"></span><span style="width:16px;height:90px;background:#1F4A4F"></span><span style="width:28px;height:142px;background:#7A3B22"></span><span style="width:22px;height:112px;background:#3A3F47"></span><span style="width:26px;height:124px;background:#5E2A2A"></span><span style="width:18px;height:100px;background:#22324F"></span>
+        </div>
+        <div style="height:6px;background:var(--s2)"></div>
+        <div class="bd" style="padding-top:20px">
+          <div style="display:flex;align-items:center;gap:8px"><svg class="glyph" style="width:20px;height:27px"><use href="#glyph"/></svg><span class="wm">BeReading</span></div>
+          <div style="font-size:14px;color:var(--t2);margin:4px 0 18px">Você lê. A gente te faz pensar sobre o que leu.</div>
+          <div class="fld"><label>E-mail</label><div class="box f">guilherme@</div></div>
+          <div class="fld"><label>Senha</label><div class="box">••••••••</div></div>
+          <div class="btn pri" style="margin-top:4px">Entrar</div>
+          <div style="text-align:center;font-size:13.5px;color:var(--t2);margin-top:14px">Primeira vez? <span style="color:var(--t1);font-weight:600">Criar conta</span></div>
+        </div>
+      </div>
+      <div class="notes"><ul>
+        <li>Mascote no canto e <code>paddingBottom: 280</code> saem. Entra uma <b>estante de lombadas</b> feita com a paleta de capas, que é a identidade sem ilustração.</li>
+        <li>Ícone de bússola no e-mail sai. O erro fica inline, abaixo do campo, no lugar do <code>Alert</code>.</li>
+      </ul></div>
+    </div>
+
+    <div class="col"><div class="cap">Criar conta</div>
+      <div class="ph">
+        <div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+        <div class="nav"><span class="ib"><svg class="ic"><use href="#i-back"/></svg></span></div>
+        <div class="bd" style="padding-top:6px">
+          <div class="ttl">Bora começar.</div>
+          <div class="sub" style="margin-bottom:18px">Em 1 minuto você tá lendo.</div>
+          <div class="fld"><label>Como te chamam?</label><div class="box" style="color:var(--t1)">Guilherme</div></div>
+          <div class="fld"><label>E-mail</label><div class="box" style="color:var(--t1)">guilherme@email.com</div></div>
+          <div class="fld"><label>Senha</label><div class="box f">••••</div><div style="font-size:12px;color:var(--t3);margin-top:6px;display:flex;gap:6px;align-items:center"><span style="display:flex;gap:3px"><i style="width:22px;height:3px;border-radius:2px;background:var(--acc);display:block"></i><i style="width:22px;height:3px;border-radius:2px;background:var(--s3);display:block"></i><i style="width:22px;height:3px;border-radius:2px;background:var(--s3);display:block"></i></span>mais 2 caracteres</div></div>
+          <div style="font-size:11.5px;color:var(--t3);line-height:1.45;margin:4px 0 14px">Ao criar a conta, você aceita os termos de uso e a política de privacidade.</div>
+          <div class="btn pri">Criar conta</div>
+        </div>
+      </div>
+      <div class="notes"><ul>
+        <li>A senha mostra quanto falta para 6 caracteres, e o botão fica desabilitado até valer (a regra atual continua).</li>
+        <li>⚠ O link dos termos continua apontando para um documento que <b>não existe</b> (BER-51). Isso é fora do escopo, mas a tela está pronta para o link.</li>
+      </ul></div>
+    </div>
+
+    <div class="col"><div class="cap">Confirmar e-mail</div>
+      <div class="ph">
+        <div class="sb"><span>9:42</span><span>●●● ▮</span></div>
+        <div class="nav"><span class="ib"><svg class="ic"><use href="#i-back"/></svg></span></div>
+        <div class="bd" style="padding-top:30px;text-align:center">
+          <div style="width:88px;height:88px;border-radius:26px;margin:0 auto;background:var(--s1);border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;color:var(--acc);box-shadow:0 0 0 10px rgba(240,168,58,.06),0 0 0 22px rgba(240,168,58,.03)"><svg class="ic" style="width:34px;height:34px;stroke-width:1.6"><use href="#i-mail"/></svg></div>
+          <div class="ttl" style="margin-top:22px">Confere seu e-mail</div>
+          <div class="sub" style="line-height:1.5;margin-top:8px">Mandamos um link de confirmação pra<br><b style="color:var(--t1)">guilherme@email.com</b></div>
+          <div style="font-size:12px;color:var(--t3);margin-top:12px">Não chegou? Olha no spam ou em promoções.</div>
+        </div>
+        <div style="position:absolute;left:16px;right:16px;bottom:28px;display:flex;flex-direction:column;gap:6px"><div class="btn pri">Já confirmei</div><div class="btn gho">Reenviar e-mail · 0:42</div></div>
+      </div>
+      <div class="notes"><ul>
+        <li>O "ping" do envelope fica, em âmbar e mais lento, e para com reduce motion. Toda a lógica da BER-43 continua igual.</li>
+        <li>"Reenviar" ganha contador de 60 s, para evitar rate limit do Supabase. Os <code>Alert</code>s de status viram mensagem inline.</li>
+      </ul></div>
+    </div>
+  </div></div>
+
+  <p class="lead" style="margin-top:.6rem"><b>Também muda, sem tela própria aqui:</b> ícone e splash novos (o marcador âmbar sobre <code>#12100E</code>, splash escuro e <code>userInterfaceStyle: "dark"</code>), a tela de erro de perfil (BER-45) no sistema novo e o modal de turma como sheet.</p>
+</div>

@@ -1,0 +1,268 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BeReading · redesign · mockup</title>
+<style>:root{--bg-primary:#1d1d1f;--bg-secondary:#2d2d2f;--bg-tertiary:#3d3d3f;--border:#424245;--text-primary:#f5f5f7;--text-secondary:#a1a1a6;--text-tertiary:#636366;--accent:#0a84ff;--selected-bg:rgba(10,132,255,.15);--selected-border:#0a84ff}*{box-sizing:border-box}body{margin:0;padding:2rem;background:var(--bg-primary);color:var(--text-primary);font-family:system-ui,-apple-system,sans-serif;line-height:1.5}h2{font-size:1.5rem;font-weight:600;margin:0 0 .5rem}h3{font-size:1.1rem;font-weight:600;margin:0 0 .25rem}.subtitle{color:var(--text-secondary);margin-bottom:1.5rem}.label{font-size:.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em}.options{display:flex;flex-direction:column;gap:.75rem}.option{background:var(--bg-secondary);border:2px solid var(--border);border-radius:12px;padding:1rem 1.25rem;display:flex;gap:1rem}.option .letter{background:var(--bg-tertiary);width:1.75rem;height:1.75rem;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0}.option .content p{color:var(--text-secondary);font-size:.85rem;margin:0}</style>
+<script>function toggleSelect(){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<svg width="0" height="0" style="position:absolute"><defs>
+  <symbol id="glyph" viewBox="0 0 24 32"><path d="M2 4.5A4.5 4.5 0 0 1 6.5 0h11A4.5 4.5 0 0 1 22 4.5V30l-10-6.5L2 30Z" fill="#F0A83A"/><circle cx="8.6" cy="10" r="1.7" fill="#1B1206"/><circle cx="15.4" cy="10" r="1.7" fill="#1B1206"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-lib" viewBox="0 0 24 24"><rect width="8" height="18" x="3" y="3" rx="1"/><path d="M7 3v18"/><path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z"/></symbol>
+  <symbol id="i-cmp" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/></symbol>
+  <symbol id="i-usr" viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+</defs></svg>
+<style>
+  .lc { --bg:#12100E; --s1:#1B1916; --s2:#25221E; --s3:#302C27; --line:rgba(243,237,226,.08); --line2:rgba(243,237,226,.14);
+        --t1:#F3EDE2; --t2:#B9B0A3; --t3:#978E82; --acc:#F0A83A; --accInk:#1B1206; --accSoft:rgba(240,168,58,.14); --pos:#8CC28F;
+        --ser:'Newsreader', Georgia, serif; --ui:'Hanken Grotesk', system-ui, sans-serif; max-width: 1400px; margin: 0 auto; }
+  .kick { font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: .4rem; }
+  .lead { color: var(--text-secondary); max-width: 900px; margin-bottom: 1.4rem; font-size: .95rem; }
+  .flow { display: flex; gap: 14px; overflow-x: auto; padding: 4px 2px 16px; align-items: flex-start; }
+  .col { flex: 0 0 300px; }
+  .cap { font-size: .8rem; font-weight: 600; margin: 0 0 8px 4px; color: var(--text-primary); display: flex; gap: 8px; align-items: center; }
+  .cap i { font-style: normal; width: 20px; height: 20px; border-radius: 50%; background: var(--bg-tertiary); display: inline-flex; align-items: center; justify-content: center; font-size: .7rem; }
+  .arrowc { flex: 0 0 22px; align-self: center; color: var(--text-tertiary); font-size: 22px; text-align: center; margin-top: 30px; }
+
+  .ph { width: 292px; height: 632px; border-radius: 42px; border: 7px solid #050505; overflow: hidden; position: relative; margin: 0 auto;
+        box-shadow: 0 22px 46px rgba(0,0,0,.28); background: var(--bg); color: var(--t1); font-family: var(--ui); }
+  .ph * { box-sizing: border-box; }
+  .ph svg.ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .sb { height: 32px; display: flex; justify-content: space-between; align-items: flex-end; padding: 0 22px 4px; font-size: 10.5px; font-weight: 600; font-family: -apple-system, system-ui, sans-serif; position: relative; z-index: 2; }
+  .bd { padding: 10px 18px 0; }
+  .glyph { width: 20px; height: 27px; flex: none; }
+  .hdr { display: flex; justify-content: space-between; align-items: center; }
+  .hi { font-size: 12.5px; color: var(--t2); } .nm { font-family: var(--ser); font-size: 27px; font-weight: 500; letter-spacing: -.3px; line-height: 1.05; }
+  .ring { position: relative; flex: none; } .ring svg { transform: rotate(-90deg); display: block; }
+  .ring .in { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .week { display: flex; justify-content: space-between; margin-top: 18px; }
+  .week div { text-align: center; font-size: 10px; color: var(--t3); font-weight: 500; }
+  .week b { display: flex; width: 30px; height: 30px; border-radius: 50%; margin: 0 auto 4px; background: var(--s1); border: 1px solid var(--line); align-items: center; justify-content: center; color: var(--accInk); }
+  .week .on b { background: var(--acc); border-color: var(--acc); } .week .on svg.ic { width: 13px; height: 13px; stroke-width: 3.2; }
+  .week .today b { background: transparent; border: 1.5px dashed var(--acc); } .week .today { color: var(--acc); font-weight: 600; }
+  .stk { font-size: 12.5px; color: var(--t2); margin-top: 10px; } .stk b { color: var(--t1); font-weight: 600; }
+  .cov { border-radius: 3px 7px 7px 3px; display: flex; flex-direction: column; justify-content: space-between; position: relative; flex: none; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 14px 26px rgba(0,0,0,.45); overflow: hidden; }
+  .cov::before { content: ''; position: absolute; left: 5px; top: 0; bottom: 0; width: 1px; background: rgba(0,0,0,.28); }
+  .cov .ct { font-family: var(--ser); font-weight: 500; color: #F6E9D4; line-height: 1.08; }
+  .cov .ca { letter-spacing: .8px; text-transform: uppercase; color: rgba(246,233,212,.72); border-top: 1px solid rgba(246,233,212,.35); font-weight: 600; }
+  .hero { display: flex; gap: 14px; margin-top: 22px; }
+  .k { font-size: 12px; font-weight: 600; color: var(--acc); } .t { font-family: var(--ser); font-size: 19px; line-height: 1.12; margin: 4px 0 2px; font-weight: 500; } .au { font-size: 12px; color: var(--t2); }
+  .pg { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--t2); margin-top: 12px; font-variant-numeric: tabular-nums; }
+  .bar { height: 4px; border-radius: 2px; background: var(--s2); margin-top: 6px; overflow: hidden; } .bar i { display: block; height: 100%; background: var(--t1); border-radius: 2px; }
+  .btn { height: 50px; border-radius: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; font-size: 15px; }
+  .pri { background: var(--acc); color: var(--accInk); } .sec { background: var(--s2); color: var(--t1); border: 1px solid var(--line2); } .gho { color: var(--t2); }
+  .orl { margin-top: 20px; background: var(--s1); border: 1px solid var(--line); border-radius: 20px; padding: 14px; }
+  .who { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--acc); }
+  .orl p { font-size: 14px; line-height: 1.45; margin: 8px 0 10px; }
+  .orl .go { font-size: 13.5px; font-weight: 600; color: var(--acc); display: flex; align-items: center; gap: 6px; }
+  .lvl { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; font-size: 12px; color: var(--t2); font-variant-numeric: tabular-nums; }
+  .lvl b { color: var(--t1); font-weight: 600; }
+  .tb { position: absolute; left: 0; right: 0; bottom: 0; height: 76px; border-top: 1px solid var(--line); background: rgba(27,25,22,.92); display: flex; padding: 9px 6px 0; }
+  .tb .it { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; font-weight: 500; color: var(--t3); }
+  .tb .it.on { color: var(--t1); } .tb .ind { position: absolute; bottom: 7px; left: 50%; transform: translateX(-50%); width: 100px; height: 4px; border-radius: 3px; background: var(--t1); }
+
+  /* sheet */
+  .dim { position: absolute; inset: 0; background: rgba(0,0,0,.55); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; height: 520px; background: #1F1C19; border-radius: 28px 28px 0 0; border-top: 1px solid var(--line2); padding: 8px 18px 0; box-shadow: 0 -12px 32px rgba(0,0,0,.4); }
+  .grab { width: 38px; height: 5px; border-radius: 3px; background: var(--s3); margin: 0 auto 14px; }
+  .sh-t { font-family: var(--ser); font-size: 24px; font-weight: 500; margin: 0 0 12px; }
+  .bookrow { display: flex; gap: 10px; align-items: center; padding: 8px; border-radius: 14px; background: var(--s2); }
+  .bookrow .sw { margin-left: auto; font-size: 12.5px; font-weight: 600; color: var(--t2); display: flex; gap: 4px; align-items: center; }
+  .fields { display: flex; gap: 10px; margin-top: 16px; align-items: stretch; }
+  .fld { flex: 1; } .fld label { font-size: 12.5px; font-weight: 600; color: var(--t2); display: block; margin-bottom: 6px; }
+  .fld .box { height: 72px; border-radius: 16px; background: var(--s2); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; letter-spacing: -.8px; font-variant-numeric: tabular-nums; }
+  .fld .box.pre { color: var(--t2); } .fld .box.focus { border-color: var(--t2); box-shadow: 0 0 0 3px rgba(243,237,226,.08); }
+  .fld .hint { font-size: 11.5px; color: var(--t3); margin-top: 5px; }
+  .quick { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  .quick span { height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line2); font-size: 12.5px; font-weight: 600; color: var(--t2); display: inline-flex; align-items: center; }
+  .quick span.on { background: var(--accSoft); border-color: rgba(240,168,58,.45); color: var(--acc); }
+  .sum { margin-top: 16px; padding: 12px 14px; border-radius: 16px; background: var(--s1); border: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
+  .sum .big { font-size: 30px; font-weight: 700; letter-spacing: -1px; font-variant-numeric: tabular-nums; line-height: 1; }
+  .sum .meta { font-size: 12.5px; color: var(--t2); line-height: 1.4; } .sum .meta b { color: var(--acc); font-weight: 600; }
+  .xp { display: inline-flex; font-size: 12px; font-weight: 700; color: var(--acc); background: var(--accSoft); border-radius: 999px; padding: 3px 9px; margin-left: auto; font-variant-numeric: tabular-nums; }
+  .kbd { position: absolute; left: 0; right: 0; bottom: 0; height: 176px; background: #2A2622; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px 8px 22px; }
+  .kbd span { background: #3A3530; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 17px; font-family: -apple-system, system-ui, sans-serif; }
+
+  /* conquista */
+  .win { position: absolute; inset: 0; background: radial-gradient(90% 55% at 50% 30%, rgba(240,168,58,.16), transparent 70%), var(--bg); }
+  .win .bd { position: relative; padding-top: 18px; text-align: center; }
+  .wv { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--acc); }
+  .wt { font-family: var(--ser); font-size: 34px; font-weight: 500; letter-spacing: -.5px; line-height: 1.05; margin: 12px 0 6px; }
+  .ws { font-size: 14px; color: var(--t2); line-height: 1.45; }
+  .bigring { width: 170px; height: 170px; margin: 22px auto 0; }
+  .gain { display: flex; justify-content: center; gap: 10px; margin-top: 18px; }
+  .gain div { background: var(--s1); border: 1px solid var(--line); border-radius: 14px; padding: 9px 14px; text-align: left; }
+  .gain b { display: block; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.4px; } .gain span { font-size: 11.5px; color: var(--t2); }
+  .gain .a b { color: var(--acc); }
+  .wbtns { position: absolute; left: 18px; right: 18px; bottom: 30px; display: flex; flex-direction: column; gap: 6px; }
+
+  .notes { font-size: .77rem; color: var(--text-secondary); line-height: 1.5; margin-top: 12px; }
+  .notes ul { margin: 0 0 0 16px; } .notes b { color: var(--text-primary); } .notes li { margin-bottom: 4px; }
+  .states { margin-top: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .states > div { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; font-size: .82rem; color: var(--text-secondary); line-height: 1.5; }
+  .states h4 { margin: 0 0 4px; font-size: .85rem; color: var(--text-primary); }
+</style>
+
+<div class="lc">
+  <div class="kick">Seção 2 de 4 · Loop central</div>
+  <h2>Hoje → registrar → capítulo fechado → quiz</h2>
+  <p class="lead">O caminho que faz o app valer a assinatura, na ordem em que acontece. Os dados são reais: Mochileiro na pág. 84 de 208, cap. 4 termina na 112, 4 dias seguidos, nível 4 com 1.840 XP, quiz do cap. 3 pendente. O XP é derivado com a mesma fórmula de hoje (páginas × 5; nota ÷ 5), só que calculado sobre o que está no banco.</p>
+
+  <div class="flow">
+
+    <!-- 1 HOJE -->
+    <div class="col">
+      <div class="cap"><i>1</i>Hoje</div>
+      <div class="ph">
+        <div class="sb"><span>21:14</span><span>●●● ▮</span></div>
+        <div class="bd">
+          <div class="hdr"><div><div class="hi">E aí,</div><div class="nm">Guilherme</div></div>
+            <div class="ring" style="width:42px;height:42px"><svg width="42" height="42"><circle cx="21" cy="21" r="18" fill="none" stroke="#25221E" stroke-width="3.5"/><circle cx="21" cy="21" r="18" fill="none" stroke="#F0A83A" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="95 113"/></svg><div class="in" style="font-size:13px">4</div></div></div>
+          <div class="week">
+            <div class="on"><b><svg class="ic"><use href="#i-check"/></svg></b>S</div><div class="on"><b><svg class="ic"><use href="#i-check"/></svg></b>T</div><div class="on"><b><svg class="ic"><use href="#i-check"/></svg></b>Q</div><div class="on"><b><svg class="ic"><use href="#i-check"/></svg></b>Q</div><div class="today"><b></b>S</div><div><b></b>S</div><div><b></b>D</div>
+          </div>
+          <div class="stk"><b>4 dias seguidos.</b> Lê hoje e vira 5.</div>
+          <div class="hero">
+            <div class="cov" style="width:86px;height:129px;padding:10px 9px 9px 12px;background:#5E2A2A"><div class="ct" style="font-size:12.5px">O Guia do Mochileiro das Galáxias</div><div class="ca" style="font-size:7px;padding-top:5px">Douglas Adams</div></div>
+            <div style="flex:1;min-width:0">
+              <div class="k">Lendo agora</div>
+              <div class="t">O Guia do Mochileiro das Galáxias</div>
+              <div class="au">cap. 4 de 8 · faltam 28 pág. pra fechar</div>
+              <div class="pg"><span>pág. 84 de 208</span><span>40%</span></div>
+              <div class="bar"><i style="width:40%"></i></div>
+            </div>
+          </div>
+          <div class="btn pri" style="margin-top:16px"><svg class="ic"><use href="#i-book"/></svg>Registrar leitura</div>
+          <div class="orl">
+            <div class="who"><svg class="glyph"><use href="#glyph"/></svg>Orelha</div>
+            <p>Você fechou o capítulo 3 ontem e deixou 4 perguntas pra trás. Leva uns minutos.</p>
+            <div class="go">Responder agora<svg class="ic" style="width:15px;height:15px"><use href="#i-arrow"/></svg></div>
+          </div>
+          <div class="lvl"><span><b>Nível 4</b> · Constante</span><span>1.840 / 2.200 XP</span></div>
+        </div>
+        <div class="tb"><div class="it on"><svg class="ic"><use href="#i-home"/></svg>Hoje</div><div class="it"><svg class="ic"><use href="#i-lib"/></svg>Estante</div><div class="it"><svg class="ic"><use href="#i-cmp"/></svg>Explorar</div><div class="it"><svg class="ic"><use href="#i-usr"/></svg>Você</div><span class="ind"></span></div>
+      </div>
+      <div class="notes"><ul>
+        <li><b>Hierarquia:</b> hábito (semana) → o livro e a ação → o assistente → o nível. Uma ação primária.</li>
+        <li><b>"faltam 28 pág. pra fechar"</b> sai de <code>chapters.end_page</code> − <code>current_page</code>. É a meta que puxa a leitura.</li>
+        <li>O anel no topo leva para Você. A Orelha só aparece quando tem algo a dizer: quiz pendente, sequência em risco ou livro parado há dias.</li>
+        <li>Com 2 livros ou mais em leitura, entra uma fileira "Também lendo" abaixo da Orelha, com capas de 48.</li>
+      </ul></div>
+    </div>
+
+    <div class="arrowc">→</div>
+
+    <!-- 2 SHEET -->
+    <div class="col">
+      <div class="cap"><i>2</i>Registrar leitura · sheet</div>
+      <div class="ph">
+        <div class="sb"><span>21:14</span><span>●●● ▮</span></div>
+        <div class="bd" style="opacity:.35"><div class="hi">E aí,</div><div class="nm">Guilherme</div></div>
+        <div class="dim"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="sh-t">Até onde você foi?</div>
+          <div class="bookrow">
+            <div class="cov" style="width:32px;height:48px;background:#5E2A2A;box-shadow:none"></div>
+            <div><div style="font-size:13.5px;font-weight:600">O Guia do Mochileiro…</div><div style="font-size:11.5px;color:var(--t3)">parou na pág. 84</div></div>
+            <span class="sw">Trocar<svg class="ic" style="width:14px;height:14px"><use href="#i-chev"/></svg></span>
+          </div>
+          <div class="fields">
+            <div class="fld"><label>De</label><div class="box pre">85</div><div class="hint">continua de onde parou</div></div>
+            <div class="fld"><label>Até</label><div class="box focus">112</div><div class="hint">de 208</div></div>
+          </div>
+          <div class="quick"><span>+10</span><span>+20</span><span class="on">Fim do cap. 4 · p. 112</span></div>
+          <div class="sum">
+            <div class="big">28</div>
+            <div class="meta">páginas<br><b>fecha o capítulo 4</b></div>
+            <span class="xp">+140 XP</span>
+          </div>
+          <div class="btn pri" style="margin-top:14px"><svg class="ic"><use href="#i-check"/></svg>Registrar 28 páginas</div>
+        </div>
+      </div>
+      <div class="notes"><ul>
+        <li><b>O "De" já vem preenchido</b> com <code>current_page + 1</code>. Em 90% dos casos o leitor só digita o "Até". Hoje são dois campos vazios.</li>
+        <li><b>Atalhos</b> +10, +20 e <b>"Fim do cap. X"</b>, a partir dos capítulos do livro. O resumo avisa antes do envio que aquilo fecha um capítulo.</li>
+        <li>O aviso de páginas repetidas (BER-54) vira nota em <code>accentSoft</code> acima do resumo. A validação continua a mesma (<code>validatePageRange</code>).</li>
+        <li>Sheet nativo (<code>formSheet</code>, detents 70% e 100%). O teclado numérico sobe sem cobrir o CTA.</li>
+      </ul></div>
+    </div>
+
+    <div class="arrowc">→</div>
+
+    <!-- 3 CONQUISTA -->
+    <div class="col">
+      <div class="cap"><i>3</i>Capítulo fechado · tela cheia</div>
+      <div class="ph">
+        <div class="win">
+          <div class="sb"><span>21:15</span><span>●●● ▮</span></div>
+          <div class="bd">
+            <div class="wv"><svg class="glyph"><use href="#glyph"/></svg>Orelha</div>
+            <div class="wt">Capítulo 4,<br>fechado.</div>
+            <div class="ws">Bora ver o que ficou?<br>São 4 perguntas sobre Magrathea.</div>
+            <div class="ring bigring"><svg width="170" height="170"><circle cx="85" cy="85" r="74" fill="none" stroke="#25221E" stroke-width="11"/><circle cx="85" cy="85" r="74" fill="none" stroke="#F0A83A" stroke-width="11" stroke-linecap="round" stroke-dasharray="419 465"/></svg>
+              <div class="in"><span style="font-size:12px;color:var(--t2);font-weight:500">nível 4</span><span style="font-size:32px;letter-spacing:-1px;line-height:1.05">1.980</span><span style="font-size:11.5px;color:var(--t3);font-weight:500">de 2.200 XP</span></div></div>
+            <div class="gain"><div class="a"><b>+140 XP</b><span>28 páginas</span></div><div><b>5 dias</b><span>seguidos</span></div></div>
+          </div>
+          <div class="wbtns">
+            <div class="btn pri">Bora pro quiz<svg class="ic"><use href="#i-arrow"/></svg></div>
+            <div class="btn gho">Depois</div>
+          </div>
+        </div>
+      </div>
+      <div class="notes"><ul>
+        <li><b>Substitui o <code>Alert.alert</code></b> de "Capítulo completo!". Os dados vêm da resposta do <code>register-reading-session</code> (<code>completed_chapter_ids</code>, <code>current_streak</code>) e do XP derivado.</li>
+        <li><b>Motion:</b> o anel sai de 1.840 e conta até 1.980 em 600 ms, o XP sobe, o dia de hoje da semana preenche e vem o haptic de sucesso. Com reduce motion, aparece direto.</li>
+        <li><b>2 capítulos ou mais:</b> "2 capítulos, fechados". O quiz abre pelo primeiro, e os outros ficam com a Orelha na Hoje (lógica da BER-54 mantida).</li>
+        <li><b>Subiu de nível:</b> o anel completa, zera e aparece "Nível 5. Agora você é Maratonista."</li>
+      </ul></div>
+    </div>
+
+    <div class="arrowc">→</div>
+
+    <!-- 4 SEM CAPITULO -->
+    <div class="col">
+      <div class="cap"><i>4</i>Registro sem fechar capítulo</div>
+      <div class="ph">
+        <div class="sb"><span>21:15</span><span>●●● ▮</span></div>
+        <div class="bd">
+          <div class="hdr"><div><div class="hi">E aí,</div><div class="nm">Guilherme</div></div>
+            <div class="ring" style="width:42px;height:42px"><svg width="42" height="42"><circle cx="21" cy="21" r="18" fill="none" stroke="#25221E" stroke-width="3.5"/><circle cx="21" cy="21" r="18" fill="none" stroke="#F0A83A" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="99 113"/></svg><div class="in" style="font-size:13px">4</div></div></div>
+          <div class="week">
+            <div class="on"><b><svg class="ic"><use href="#i-check"/></svg></b>S</div><div class="on"><b><svg class="ic"><use href="#i-check"/></svg></b>T</div><div class="on"><b><svg class="ic"><use href="#i-check"/></svg></b>Q</div><div class="on"><b><svg class="ic"><use href="#i-check"/></svg></b>Q</div><div class="on"><b><svg class="ic"><use href="#i-check"/></svg></b>S</div><div><b></b>S</div><div><b></b>D</div>
+          </div>
+          <div class="stk"><b>5 dias seguidos.</b> Amanhã vira 6.</div>
+          <div class="hero">
+            <div class="cov" style="width:86px;height:129px;padding:10px 9px 9px 12px;background:#5E2A2A"><div class="ct" style="font-size:12.5px">O Guia do Mochileiro das Galáxias</div><div class="ca" style="font-size:7px;padding-top:5px">Douglas Adams</div></div>
+            <div style="flex:1;min-width:0">
+              <div class="k">Lendo agora</div>
+              <div class="t">O Guia do Mochileiro das Galáxias</div>
+              <div class="au">cap. 4 de 8 · faltam 16 pág. pra fechar</div>
+              <div class="pg"><span>pág. 96 de 208</span><span>46%</span></div>
+              <div class="bar"><i style="width:46%"></i></div>
+            </div>
+          </div>
+        </div>
+        <div style="position:absolute;left:12px;right:12px;bottom:92px;display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:16px;background:#2A2622;border:1px solid var(--line2);box-shadow:0 12px 32px rgba(0,0,0,.4);font-size:13.5px">
+          <span style="width:28px;height:28px;border-radius:50%;background:rgba(140,194,143,.14);color:var(--pos);display:flex;align-items:center;justify-content:center"><svg class="ic" style="width:14px;height:14px;stroke-width:2.8"><use href="#i-check"/></svg></span>
+          <div>12 páginas registradas<div style="font-size:12px;color:var(--t2)">+60 XP · 5 dias seguidos</div></div>
+        </div>
+        <div class="tb"><div class="it on"><svg class="ic"><use href="#i-home"/></svg>Hoje</div><div class="it"><svg class="ic"><use href="#i-lib"/></svg>Estante</div><div class="it"><svg class="ic"><use href="#i-cmp"/></svg>Explorar</div><div class="it"><svg class="ic"><use href="#i-usr"/></svg>Você</div><span class="ind"></span></div>
+      </div>
+      <div class="notes"><ul>
+        <li>Sem capítulo fechado, <b>não interrompe:</b> o sheet fecha, sobe um toast, a barra avança, o dia da semana preenche e o anel anda.</li>
+        <li>A tela <code>reading-success</code> atual (check verde + confete) <b>deixa de ser rota</b>. A função dela, confirmar e dar a recompensa, fica aqui, em menos toques. A rota continua registrada e redireciona para a Hoje, para não quebrar link antigo.</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <div class="states">
+    <div><h4>Primeiro acesso (sem livro)</h4>A Orelha se apresenta: "E aí, Guilherme. Eu sou a Orelha. Você lê, eu te faço pensar sobre o que leu. Escolhe o primeiro livro?" Um CTA para Explorar e, abaixo, as 3 capas do catálogo em fileira. Sem mascote e sem emoji.</div>
+    <div><h4>Carregando</h4>Skeleton no formato exato da Hoje (semana, capa, linhas), com crossfade de 200 ms para o conteúdo. O <code>ActivityIndicator</code> de tela cheia sai.</div>
+    <div><h4>Erro e sem rede</h4>Os dados que já carregaram ficam. Um banner discreto no topo diz "Caiu a internet. O que você registrou tá salvo", e o pull-to-refresh tenta de novo. Perfil sem carregar continua na tela de retry da BER-45, redesenhada.</div>
+    <div><h4>Sequência em risco</h4>Depois das 18h, sem registro no dia e com sequência ≥ 2, a Orelha troca de assunto: "Faltam 3h pra sua sequência zerar. Uma página já conta." O cálculo usa <code>streaks.last_read_date</code> e <b>a mesma virada de dia do servidor</b>, no fuso de São Paulo (<code>getTodayInSaoPaulo</code>, espelhado e testado no app), não o fuso do aparelho.</div>
+  </div>
+</div>

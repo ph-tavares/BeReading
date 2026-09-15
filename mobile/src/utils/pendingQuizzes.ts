@@ -27,7 +27,24 @@ export function filterReachedChapters(
   return pendingChapters
     .filter((chapter) => {
       const currentPage = pageByBook.get(chapter.book_id);
-      return currentPage !== undefined && currentPage >= chapter.end_page;
+      if (currentPage === undefined) return false;
+
+      // Capítulo sem paginação (BER-72) conta como alcançado.
+      //
+      // Isto NÃO é mudança de comportamento: já era o que acontecia, só que por
+      // acidente. O tipo dizia que `end_page` era `number`, então `currentPage
+      // >= null` virava `currentPage >= 0`, sempre verdadeiro. O tipo honesto
+      // obrigou a escrever a decisão em vez de herdá-la de uma coerção.
+      //
+      // Continua sendo o comportamento certo? É discutível, e é decisão de
+      // produto, não de tela: sem `end_page` não existe como saber, por número
+      // de página, se o leitor terminou o capítulo. Deixar passar arrisca
+      // cobrar quiz de capítulo não lido; barrar mata o quiz em todo livro
+      // fora do catálogo curado, que é justamente o caso que a BER-72 veio
+      // habilitar. Fica como está até alguém decidir, agora à vista.
+      if (chapter.end_page === null) return true;
+
+      return currentPage >= chapter.end_page;
     })
     .sort((a, b) => a.number - b.number);
 }

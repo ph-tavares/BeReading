@@ -1,204 +1,123 @@
-import { View, Text } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+// Resumo do quiz (spec 7.6, F5 Tarefa 6). Honesto: a fala sai da faixa da media
+// real (scoreLine), o XP e a soma das respostas avaliadas, e resposta pendente
+// fica fora da media e aparece como "avaliando" (BER-42). Sai o sistema antigo:
+// confete, "quest", "saga" e "feedback do mestre".
+import { useEffect, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Medal } from 'lucide-react-native';
-import { getScoreConfig } from '../../src/utils/quizUtils';
-import { Press3DButton } from '../../src/components/Press3DButton';
-import { XPPill } from '../../src/components/XPPill';
-import { Card } from '../../src/components/Card';
-import { LottieSlot } from '../../src/components/LottieSlot';
-import { colors, fonts, radii } from '../../src/theme/tokens';
+import { useAuthStore } from '../../src/stores/authStore';
+import { getChaptersByIds, loadQuizForReader } from '../../src/api/queries';
+import { ASSISTANT_NAME } from '../../src/assistant/persona';
+import { chapterUnderstoodTitle, scoreLine } from '../../src/assistant/lines';
+import { Button, Glyph, ListRow, Ring, Screen, Tag, Text } from '../../src/ui';
+import { answeredXp } from '../../src/features/quiz-chat';
+import { space } from '../../src/theme/tokens';
+import type { QuestionResult } from '../../src/utils/quizUtils';
 
-const R = 68;
-const CIRCUM = 2 * Math.PI * R;
+type Recap = { texto: string; resultado: QuestionResult | null }[];
+
+const TAMANHO_DO_ANEL = 112; // Documentado em src/ui/Ring.tsx: 112 no resumo.
 
 export default function QuizSummaryScreen() {
-  const { avgScore, total, pending } = useLocalSearchParams<{
+  // `total` segue no contrato da rota do quiz; a tela nao precisa mais dele.
+  const { avgScore, pending, chapterId } = useLocalSearchParams<{
     avgScore: string;
     total: string;
     pending?: string;
+    chapterId?: string;
   }>();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { profile } = useAuthStore();
+  const userId = profile?.user_id ?? null;
 
-  // BER-42: `avgScore` chega vazio quando NENHUMA resposta foi avaliada ainda.
-  // Vazio nao e zero — a media so aparece quando existe de fato.
-  const parsedAvg = parseInt(avgScore ?? '', 10);
-  const hasAvg = !Number.isNaN(parsedAvg);
-  const avg = hasAvg ? parsedAvg : 0;
-  const pendingN = parseInt(pending ?? '0', 10) || 0;
-  const totalN = parseInt(total ?? '1', 10);
-  const config = getScoreConfig(avg);
-  const totalXP = Math.round((avg / 5) * totalN);
-  const isExcellent = avg >= 85;
-  const ringColor = isExcellent ? colors.green : colors.gold;
+  const [numero, setNumero] = useState<number | null>(null);
+  const [recap, setRecap] = useState<Recap | null>(null);
+
+  // BER-42: `avgScore` chega vazio quando nenhuma resposta foi avaliada ainda.
+  // Vazio nao e zero: a media so aparece quando existe de fato.
+  const lido = parseInt(avgScore ?? '', 10);
+  const media = Number.isNaN(lido) ? null : lido;
+  const pendentes = parseInt(pending ?? '0', 10) || 0;
+
+  useEffect(() => {
+    if (!chapterId || !userId) return;
+    let cancelado = false;
+    // Sem o numero ou sem o recap a tela segue: titulo sem numero, sem lista.
+    Promise.all([
+      getChaptersByIds([chapterId]).catch(() => null),
+      loadQuizForReader(chapterId, userId).catch(() => null),
+    ]).then(([capitulos, quiz]) => {
+      if (cancelado) return;
+      setNumero(capitulos?.[0]?.number ?? null);
+      if (quiz) {
+        setRecap(quiz.questions.map((q, i) => ({ texto: q.question_text, resultado: quiz.progress.results[i] ?? null })));
+      }
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [chapterId, userId]);
+
+  const xp = recap ? answeredXp(recap.flatMap((item) => (item.resultado ? [item.resultado] : []))) : null;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          top: 40,
-          left: 0,
-          right: 0,
-          alignItems: 'center',
-        }}
-      >
-        <LottieSlot name="confetti" size={280} loop={false} autoplay={false} fallback={null} />
+    <Screen edges={['top', 'bottom']} contentStyle={styles.content}>
+      <View style={styles.quem}>
+        <Glyph />
+        <Text variant="label" tone="accent">{ASSISTANT_NAME}</Text>
+      </View>
+      <Text variant="title">{chapterUnderstoodTitle(numero)}</Text>
+      <Text variant="callout" tone="secondary">{scoreLine(media)}</Text>
+
+      <View style={styles.anel}>
+        <Ring
+          progress={media === null ? 0 : media / 100}
+          size={TAMANHO_DO_ANEL}
+          accessibilityLabel={media === null ? 'Média ainda sendo avaliada' : `Média ${media} de 100`}
+        >
+          {media === null
+            ? <Text variant="caption" tone="tertiary">avaliando</Text>
+            : <Text variant="numericL">{String(media)}</Text>}
+        </Ring>
+        {xp !== null ? <Tag label={`+${xp} XP`} tone="accent" /> : null}
       </View>
 
-      <View style={{
-        paddingTop: insets.top + 40,
-        paddingHorizontal: 22,
-        paddingBottom: 20,
-        alignItems: 'center',
-      }}>
-        <Text style={{
-          fontFamily: fonts.black,
-          fontSize: 10.5,
-          letterSpacing: 2.5,
-          color: colors.textMute,
-          marginBottom: 14,
-        }}>QUEST COMPLETA</Text>
+      {pendentes > 0 ? (
+        <Text variant="caption" tone="tertiary">
+          {pendentes === 1
+            ? '1 resposta ainda está sendo avaliada e não entrou na média.'
+            : `${pendentes} respostas ainda estão sendo avaliadas e não entraram na média.`}
+        </Text>
+      ) : null}
 
-        <View style={{ width: 168, height: 168, marginBottom: 20 }}>
-          <Svg width={168} height={168} viewBox="0 0 168 168" rotation={-90} originX={84} originY={84}>
-            <Circle cx={84} cy={84} r={R} fill="none" stroke={colors.surface} strokeWidth={10} />
-            <Circle
-              cx={84}
-              cy={84}
-              r={R}
-              fill="none"
-              stroke={ringColor}
-              strokeWidth={10}
-              strokeLinecap="round"
-              strokeDasharray={`${(CIRCUM * avg) / 100} ${CIRCUM}`}
+      {recap ? (
+        <View>
+          {recap.map((item, i) => (
+            <ListRow
+              key={`${i}-${item.texto}`}
+              title={item.texto}
+              last={i === recap.length - 1}
+              trailing={
+                <Tag label={typeof item.resultado?.score === 'number' ? String(item.resultado.score) : 'avaliando'} />
+              }
             />
-          </Svg>
-          <View style={{
-            position: 'absolute',
-            left: 0, right: 0, top: 0, bottom: 0,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            <Text style={{
-              fontFamily: fonts.black,
-              fontSize: 56,
-              color: colors.text,
-              lineHeight: 56,
-              letterSpacing: -2,
-            }}>{hasAvg ? avg : '—'}</Text>
-            <Text style={{
-              fontFamily: fonts.bold,
-              fontSize: 11,
-              color: colors.textMute,
-              letterSpacing: 1.5,
-              marginTop: 4,
-            }}>{hasAvg ? '/100 MÉDIA' : 'AVALIANDO'}</Text>
-          </View>
+          ))}
         </View>
+      ) : null}
 
-        <Text style={{
-          fontFamily: fonts.black,
-          fontSize: 24,
-          color: colors.text,
-          letterSpacing: -0.4,
-          marginBottom: 8,
-        }}>{config.label}</Text>
-        <Text style={{
-          fontFamily: fonts.medium,
-          fontSize: 13.5,
-          color: colors.textSoft,
-          lineHeight: 20,
-          textAlign: 'center',
-          maxWidth: 280,
-          marginBottom: 18,
-        }}>{totalN} de {totalN} respondidas. Sua compreensão subiu.</Text>
-
-        {pendingN > 0 && (
-          <Text style={{
-            fontFamily: fonts.medium,
-            fontSize: 12.5,
-            color: colors.textMute,
-            lineHeight: 18,
-            textAlign: 'center',
-            maxWidth: 280,
-            marginTop: -10,
-            marginBottom: 18,
-          }}>
-            {pendingN === 1
-              ? '1 resposta ainda está sendo avaliada e não entrou na média.'
-              : `${pendingN} respostas ainda estão sendo avaliadas e não entraram na média.`}
-          </Text>
-        )}
-
-        <XPPill xp={totalXP} />
+      <View style={styles.acoes}>
+        <Button onPress={() => router.replace('/')}>Continuar lendo</Button>
+        {chapterId ? (
+          <Button variant="ghost" onPress={() => router.replace(`/quiz/${chapterId}`)}>Rever a conversa</Button>
+        ) : null}
       </View>
-
-      <View style={{ paddingHorizontal: 22, paddingBottom: insets.bottom + 30, gap: 16 }}>
-        {/* Badge unlocked (quando avg >= 85) */}
-        {isExcellent && (
-          <Card glow style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-            <View style={{
-              width: 50,
-              height: 50,
-              borderRadius: 16,
-              backgroundColor: colors.gold,
-              borderBottomWidth: 4,
-              borderBottomColor: colors.goldDeep,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <Medal size={26} color="#fff" strokeWidth={2} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{
-                fontFamily: fonts.black,
-                fontSize: 10.5,
-                letterSpacing: 1.5,
-                color: colors.gold,
-                textTransform: 'uppercase',
-                marginBottom: 2,
-              }}>Quest vencida</Text>
-              <Text style={{
-                fontFamily: fonts.black,
-                fontSize: 15,
-                color: colors.text,
-              }}>Capítulo dominado</Text>
-            </View>
-          </Card>
-        )}
-
-        {/* Mensagem estilo "feedback do mestre" */}
-        <View style={{
-          backgroundColor: colors.bgRaise,
-          borderRadius: radii.md,
-          padding: 16,
-          borderLeftWidth: 3,
-          borderLeftColor: colors.purple,
-        }}>
-          <Text style={{
-            fontFamily: fonts.black,
-            fontSize: 10.5,
-            letterSpacing: 1.5,
-            color: colors.purple,
-            textTransform: 'uppercase',
-            marginBottom: 6,
-          }}>Feedback do mestre</Text>
-          <Text style={{
-            fontFamily: fonts.medium,
-            fontSize: 14,
-            color: colors.textSoft,
-            lineHeight: 21,
-          }}>{config.message}</Text>
-        </View>
-
-        <Press3DButton onPress={() => router.replace('/')} size="lg">
-          Continuar a saga
-        </Press3DButton>
-      </View>
-    </View>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  content: { gap: space.lg, paddingTop: space.xl, paddingBottom: space.xl },
+  quem: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  anel: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
+  acoes: { gap: space.sm, marginTop: space.md },
+});

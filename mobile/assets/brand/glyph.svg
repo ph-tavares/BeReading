@@ -1,0 +1,17 @@
+<!--
+  SVG-fonte do marcador (Tarefa 5, BER-77). Mesma forma de src/assistant/Glyph.tsx
+  (GLYPH_PATH, GLYPH_VIEWBOX, GLYPH_EYES, GLYPH_EYE_RADIUS) e das cores de
+  src/theme/tokens.ts (color.accent, color.accentInk) — copiadas aqui a mao
+  porque este arquivo nao roda build step, so serve de fonte pra regerar os
+  PNGs de assets/ (icon, splash, favicon, adaptive icon) via Chrome headless.
+  Se o desenho do Glyph mudar, atualize aqui tambem e regere os PNGs.
+
+  Proporcao 3:4 (viewBox 24x32). Sem posicionamento nem fundo: quem gera cada
+  PNG decide margem, canvas e fundo (ver os HTMLs em assets/brand/*.html
+  usados na geracao, ou recrie-os seguindo o mesmo padrao).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32">
+  <path d="M2 4.5A4.5 4.5 0 0 1 6.5 0h11A4.5 4.5 0 0 1 22 4.5V30l-10-6.5L2 30Z" fill="#F0A83A" />
+  <circle cx="8.6" cy="10" r="1.7" fill="#1B1206" />
+  <circle cx="15.4" cy="10" r="1.7" fill="#1B1206" />
+</svg>
