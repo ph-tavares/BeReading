@@ -97,8 +97,18 @@ const sessao = (over: Partial<ReadingSession> = {}): ReadingSession => ({
   read_at: '2026-09-12T12:00:00.000Z', ...over,
 });
 
+// A tela le o relogio (livro parado conta dias ate hoje; risco de sequencia
+// olha a hora em SP), entao as datas fixas dos mocks so valem com ele parado.
+// Sem isso, a partir de 16/09 a leitura de 13/09 virou "livro parado" e o card
+// da Orelha apareceu onde o teste espera silencio.
+function congelarEm13De09PelaManha() {
+  jest.useFakeTimers();
+  jest.setSystemTime(new Date('2026-09-13T14:00:00.000Z')); // 11h em Sao Paulo
+}
+
 /** Estado "quieto": sem quiz, sem risco de sequencia, sem livro parado. */
 function semAssunto() {
+  congelarEm13De09PelaManha();
   mLoadPendingQuizzes.mockResolvedValue([]);
   mGetStreak.mockResolvedValue(streak({ last_read_date: '2026-09-13' }));
   mGetReadingSessions.mockResolvedValue([sessao({ read_at: '2026-09-13T12:00:00.000Z' })]);
@@ -290,6 +300,7 @@ describe('Hoje: card do assistente', () => {
     mGetStudentBooks.mockResolvedValue([entry({ current_page: 84 }, b)]);
     mLoadPendingQuizzes.mockResolvedValue([chapter({ id: 'ch3', number: 3, end_page: 84 })]);
     mGetQuestionsForChapter.mockRejectedValue(new Error('rede caiu'));
+    congelarEm13De09PelaManha();
     mGetStreak.mockResolvedValue(streak({ last_read_date: '2026-09-13' }));
     mGetReadingSessions.mockResolvedValue([sessao({ read_at: '2026-09-13T12:00:00.000Z' })]);
 
