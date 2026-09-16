@@ -1,0 +1,71 @@
+import { assertEquals, assertRejects } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { callAI } from './ai.ts';
+
+function urlOf(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
+async function withFetch<T>(
+  handler: (url: string, body: Record<string, unknown>) => Response,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const original = globalThis.fetch;
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) =>
+    Promise.resolve(handler(urlOf(input), JSON.parse(String(init?.body ?? '{}'))))) as typeof fetch;
+  try {
+    return await fn();
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+Deno.test('callAI (anthropic): devolve texto, modelo e usage, repassando max_tokens e temperature', async () => {
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+  Deno.env.set('ANTHROPIC_API_KEY', 'k');
+  Deno.env.delete('ANTHROPIC_MODEL');
+  let sent: Record<string, unknown> = {};
+  const result = await withFetch((url, body) => {
+    assertEquals(url, 'https://api.anthropic.com/v1/messages');
+    sent = body;
+    return Response.json({ content: [{ text: 'oi' }], usage: { input_tokens: 12, output_tokens: 3 } });
+  }, () => callAI({ prompt: 'p', maxTokens: 500, temperature: 0.2 }));
+
+  assertEquals(result, { text: 'oi', model: 'claude-haiku-4-5', usage: { inputTokens: 12, outputTokens: 3 } });
+  assertEquals(sent.max_tokens, 500);
+  assertEquals(sent.temperature, 0.2);
+});
+
+Deno.test('callAI (openai): lê usage de prompt_tokens/completion_tokens e omite temperature ausente', async () => {
+  Deno.env.set('AI_PROVIDER', 'openai');
+  Deno.env.set('AI_API_KEY', 'k');
+  Deno.env.delete('AI_MODEL');
+  let sent: Record<string, unknown> = {};
+  const result = await withFetch((_url, body) => {
+    sent = body;
+    return Response.json({
+      choices: [{ message: { content: 'ok' } }],
+      usage: { prompt_tokens: 7, completion_tokens: 2 },
+    });
+  }, () => callAI({ prompt: 'p', maxTokens: 256 }));
+
+  assertEquals(result.usage, { inputTokens: 7, outputTokens: 2 });
+  assertEquals(result.model, 'gpt-4o-mini');
+  assertEquals('temperature' in sent, false);
+});
+
+Deno.test('callAI: resposta sem usage conta zero, não quebra', async () => {
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+  Deno.env.set('ANTHROPIC_API_KEY', 'k');
+  const result = await withFetch(() => Response.json({ content: [{ text: 'x' }] }),
+    () => callAI({ prompt: 'p', maxTokens: 10 }));
+  assertEquals(result.usage, { inputTokens: 0, outputTokens: 0 });
+});
+
+Deno.test('callAI: status de erro vira exceção com o status na mensagem', async () => {
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+  Deno.env.set('ANTHROPIC_API_KEY', 'k');
+  await withFetch(() => new Response('limite', { status: 429 }), () =>
+    assertRejects(() => callAI({ prompt: 'p', maxTokens: 10 }), Error, 'Anthropic API error 429'));
+});
