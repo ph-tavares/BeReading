@@ -36,9 +36,21 @@ Deno.test('AU: morte antes de 1955 já é domínio público (extensão para 70 a
   assertEquals(isPublicDomainIn('AU', input({ authorDeathYear: 1960 })).isPublicDomain, false);
 });
 
+Deno.test('AU: respeita o prazo antigo (vida + 50) para morte antes de 1955', () => {
+  // Morte em 1950: prazo antigo (vida + 50) expira em 2001.
+  assertEquals(isPublicDomainIn('AU', input({ authorDeathYear: 1950, currentYear: 2000 })).isPublicDomain, false);
+  assertEquals(isPublicDomainIn('AU', input({ authorDeathYear: 1950, currentYear: 2001 })).isPublicDomain, true);
+});
+
 Deno.test('CA: morte até 1971 já é domínio público', () => {
   assertEquals(isPublicDomainIn('CA', input({ authorDeathYear: 1971 })).isPublicDomain, true);
   assertEquals(isPublicDomainIn('CA', input({ authorDeathYear: 1972 })).isPublicDomain, false);
+});
+
+Deno.test('CA: respeita o prazo antigo (vida + 50) para morte até 1971', () => {
+  // Morte em 1950: prazo antigo (vida + 50) expira em 2001.
+  assertEquals(isPublicDomainIn('CA', input({ authorDeathYear: 1950, currentYear: 2000 })).isPublicDomain, false);
+  assertEquals(isPublicDomainIn('CA', input({ authorDeathYear: 1950, currentYear: 2001 })).isPublicDomain, true);
 });
 
 Deno.test('tradução tem direito próprio: sem dado do tradutor, nunca é domínio público', () => {

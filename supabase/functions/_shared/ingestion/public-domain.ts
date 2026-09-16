@@ -21,6 +21,11 @@ export interface PublicDomainResult {
 
 const NOT_PD: PublicDomainResult = { isPublicDomain: false, basis: null };
 
+/** Vida + 50: entra em domínio público em 1º de janeiro do 51º ano após a morte. */
+function lifePlus50(death: number | null, currentYear: number): boolean {
+  return death !== null && currentYear >= death + 51;
+}
+
 /** Vida + 70: entra em domínio público em 1º de janeiro do 71º ano após a morte. */
 function lifePlus70(death: number | null, currentYear: number): boolean {
   return death !== null && currentYear >= death + 71;
@@ -38,12 +43,14 @@ export function isPublicDomainIn(country: string, input: PublicDomainInput): Pub
         : NOT_PD;
     case 'AU':
       // A extensão para vida + 70 (2005) não retroagiu para quem morreu antes de 1955.
-      return death !== null && (death < 1955 || lifePlus70(death, currentYear))
+      // O prazo antigo (vida + 50) já expirou para quem morreu antes de 1955.
+      return death !== null && ((death < 1955 && lifePlus50(death, currentYear)) || lifePlus70(death, currentYear))
         ? { isPublicDomain: true, basis: `AU: autor falecido em ${death}` }
         : NOT_PD;
     case 'CA':
       // A extensão para vida + 70 (2022) não retroagiu para quem morreu até 1971.
-      return death !== null && (death <= 1971 || lifePlus70(death, currentYear))
+      // O prazo antigo (vida + 50) já expirou para quem morreu até 1971.
+      return death !== null && ((death <= 1971 && lifePlus50(death, currentYear)) || lifePlus70(death, currentYear))
         ? { isPublicDomain: true, basis: `CA: autor falecido em ${death}` }
         : NOT_PD;
     case 'BR':

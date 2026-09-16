@@ -19,3 +19,15 @@ Deno.test('detectLanguage: inglês', () => {
 Deno.test('detectLanguage: texto curto demais devolve null', () => {
   assertEquals(detectLanguage('Capítulo 1'), null);
 });
+
+Deno.test('detectLanguage: espanhol', () => {
+  assertEquals(detectLanguage(
+    'Una vez ella fue al mercado con sus hermanas pero cuando llegaron no había nadie y los vendedores habían cerrado sus puertas porque era muy tarde ya en el día.',
+  ), 'es');
+});
+
+Deno.test('detectLanguage: francês', () => {
+  assertEquals(detectLanguage(
+    'Les enfants qui sont allés à l\'école pour étudier avec le professeur mais elle n\'était pas là et il n\'y avait pas de cours prévu pour eux ce jour.',
+  ), 'fr');
+});
