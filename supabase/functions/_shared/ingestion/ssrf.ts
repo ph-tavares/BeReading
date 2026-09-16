@@ -3,7 +3,7 @@
 // guarda, uma URL maliciosa faria a Edge Function requisitar endereços internos
 // (metadados de nuvem, serviços da rede do Supabase). Cada redirecionamento passa aqui.
 
-export type ResolveFn = (hostname: string) => Promise<string[]>;
+export type ResolveFn = (hostname: string) => Promise<string[] | null>;
 
 export class UnsafeUrlError extends Error {}
 
@@ -55,17 +55,21 @@ export async function assertPublicUrl(raw: string, resolve: ResolveFn): Promise<
   if (host === 'localhost' || host.endsWith('.localhost') || !host.includes('.')) {
     throw new UnsafeUrlError(`host não público: ${host}`);
   }
-  if ((await resolve(host)).some(isPrivateAddress)) throw new UnsafeUrlError(`${host} resolve para IP não público`);
+  const addresses = await resolve(host);
+  if (addresses === null) return url;
+  if (addresses.length === 0) throw new UnsafeUrlError(`${host} não resolve`);
+  if (addresses.some(isPrivateAddress)) throw new UnsafeUrlError(`${host} resolve para IP não público`);
   return url;
 }
 
 /**
- * A e AAAA via `Deno.resolveDns`. Se o runtime não expuser DNS, devolve lista vazia e vale
- * só a checagem de host acima. Conferir no Edge Runtime na primeira execução real (Tarefa 19).
+ * Resolve A e AAAA via `Deno.resolveDns`. Se o runtime não expuser DNS, devolve `null`
+ * (fallback para checagem de host acima, BER-59). Se o hostname não resolve, devolve `[]`
+ * e `assertPublicUrl` rejeita (fail-closed). Conferir no Edge Runtime na primeira execução real (Tarefa 19).
  */
 export const defaultResolve: ResolveFn = async (hostname) => {
   const resolver = (Deno as { resolveDns?: typeof Deno.resolveDns }).resolveDns;
-  if (typeof resolver !== 'function') return [];
+  if (typeof resolver !== 'function') return null;
   const results = await Promise.allSettled([resolver(hostname, 'A'), resolver(hostname, 'AAAA')]);
   return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
 };

@@ -28,3 +28,14 @@ Deno.test('assertPublicUrl: recusa esquema, credencial, IP privado, localhost, h
   await assertRejects(() => assertPublicUrl('http://intranet/', pub), UnsafeUrlError);
   await assertRejects(() => assertPublicUrl('https://evil.example.com/', resolvesTo('10.0.0.5')), UnsafeUrlError);
 });
+
+Deno.test('assertPublicUrl: recusa host que não resolve', async () => {
+  const noResolve = () => Promise.resolve([]);
+  await assertRejects(() => assertPublicUrl('https://nao-existe-nowhere.test/', noResolve), UnsafeUrlError);
+});
+
+Deno.test('assertPublicUrl: aceita quando resolver retorna null (sem DNS no runtime)', async () => {
+  const noDns = () => Promise.resolve(null);
+  const url = await assertPublicUrl('https://example.com/path', noDns);
+  assertEquals(url.hostname, 'example.com');
+});
