@@ -130,7 +130,8 @@ create index idx_ingestion_claims_chapter on public.ingestion_claims (edition_ch
 create table public.chapter_knowledge (
   id uuid primary key default extensions.uuid_generate_v4(),
   edition_chapter_id uuid not null unique references public.edition_chapters(id) on delete cascade,
-  run_id uuid not null references public.ingestion_runs(id) on delete cascade,
+  -- BER-59: runs são auditoria permanente; conhecimento publicado não pode sumir junto — apagar um run que ainda sustenta conhecimento tem que falhar alto.
+  run_id uuid not null references public.ingestion_runs(id) on delete restrict,
   status text not null check (status in ('confirmed', 'partial', 'insufficient')),
   confidence numeric(3,2) not null check (confidence between 0 and 1),
   summary text not null default '',
@@ -151,7 +152,8 @@ create table public.chapter_facts (
 
 create table public.chapter_fact_sources (
   fact_id uuid not null references public.chapter_facts(id) on delete cascade,
-  source_id uuid not null references public.ingestion_sources(id) on delete cascade,
+  -- BER-59: sources são auditoria permanente; proveniência de fato publicado não pode sumir junto — apagar uma source que ainda sustenta fato tem que falhar alto.
+  source_id uuid not null references public.ingestion_sources(id) on delete restrict,
   primary key (fact_id, source_id)
 );
 
