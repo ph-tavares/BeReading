@@ -49,6 +49,7 @@ Deno.test('robots.txt ou noai rejeitam', () => {
 
 Deno.test('login, paywall, 401 e 403 são acesso restrito; outro 4xx/5xx é erro_http', () => {
   assertEquals(decideSource(input({ page: page({ loginOrPaywall: true }) })).reason, 'acesso_restrito');
+  assertEquals(decideSource(input({ page: page({ status: 401 }) })).reason, 'acesso_restrito');
   assertEquals(decideSource(input({ page: page({ status: 403 }) })).reason, 'acesso_restrito');
   assertEquals(decideSource(input({ page: page({ status: 404 }) })).reason, 'erro_http');
 });
