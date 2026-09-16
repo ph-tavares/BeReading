@@ -27,6 +27,7 @@ jobs:
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+      SUPABASE_PROJECT_REF: asfdkzejtuqcgqdcsnac
       # Tabelas cuja contagem é comparada entre produção e a cópia restaurada.
       CHECK_TABLES: auth.users public.profiles public.reading_sessions public.answers public.student_books public.subscriptions
     steps:
@@ -92,6 +93,8 @@ jobs:
       # Restaura a partir do arquivo CRIPTOGRAFADO, exatamente como faria quem
       # precisasse do backup: prova que a chave abre e que o conteúdo restaura.
       - name: Verificar restauração num Supabase local limpo
+        env:
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           set -euo pipefail
           R="$RUNNER_TEMP/restore"
@@ -105,6 +108,28 @@ jobs:
           mkdir -p "$R/project" && cd "$R/project"
           supabase init --force > /dev/null
           sed -i 's/^project_id = .*/project_id = "restorecheck"/' supabase/config.toml
+
+          # BER-92: as tabelas de auth e storage nascem das migrations das imagens gotrue e
+          # storage-api, não do backup. Com produção numa versão mais nova que a embutida no
+          # CLI, o data.sql traz tabela que o local não tem (16/09/2026: auth.mfa_recovery_code_sets,
+          # do gotrue v2.197.0, contra o v2.196.0 do CLI 2.117.0). Os arquivos em .temp são os
+          # que o `supabase link` grava para o local espelhar o remoto.
+          # Se a consulta falhar, segue com as versões do CLI: a restauração abaixo acusa se
+          # isso quebrar, e uma falha de rede aqui não deve impedir o backup.
+          BASE="https://${SUPABASE_PROJECT_REF}.supabase.co"
+          mkdir -p supabase/.temp
+          auth_v=$(curl -fsS -m 30 --retry 3 -H "apikey: ${SUPABASE_ANON_KEY:-}" "$BASE/auth/v1/health" | jq -r .version) || auth_v=""
+          storage_v=$(curl -fsS -m 30 --retry 3 "$BASE/storage/v1/version") || storage_v=""
+          storage_v="v${storage_v#v}"
+          for pair in "gotrue:$auth_v" "storage:$storage_v"; do
+            name=${pair%%:*}; version=${pair#*:}
+            if [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "$version" > "supabase/.temp/$name-version"
+              echo "$name local na versão de produção: $version"
+            else
+              echo "::warning::não foi possível ler a versão de $name em produção; usando a do CLI"
+            fi
+          done
           # gotrue e storage-api ficam ligados: criam as tabelas de auth e storage que o data.sql preenche.
           supabase start -x studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor,realtime,postgres-meta > /dev/null
 

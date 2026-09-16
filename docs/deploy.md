@@ -57,7 +57,7 @@ Settings → Secrets and variables → Actions:
 |---|---|---|
 | `SUPABASE_ACCESS_TOKEN` | deploy das Edge Functions | Dashboard → avatar → Access Tokens. Escopo: projeto BeReading, Full access |
 | `SUPABASE_DB_URL` | `db push` | Projeto → **Connect** → **Direct** → **Session pooler** (porta 5432), com a senha do banco |
-| `SUPABASE_ANON_KEY` | smoke test | Project Settings → API Keys → a **publishable key** (`sb_publishable_…`). Não use a `anon` legada, que será desativada (BER-76) |
+| `SUPABASE_ANON_KEY` | smoke test do deploy; versão do Auth na verificação do backup | Project Settings → API Keys → a **publishable key** (`sb_publishable_…`). Não use a `anon` legada, que será desativada (BER-76) |
 | `BACKUP_ENCRYPTION_KEY` | `backup.yml` (criptografia do backup) | Gerada pelo time; cópia obrigatória no gerenciador de senhas. Ver [Backup e restauração](#backup-e-restauração) |
 
 Ao gravar, evite espaço ou quebra de linha no final do valor. No PowerShell:
@@ -107,8 +107,8 @@ O projeto está no **plano gratuito do Supabase, que não faz backup**. Até mig
     [Limites](#limites)).
 - **Criptografia:** os três arquivos viram um `.tar.gz`, criptografado com GPG (AES-256) usando o
   secret `BACKUP_ENCRYPTION_KEY`. Só o arquivo `.gpg` sai do runner.
-- **Verificação:** o próprio job descriptografa a cópia, restaura num Supabase local vazio e
-  compara a contagem de `auth.users`, `profiles`, `reading_sessions`, `answers`,
+- **Verificação:** o próprio job descriptografa a cópia, restaura num Supabase local vazio, com
+  Auth e Storage nas mesmas versões de produção, e compara a contagem de `auth.users`, `profiles`, `reading_sessions`, `answers`,
   `student_books` e `subscriptions` com a de produção. O log mostra só "confere" ou "diverge".
 - **Onde fica:** artefato `bereading-db-AAAAMMDD-HHMM` da execução, **por 14 dias**.
 
@@ -150,6 +150,10 @@ testar a mesma cópia num Supabase local (passos 1 a 4 abaixo, trocando o destin
    `& "C:\Program Files\Git\usr\bin\gpg.exe" --decrypt --output ...`. O `tar` já vem com o Windows.
 3. Aponte para o banco de destino. Para testar localmente, use o banco de um `supabase start`
    num projeto **vazio** (sem migrations): `postgresql://postgres:postgres@127.0.0.1:54322/postgres`.
+   Antes do `supabase start`, grave as versões de produção em `supabase/.temp/gotrue-version`
+   (campo `version` de `/auth/v1/health`, com o header `apikey`) e `supabase/.temp/storage-version`
+   (`v` + a resposta de `/storage/v1/version`). Sem isso, a restauração pode falhar como em
+   [`relation "auth.…" does not exist`](#relation-auth-does-not-exist-na-verificação-do-backup).
    Para produção, a URI do Session pooler.
 4. Restaure na ordem roles → schema → dados, numa transação só:
    ```bash
@@ -279,6 +283,16 @@ O passo `supabase/setup-cli` foi configurado com `version: latest`. Nesse modo, 
 Aconteceu no deploy do #39 (15/09/2026), antes de qualquer passo em produção. A correção
 permanente é manter a versão fixa (ver [Regras](#regras)). Se reaparecer num workflow que ainda
 use `latest`, basta rodar o job de novo.
+
+### `relation "auth.…" does not exist` na verificação do backup
+
+O Supabase atualizou o Auth ou o Storage de produção para uma versão com tabela nova, e o
+Supabase local da verificação subiu com a versão embutida no CLI, mais velha. Aconteceu em
+16/09/2026 com `auth.mfa_recovery_code_sets` (gotrue v2.197.0 em produção, v2.196.0 no CLI
+2.117.0) e nenhum backup foi salvo, porque o upload só roda depois da verificação (BER-92).
+Desde então o `backup.yml` consulta as versões de produção antes do `supabase start`. Se voltar a
+acontecer, veja no log se apareceu o aviso `não foi possível ler a versão de …`: a consulta falhou
+(confira o secret `SUPABASE_ANON_KEY`) e a verificação usou as versões do CLI.
 
 ### `password authentication failed for user "postgres"`
 
