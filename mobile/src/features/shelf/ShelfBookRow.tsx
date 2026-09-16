@@ -1,9 +1,10 @@
 // Linha de livro em leitura na Estante (spec 7.7): capa 52, titulo, pagina e
 // barra do livro inteiro. Toque abre o detalhe do livro.
 //
-// O layout mora no View interno, nunca no `style` em funcao do Pressable: com
-// a interop do NativeWind, o estilo em funcao some no aparelho (a capa caia em
-// cima do texto no teste em emulador de 15/09), e o Jest nao acusa.
+// O layout mora no View interno, nao no `style` em funcao do Pressable: no
+// teste em emulador de 15/09 o estilo em funcao sumia no aparelho (a capa caia
+// em cima do texto) e o Jest nao acusava. A causa era a interop do NativeWind,
+// que so rodava fora do Jest; ela saiu na BER-56.
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Cover, ProgressBar, Text } from '../../ui';
 import { color, space } from '../../theme/tokens';

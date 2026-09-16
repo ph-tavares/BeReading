@@ -10,7 +10,7 @@ agente de IA): [`AGENTS.md`](AGENTS.md).
 
 ## Arquitetura
 
-- **`mobile/`** — app **Expo / React Native** (expo-router, Zustand, NativeWind/Tailwind, `@supabase/supabase-js`).
+- **`mobile/`** — app **Expo / React Native** (expo-router, Zustand, Reanimated, `StyleSheet` com os tokens de `src/theme`, `@supabase/supabase-js`).
 - **`supabase/`** — backend **Supabase**: Edge Functions (Deno/TypeScript) + Postgres.
 - ⚠️ O backend "vivo" é um **projeto Supabase na nuvem** — veja [Known issues](#️-known-issues--dívida-técnica).
 

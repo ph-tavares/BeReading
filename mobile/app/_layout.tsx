@@ -1,4 +1,3 @@
-import '../global.css';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
