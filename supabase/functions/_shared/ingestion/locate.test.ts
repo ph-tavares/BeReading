@@ -60,3 +60,18 @@ Deno.test('looksForwardReferencing: frase que antecipa capítulo posterior', () 
   assertEquals(looksForwardReferencing('He will later discover the truth.'), true);
   assertEquals(looksForwardReferencing('Bentinho vai ao quintal e encontra Capitu riscando o muro.'), false);
 });
+
+Deno.test('looksForwardReferencing: outras construções que antecipam o futuro', () => {
+  for (const s of [
+    'Anos depois, ele reencontra o amigo.',
+    'Ela viria a ser sua esposa.',
+    'O rapaz acabaria por deixar o seminário.',
+    'Ele estava destinado a partir.',
+    'He eventually leaves the town.',
+    'It turns out she was right.',
+    'She was destined to rule.',
+    'She goes on to marry him.',
+  ]) {
+    assertEquals(looksForwardReferencing(s), true, s);
+  }
+});

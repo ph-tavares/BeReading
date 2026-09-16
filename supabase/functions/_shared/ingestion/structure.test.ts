@@ -57,3 +57,12 @@ Deno.test('confirmStructure: duas estruturas confirmadas e incompatíveis não c
 Deno.test('confirmStructure: lista com buraco na numeração é descartada', () => {
   assertEquals(confirmStructure([cand({ weight: 'A', chapters: [ch(1), ch(3)] })]), null);
 });
+
+Deno.test('confirmStructure: fonte sem títulos não une estruturas com títulos em conflito, em qualquer ordem', () => {
+  const semTitulos = cand({ sourceId: 'n', independenceGroup: 'n.com', chapters: [ch(1), ch(2), ch(3)] });
+  const a = cand({ sourceId: 'a', independenceGroup: 'a.com' });
+  const b = cand({ sourceId: 'b', independenceGroup: 'b.com', chapters: [ch(1, 'Do título'), ch(2, 'Outro'), ch(3, 'A denúncia')] });
+  assertEquals(confirmStructure([semTitulos, a, b]), null);
+  assertEquals(confirmStructure([a, semTitulos, b]), null);
+  assertEquals(confirmStructure([b, a, semTitulos]), null);
+});

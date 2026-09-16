@@ -68,6 +68,14 @@ const FORWARD_PATTERNS: RegExp[] = [
   /\bin the end\b/i,
   /\bwill (later )?(be revealed|discover|learn|find out)\b/i,
   /\bsubsequent chapters?\b/i,
+  /\banos depois\b/i,
+  /\bviria a\b/i,
+  /\bacabaria por\b/i,
+  /\bestava destinad[oa] a\b/i,
+  /\beventually\b/i,
+  /\bturns out\b/i,
+  /\bdestined to\b/i,
+  /\bgoes on to\b/i,
 ];
 
 export function looksForwardReferencing(statement: string): boolean {

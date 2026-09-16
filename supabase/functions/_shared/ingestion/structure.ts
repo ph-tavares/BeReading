@@ -61,10 +61,15 @@ export function compatible(a: DeclaredChapter[], b: DeclaredChapter[]): boolean 
   });
 }
 
+function compatibleWithAll(members: StructureCandidate[], candidate: StructureCandidate): boolean {
+  return members.every((m) => compatible(m.chapters, candidate.chapters));
+}
+
+/** Um grupo só aceita quem é compatível com todos os membros: "compatível" não é transitivo quando falta título. */
 function cluster(candidates: StructureCandidate[]): StructureCandidate[][] {
   const clusters: StructureCandidate[][] = [];
   for (const candidate of candidates) {
-    const home = clusters.find((c) => compatible(c[0].chapters, candidate.chapters));
+    const home = clusters.find((c) => compatibleWithAll(c, candidate));
     if (home) home.push(candidate);
     else clusters.push([candidate]);
   }
@@ -74,8 +79,17 @@ function cluster(candidates: StructureCandidate[]): StructureCandidate[][] {
 const supportsOf = (members: StructureCandidate[]): Support[] =>
   members.map((m) => ({ independenceGroup: m.independenceGroup, weight: m.weight }));
 
+/**
+ * Apoio de um grupo: os membros e toda fonte compatível com todos eles. Um sumário sem títulos
+ * apoia cada estrutura com que é compatível; se isso confirmar duas estruturas rivais, nenhuma
+ * confirma (spec §6.3, BER-59).
+ */
+function supportersOf(members: StructureCandidate[], all: StructureCandidate[]): StructureCandidate[] {
+  return all.filter((c) => members.includes(c) || compatibleWithAll(members, c));
+}
+
 function build(members: StructureCandidate[], all: StructureCandidate[], basis: ConfirmedStructure['basis']): ConfirmedStructure {
-  const supporters = all.filter((c) => members.includes(c) || compatible(members[0].chapters, c.chapters));
+  const supporters = supportersOf(members, all);
   const confidence = basis === 'isbn'
     ? Math.max(0.7, factConfidence(supportsOf(supporters), false))
     : factConfidence(supportsOf(supporters), false);
@@ -91,8 +105,9 @@ export function confirmStructure(candidates: StructureCandidate[]): ConfirmedStr
     return tiedClusters.length === 1 ? build(tiedClusters[0], valid, 'isbn') : null;
   }
 
-  const confirmed = cluster(valid).filter((members) => structureConfirmed(supportsOf(members)));
+  const confirmed = cluster(valid).filter((members) => structureConfirmed(supportsOf(supportersOf(members, valid))));
   if (confirmed.length !== 1) return null;
   const members = confirmed[0];
-  return build(members, valid, members.some((m) => m.weight === 'A') ? 'primary' : 'independent');
+  const basis = supportersOf(members, valid).some((m) => m.weight === 'A') ? 'primary' : 'independent';
+  return build(members, valid, basis);
 }
