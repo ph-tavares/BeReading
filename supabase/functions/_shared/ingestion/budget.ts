@@ -8,7 +8,12 @@ export const LIMITS = {
   maxSearchesPerRun: 30,
   maxSourcesPerRun: 60,
   maxCostUsdPerRun: 2,
-  maxTavilyCreditsPerDay: 30,
+  /**
+   * Um livro sozinho chega ao teto de buscas do run (30): 5 sobre o livro e uma por capítulo. Com
+   * a cota diária em 30, o primeiro teste do 1984 não coube num dia (BER-59). 120 dá 4 livros por
+   * dia; o teto real é o plano do Tavily (1.000 créditos/mês no gratuito), ou seja ~33 livros/mês.
+   */
+  maxTavilyCreditsPerDay: 120,
   maxNewRunsPerDay: 10,
 } as const;
 

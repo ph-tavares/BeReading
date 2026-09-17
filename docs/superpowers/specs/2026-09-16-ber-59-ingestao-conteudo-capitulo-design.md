@@ -279,7 +279,7 @@ A estrutura declarada pelas fontes passa pelas mesmas regras de independência:
 | Buscas por run | 30 | run `partial`, motivo `limite` |
 | Fontes lidas por run | 60 | idem |
 | Custo estimado por run | US$ 2,00 | idem |
-| Créditos Tavily por dia | 30 | runs aguardam o dia seguinte |
+| Créditos Tavily por dia | 120 (era 30) | runs aguardam o dia seguinte |
 | Runs novos por dia | 10 | idem |
 | `INGESTION_ENABLED` | `true` | `false` para tudo sem deploy |
 
@@ -465,3 +465,9 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
     seguinte e, como a segunda tentativa de estrutura espera a coleta terminar, o run inteiro
     ficava horas parado. Agora o número de buscas por capítulo é limitado também pelo que sobra
     da cota diária.
+30. **Cota diária do Tavily passa de 30 para 120 créditos.** Um livro sozinho chega ao teto de
+    buscas do run (30 = 5 sobre o livro + uma por capítulo), então 30 por dia não cobria nem um
+    livro: o segundo teste do *1984* parou na 28ª busca. 120 dá quatro livros por dia. O teto que
+    importa de verdade é o do plano do Tavily (1.000 créditos por mês no gratuito, ~33 livros);
+    a cota diária é só a trava contra gastar o mês inteiro de uma vez.
+
