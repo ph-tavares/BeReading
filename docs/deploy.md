@@ -291,6 +291,7 @@ Definidos com `supabase secrets set` (não são secrets do GitHub):
 |---|---|
 | `TAVILY_API_KEY` | Busca de fontes. Conta em tavily.com; o plano gratuito dá 1.000 créditos por mês |
 | `INGESTION_ENABLED` | `false` para tudo sem deploy: `ingest-book` devolve 503 e o worker não executa |
+| `INGESTION_ALLOW_NO_DNS` | Desligado por padrão (não definir). Se o runtime não expuser DNS, o download recusa todo host em vez de pular a checagem de IP interno (SSRF); `true` libera sem essa checagem, só com o risco aceito |
 | `ANTHROPIC_API_KEY` / `AI_PROVIDER` | Já existem (quiz). A ingestão usa o mesmo provedor |
 | `CRON_SECRET` | Já existe (BER-33). O cron da ingestão usa o mesmo |
 

@@ -11,14 +11,16 @@ import { DomainThrottle, type FetchDeps, fetchPage, fetchRobots } from './source
 import { fetchGoogleBooks } from './sources/googlebooks.ts';
 import { fetchOpenLibraryEdition } from './sources/openlibrary-edition.ts';
 import { tavilySearch } from './sources/tavily.ts';
-import { defaultResolve } from './ssrf.ts';
+import { defaultResolve, requireDns } from './ssrf.ts';
 import type { StepContext } from './steps/context.ts';
 import { SupabaseIngestionStore } from './supabase-store.ts';
 
 export function buildProductionContext(): StepContext {
   const deps: FetchDeps = {
     fetchFn: fetch,
-    resolve: defaultResolve,
+    // Fail-closed (BER-59): sem API de DNS o download recusa o host em vez de pular a checagem de
+    // IP. `INGESTION_ALLOW_NO_DNS=true` só para um runtime sem DNS em que o risco foi aceito.
+    resolve: requireDns(defaultResolve, Deno.env.get('INGESTION_ALLOW_NO_DNS') === 'true'),
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     now: () => Date.now(),
   };

@@ -1,5 +1,6 @@
-import { assertEquals, assertRejects, assertStrictEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import { assertPublicUrl, isPrivateAddress, makeResolve, UnsafeUrlError } from './ssrf.ts';
+import { assertEquals, assertRejects } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { isTransientError } from './queue.ts';
+import { assertPublicUrl, isPrivateAddress, makeResolve, requireDns, UnsafeUrlError } from './ssrf.ts';
 
 const resolvesTo = (...ips: string[]) => () => Promise.resolve(ips);
 
@@ -73,9 +74,17 @@ Deno.test('makeResolve: NotFound nos dois tipos devolve lista vazia', async () =
   assertEquals(await resolve('example.com'), []);
 });
 
-Deno.test('makeResolve: erro que não é NotFound é repassado (falha transitória, não recusa)', async () => {
+Deno.test('makeResolve: erro que não é NotFound vira TypeError com o host (falha transitória, não recusa) (BER-59)', async () => {
   const timeout = new Error('timeout');
   const resolve = makeResolve((_host, type) => (type === 'A' ? Promise.reject(timeout) : Promise.resolve([])));
-  const err = await assertRejects(() => resolve('example.com'));
-  assertStrictEquals(err, timeout);
+  const err = await assertRejects(() => resolve('example.com'), TypeError, 'DNS falhou para example.com: timeout');
+  assertEquals(isTransientError(err), true);
+});
+
+Deno.test('requireDns: sem DNS no runtime recusa o host, a menos que liberado (BER-59)', async () => {
+  const semDns = makeResolve(undefined);
+  assertEquals(await requireDns(semDns, false)('example.com'), []);
+  assertEquals(await requireDns(semDns, true)('example.com'), null);
+  assertEquals(await requireDns(resolvesTo('8.8.8.8'), false)('example.com'), ['8.8.8.8']);
+  await assertRejects(() => assertPublicUrl('https://example.com/x', requireDns(semDns, false)), UnsafeUrlError, 'não resolve');
 });

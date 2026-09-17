@@ -387,9 +387,11 @@ Decididos ao executar o plano (PR 1 e PR 2):
 11. A troca de capítulos de uma edição usa a função transacional `replace_edition_chapters`, que
     preserva o capítulo com identidade compatível entre a estrutura antiga e a nova (e o
     conhecimento já ligado a ele) em vez de apagar tudo e recriar.
-12. Resolução de DNS: host que não resolve é rejeitado; `ResolveFn` devolve `null` só quando o
-    runtime não expõe API de DNS (fallback documentado); NXDOMAIN (sem endereço) é distinto de
-    falha do resolvedor, que é tratada como transitória.
+12. Resolução de DNS: host que não resolve é rejeitado; NXDOMAIN (sem endereço) é distinto de
+    falha do resolvedor (timeout, rede, permissão), que vira `TypeError` e o passo é repetido como
+    transitório pela fila (§7). `ResolveFn` devolve `null` só quando o runtime não expõe API de
+    DNS; em produção isso recusa o host (fail-closed), a menos que o secret
+    `INGESTION_ALLOW_NO_DNS=true` libere de propósito.
 13. A checagem de SSRF também bloqueia IPv4 escrito como IPv6 (mapeado, compatível, NAT64, 6to4),
     além de multicast e da faixa TEST-NET.
 14. A estrutura de capítulos não confirma quando existe candidato válido incompatível fora do
@@ -408,3 +410,8 @@ Decididos ao executar o plano (PR 1 e PR 2):
     falha na criação só atrasar a próxima tentativa em vez de parar de rebuscar o capítulo.
 20. As dependências `npm:` (`tldts`, `linkedom`, `@mozilla/readability`, `unpdf`) são fixadas em
     versão exata, porque o repositório não tem `deno.lock`.
+21. Risco residual aceito de DNS rebinding: o IP é checado numa resolução e o `fetch` resolve o
+    nome de novo, então um DNS malicioso pode trocar o endereço entre as duas. O `fetch` do Deno
+    não permite fixar o IP resolvido. O impacto é limitado: o worker só faz `GET` sem credencial e
+    nenhuma resposta bruta é devolvida a ninguém (o texto só alimenta a extração e é descartado),
+    então na prática é uma requisição cega.
