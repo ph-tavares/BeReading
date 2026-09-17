@@ -68,7 +68,10 @@ export async function scheduleRechecks(ctx: StepContext): Promise<number> {
  * falho fecha o run como `failed`; qualquer outro caso é replanejado.
  */
 export async function recoverStalledRuns(ctx: StepContext): Promise<void> {
-  for (const run of await ctx.store.listStalledRuns(STALLED_RUNS_PER_CYCLE)) {
+  // Só run com mais de STALE_LOCK_MS de vida (BER-59): o `ingest-book` e o `scheduleRechecks` criam o
+  // run e só depois enfileiram os passos; um worker sobreposto não pode replanejar nesse intervalo.
+  const startedBefore = iso(ctx.now() - STALE_LOCK_MS);
+  for (const run of await ctx.store.listStalledRuns(STALLED_RUNS_PER_CYCLE, startedBefore)) {
     try {
       const steps = await ctx.store.listSteps(run.id);
       if (steps.some((s) => s.kind === 'publish' && s.status === 'failed')) {

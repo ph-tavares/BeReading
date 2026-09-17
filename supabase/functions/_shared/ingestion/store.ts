@@ -143,8 +143,12 @@ export interface IngestionStore {
   updateRun(id: string, patch: { status?: RunStatus; statusReason?: string | null; finishedAt?: string | null; structureDivergence?: unknown }): Promise<void>;
   incrementRunStats(id: string, delta: Record<string, number>): Promise<void>;
   countRunsSince(iso: string): Promise<number>;
-  /** Runs `queued`/`running` sem nenhum passo `pending`/`running` (BER-59): ninguém mais os avançaria. */
-  listStalledRuns(limit: number): Promise<RunRow[]>;
+  /**
+   * Runs `queued`/`running` sem nenhum passo `pending`/`running` (BER-59): ninguém mais os avançaria.
+   * Só os iniciados antes de `startedBeforeIso`: um run recém-criado ainda não teve os passos
+   * enfileirados, e replanejá-lo cedo (rebusca sem `discover`) verificaria e publicaria sem buscar.
+   */
+  listStalledRuns(limit: number, startedBeforeIso: string): Promise<RunRow[]>;
   /** Soma `payload.creditos` dos passos `discover` terminados (`done`) desde `iso` (BER-59). */
   sumTavilyCreditsSince(iso: string): Promise<number>;
 

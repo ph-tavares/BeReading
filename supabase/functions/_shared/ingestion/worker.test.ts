@@ -58,6 +58,11 @@ async function seed(store: MemoryIngestionStore) {
   return { edition, run };
 }
 
+/** Run parado só é recuperado depois de STALE_LOCK_MS de vida (BER-59): recua o início em 6 minutos. */
+function envelhecer(store: MemoryIngestionStore, runId: string) {
+  store.runs.find((r) => r.id === runId)!.startedAt = new Date(NOW - 6 * 60_000).toISOString();
+}
+
 Deno.test('runWorker: ISBN até conhecimento publicado, sem sobrar texto bruto', async () => {
   const store = new MemoryIngestionStore(() => NOW);
   const { edition, run } = await seed(store);
@@ -156,6 +161,7 @@ Deno.test('runWorker: passo adiado devolve a tentativa que a reivindicação con
 Deno.test('runWorker: run parado com publish falho fecha como failed e avisa a operação (BER-59)', async () => {
   const store = new MemoryIngestionStore(() => NOW);
   const { run } = await seed(store);
+  envelhecer(store, run.id);
   await store.updateRun(run.id, { status: 'running' });
   await store.enqueueSteps([{ runId: run.id, kind: 'publish', subject: '-' }]);
   Object.assign(store.steps[0], { status: 'done' });
@@ -173,17 +179,22 @@ Deno.test('runWorker: run parado com publish falho fecha como failed e avisa a o
 Deno.test('recoverStalledRuns: run parado só com coleta terminada ganha o passo structure; run com passo ativo fica (BER-59)', async () => {
   const store = new MemoryIngestionStore(() => NOW);
   const { run } = await seed(store);
+  envelhecer(store, run.id);
   await store.updateRun(run.id, { status: 'running' });
   await store.enqueueSteps([{ runId: run.id, kind: 'discover', subject: 'q' }]);
   for (const step of store.steps) step.status = 'done';
   const ativo = await seed(store);
+  envelhecer(store, ativo.run.id);
+  // Rebusca recém-criada, ainda sem os passos `discover`: não pode ser replanejada.
+  const recente = await store.createRun(run.editionId, { recheckChapters: [1] });
 
-  assertEquals((await store.listStalledRuns(10)).map((r) => r.id), [run.id]);
+  assertEquals((await store.listStalledRuns(10, new Date(NOW - 5 * 60_000).toISOString())).map((r) => r.id), [run.id]);
   const ctx = fakeContext(store);
   await recoverStalledRuns(ctx);
 
   assertEquals(store.steps.filter((s) => s.runId === run.id && s.kind === 'structure').map((s) => s.status), ['pending']);
   assertEquals(store.steps.filter((s) => s.runId === ativo.run.id).map((s) => s.kind), ['edition']);
+  assertEquals(store.steps.filter((s) => s.runId === recente.id), []);
   assertEquals(ctx.notifications, []);
 });
 
@@ -191,6 +202,8 @@ Deno.test('recoverStalledRuns: erro num run avisa e não impede os outros (BER-5
   const store = new MemoryIngestionStore(() => NOW);
   const a = await seed(store);
   const b = await seed(store);
+  envelhecer(store, a.run.id);
+  envelhecer(store, b.run.id);
   for (const step of store.steps) step.status = 'done';
   const listSteps = store.listSteps.bind(store);
   store.listSteps = (runId) => runId === a.run.id ? Promise.reject(new Error('boom')) : listSteps(runId);

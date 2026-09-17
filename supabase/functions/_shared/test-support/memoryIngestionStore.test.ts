@@ -129,3 +129,17 @@ Deno.test('finishStep: finishedAt só quando o passo termina em done ou failed (
   await store.finishStep(y.id, { status: 'failed' });
   assertEquals([x.finishedAt, y.finishedAt], [new Date(now).toISOString(), new Date(now).toISOString()]);
 });
+
+Deno.test('listStalledRuns: run sem passo criado há 1 minuto não volta; criado há 6 minutos volta (BER-59)', async () => {
+  const now = Date.parse('2026-09-16T10:00:00.000Z');
+  let clock = now - 6 * 60_000;
+  const store = new MemoryIngestionStore(() => clock);
+  const edition = await store.insertEdition('9788535910663', null);
+  const velho = await store.createRun(edition.id, { recheckChapters: [1] });
+  clock = now - 60_000;
+  await store.createRun(edition.id, { recheckChapters: [2] });
+  clock = now;
+
+  const stalled = await store.listStalledRuns(10, new Date(now - 5 * 60_000).toISOString());
+  assertEquals(stalled.map((r) => r.id), [velho.id]);
+});

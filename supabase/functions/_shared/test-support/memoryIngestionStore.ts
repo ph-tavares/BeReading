@@ -117,9 +117,11 @@ export class MemoryIngestionStore implements IngestionStore {
     return this.runs.filter((r) => r.startedAt >= iso).length;
   }
 
-  async listStalledRuns(limit: number) {
+  async listStalledRuns(limit: number, startedBeforeIso: string) {
     const active = new Set(this.steps.filter((s) => s.status === 'pending' || s.status === 'running').map((s) => s.runId));
-    return this.runs.filter((r) => (r.status === 'queued' || r.status === 'running') && !active.has(r.id)).slice(0, limit);
+    return this.runs
+      .filter((r) => (r.status === 'queued' || r.status === 'running') && r.startedAt < startedBeforeIso && !active.has(r.id))
+      .slice(0, limit);
   }
 
   async sumTavilyCreditsSince(iso: string) {
