@@ -12,69 +12,7 @@ import type { AnswerPayload } from '../_shared/types.ts';
 // BER-35: o prompt vive em módulo próprio para ser testado de verdade.
 // BER-65: sem "aluno" e sem "ensino fundamental" — o leitor é adulto.
 import { buildEvaluationPrompt } from './prompt.ts';
-
-// ---------------------------------------------------------------------------
-// AI PROVIDER — OpenAI (default) or Anthropic/Claude (set AI_PROVIDER=anthropic)
-// Env: AI_PROVIDER (openai|anthropic)
-//   OpenAI    -> AI_API_KEY, AI_MODEL (default gpt-4o-mini)
-//   Anthropic -> ANTHROPIC_API_KEY, ANTHROPIC_MODEL (default claude-haiku-4-5)
-// ---------------------------------------------------------------------------
-async function callAI(prompt: string): Promise<string> {
-  const provider = Deno.env.get('AI_PROVIDER') ?? 'openai';
-
-  if (provider === 'anthropic') {
-    const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-    const model = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5';
-    if (!apiKey) throw new Error('ANTHROPIC_API_KEY env var not set');
-
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 256,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Anthropic API error ${res.status}: ${err}`);
-    }
-
-    const data = await res.json();
-    return data.content?.[0]?.text ?? '';
-  }
-
-  const apiKey = Deno.env.get('AI_API_KEY');
-  const model = Deno.env.get('AI_MODEL') ?? 'gpt-4o-mini';
-  if (!apiKey) throw new Error('AI_API_KEY env var not set');
-
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 256,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`OpenAI API error ${res.status}: ${err}`);
-  }
-
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? '';
-}
+import { callAI } from '../_shared/ai.ts';
 
 type SupabaseClient = ReturnType<typeof createServiceClient>;
 
@@ -99,7 +37,8 @@ async function evaluateAndStore(
   const prompt = buildEvaluationPrompt(questionText, questionType, answerText, chapterContent);
 
   try {
-    const evaluation = parseEvaluation(await callAI(prompt));
+    const { text: rawResponse } = await callAI({ prompt, maxTokens: 256 });
+    const evaluation = parseEvaluation(rawResponse);
 
     const { error: updateError } = await supabase
       .from('answers')

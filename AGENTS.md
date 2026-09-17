@@ -63,7 +63,7 @@ deno check register-reading-session/index.ts evaluate-answer/index.ts \
   award-badges/index.ts generate-questions/index.ts retry-pending-quizzes/index.ts \
   check-chapter-completion/index.ts delete-account/index.ts \
   lookup-book-by-isbn/index.ts get-entitlement/index.ts reading-list/index.ts \
-  billing-mock/index.ts
+  billing-mock/index.ts _shared/ingestion/supabase-store.ts
 deno test --allow-net --allow-env
 ```
 
