@@ -454,3 +454,14 @@ Decididos depois do primeiro teste em produção (*1984*, Companhia das Letras, 
     tradutores); o autor e o ano da primeira publicação vêm da obra, com a edição mais antiga como
     reserva para o ano.
 
+Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores em produção:
+
+28. **Byte nulo sai do texto extraído.** O Postgres recusa caracteres de controle em coluna text,
+    e um PDF do archive.org derrubou o passo com "unsupported Unicode escape sequence" ao gravar
+    o texto.  tira os caracteres de controle (menos tabulação, quebra de linha
+    e retorno) de HTML, PDF e texto puro, antes de qualquer gravação.
+29. **Busca por capítulo cabe na cota diária do Tavily.** O passo  enfileirava até o
+    teto de buscas do run sem olhar a cota do dia; a busca além da cota é adiada para o dia
+    seguinte e, como a segunda tentativa de estrutura espera a coleta terminar, o run inteiro
+    ficava horas parado. Agora o número de buscas por capítulo é limitado também pelo que sobra
+    da cota diária.

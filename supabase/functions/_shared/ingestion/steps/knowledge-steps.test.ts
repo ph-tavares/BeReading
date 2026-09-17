@@ -1,6 +1,7 @@
 import { assertEquals, assertRejects } from 'https://deno.land/std@0.208.0/assert/mod.ts';
 import { fakeContext, NOW, seedRun, stepRow } from '../../test-support/ingestionContext.ts';
 import { MemoryIngestionStore } from '../../test-support/memoryIngestionStore.ts';
+import { LIMITS } from '../budget.ts';
 import type { AIRequest } from '../../ai.ts';
 import { RECHECK_AFTER_MS } from '../recheck.ts';
 import type { NewSource, RunRow } from '../store.ts';
@@ -136,6 +137,20 @@ Deno.test('structure: sem confirmação na primeira tentativa, busca os capítul
     '"Livro Sintético" Autora Exemplo capítulo 2 "O irmão" resumo',
   ]);
   assertEquals((await store.listEditionChapters(edition.id)).length, 0);
+});
+
+Deno.test('structure: buscas por capítulo cabem na cota diária do Tavily que sobrou (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seedRun(store);
+  await addSource(store, run, 'a.com', 'D', { declaredStructure: DOIS_CAPITULOS, declaredStructureComplete: true });
+  // Cota diária quase no fim: sobra uma busca, então só o capítulo 1 é enfileirado.
+  await store.enqueueSteps([{ runId: run.id, kind: 'discover', subject: 'gastou' }]);
+  await store.finishStep(store.steps[0].id, { status: 'done', payload: { creditos: LIMITS.maxTavilyCreditsPerDay - 1 } });
+
+  const outcome = await runStructureStep(stepRow(run, 'structure', '-'), run, fakeContext(store));
+
+  assertEquals(outcome.payload?.buscas_por_capitulo, 1);
+  assertEquals(outcome.enqueue?.length, 1);
 });
 
 Deno.test('structure: sem confirmação na segunda tentativa, ou sem palpite, marca o motivo e não cria capítulos', async () => {

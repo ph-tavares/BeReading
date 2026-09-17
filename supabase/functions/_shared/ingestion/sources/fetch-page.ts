@@ -96,6 +96,16 @@ async function pdfPagesText(pdf: Awaited<ReturnType<typeof getDocumentProxy>>, f
   return pages.join('\n');
 }
 
+/**
+ * Byte nulo e outros caracteres de controle saem do texto (BER-59): o Postgres recusa `\u0000` em
+ * coluna text, e no primeiro teste em producao o PDF do archive.org falhou no `saveSourceText` com
+ * "unsupported Unicode escape sequence". Tabulacao, quebra de linha e retorno ficam.
+ */
+export function stripControlChars(text: string): string {
+  // deno-lint-ignore no-control-regex
+  return text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
+}
+
 export function countWords(text: string): number {
   return (text.match(/\p{L}+/gu) ?? []).length;
 }
@@ -214,17 +224,17 @@ export async function fetchPage(
     const text = await pdfPagesText(pdf, from, to).catch((err) => {
       throw unreadable(err);
     });
-    return { ...base, kind: 'pdf', text, pdfPages: pdf.numPages, pdfNextPage: to < pdf.numPages ? to + 1 : null };
+    return { ...base, kind: 'pdf', text: stripControlChars(text), pdfPages: pdf.numPages, pdfNextPage: to < pdf.numPages ? to + 1 : null };
   }
 
   if (contentType.includes('text/html') || contentType.includes('application/xhtml')) {
     const html = decode(bytes, contentType);
     const { title, text } = htmlToText(html);
-    return { ...base, kind: 'html', text, title, html };
+    return { ...base, kind: 'html', text: stripControlChars(text), title, html };
   }
 
   if (contentType.startsWith('text/plain')) {
-    return { ...base, kind: 'text', text: decode(bytes, contentType) };
+    return { ...base, kind: 'text', text: stripControlChars(decode(bytes, contentType)) };
   }
 
   return { ...base, kind: 'other', text: '' };
