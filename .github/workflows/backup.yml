@@ -59,11 +59,13 @@ jobs:
           supabase db dump --db-url "$SUPABASE_DB_URL" --role-only -f "$DUMP/roles.sql"
           supabase db dump --db-url "$SUPABASE_DB_URL" -f "$DUMP/schema.sql"
           # Excluídas: tabelas que o papel `postgres` não pode escrever numa restauração
-          # (buckets_vectors e vector_indexes do Storage, cron.job do supabase_admin) e o
-          # histórico de execuções do cron. O agendamento do cron é recriado à mão ao
-          # restaurar — ver docs/deploy.md, "Restaurar".
+          # (buckets_vectors e vector_indexes do Storage, cron.job do supabase_admin), o
+          # histórico de execuções do cron e o texto temporário da ingestão (BER-59: texto
+          # bruto de fonte nunca pode ir para uma cópia guardada 14 dias). O agendamento do
+          # cron é recriado à mão ao restaurar — ver docs/deploy.md, "Restaurar".
           supabase db dump --db-url "$SUPABASE_DB_URL" --data-only --use-copy \
             -x storage.buckets_vectors -x storage.vector_indexes -x cron.job -x cron.job_run_details \
+            -x public.ingestion_source_texts \
             -f "$DUMP/data.sql"
           for f in roles schema data; do
             [ -s "$DUMP/$f.sql" ] || { echo "::error::$f.sql vazio"; exit 1; }

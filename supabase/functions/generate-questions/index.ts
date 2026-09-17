@@ -9,6 +9,7 @@ import { buildQuestionPrompt } from './prompt.ts';
 import { buildNoContentMessage, hasUsableContent } from '../_shared/content.ts';
 import { buildClaimableFilter, isClaimable } from './claim.ts';
 import { notifyOps } from '../_shared/ops-alert.ts';
+import { callAI } from '../_shared/ai.ts';
 
 const QUESTION_COUNT = 4;
 
@@ -20,76 +21,11 @@ function inProgressResponse(): Response {
   });
 }
 
-// ---------------------------------------------------------------------------
-// AI PROVIDER — OpenAI (default) or Anthropic/Claude (set AI_PROVIDER=anthropic)
-// Env: AI_PROVIDER (openai|anthropic)
-//   OpenAI    -> AI_API_KEY, AI_MODEL (default gpt-4o-mini)
-//   Anthropic -> ANTHROPIC_API_KEY, ANTHROPIC_MODEL (default claude-haiku-4-5)
-// ---------------------------------------------------------------------------
 // BER-55: sem temperature, os dois provedores usam o default de 1.0 — as
 // perguntas de um mesmo capítulo variam mais do que precisam. O cache por
 // capítulo mitiga o custo de gerar de novo, mas não a qualidade de uma geração
 // só. 0.4 mantém formato e tom consistentes sem virar sempre a mesma pergunta.
 const QUESTION_TEMPERATURE = 0.4;
-
-async function callAI(prompt: string): Promise<string> {
-  const provider = Deno.env.get('AI_PROVIDER') ?? 'openai';
-
-  if (provider === 'anthropic') {
-    const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-    const model = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5';
-    if (!apiKey) throw new Error('ANTHROPIC_API_KEY env var not set');
-
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 1024,
-        temperature: QUESTION_TEMPERATURE,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Anthropic API error ${res.status}: ${err}`);
-    }
-
-    const data = await res.json();
-    return data.content?.[0]?.text ?? '';
-  }
-
-  const apiKey = Deno.env.get('AI_API_KEY');
-  const model = Deno.env.get('AI_MODEL') ?? 'gpt-4o-mini';
-  if (!apiKey) throw new Error('AI_API_KEY env var not set');
-
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1024,
-      temperature: QUESTION_TEMPERATURE,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`OpenAI API error ${res.status}: ${err}`);
-  }
-
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? '';
-}
 
 // BER-49: exportada para que o teste de handler chame o código real, não uma
 // cópia — o mesmo raciocínio da BER-35 para a lógica pura.
@@ -229,7 +165,11 @@ export async function handler(req: Request): Promise<Response> {
   );
 
   try {
-    const rawResponse = await callAI(prompt);
+    const { text: rawResponse } = await callAI({
+      prompt,
+      maxTokens: 1024,
+      temperature: QUESTION_TEMPERATURE,
+    });
     // BER-38: uma pergunta com `type` fora do CHECK do banco derrubava o INSERT do
     // lote inteiro — as 4 perdidas e o capítulo marcado como `failed`. Agora as
     // inválidas são descartadas individualmente.
