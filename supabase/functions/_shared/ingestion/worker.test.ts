@@ -7,8 +7,11 @@ import { RECHECK_AFTER_MS } from './recheck.ts';
 import type { StepContext } from './steps/context.ts';
 import { runWorker } from './worker.ts';
 
-// Livro, fontes e textos sintéticos (repositório público).
-const TEXTO = 'Ana chega à cidade e procura o irmão perdido há anos, sem saber onde ele mora. '.repeat(25);
+// Livro, fontes e textos sintéticos (repositório público). Vocabulário diferente entre as
+// duas fontes de propósito: precisam ficar em grupos de independência distintos (§5.6), senão
+// o simhash as funde como cópia por terem o mesmo conteúdo.
+const TEXTO_GUTENBERG = 'Ana chega à cidade e procura o irmão perdido há anos, sem saber onde ele mora. '.repeat(25);
+const TEXTO_BLOG = 'Marcos atravessa a floresta escura em busca do tesouro escondido pelo avô antes da guerra. '.repeat(25);
 
 const EXTRACAO = {
   estrutura: [
@@ -40,7 +43,7 @@ function pipelineContext(store: MemoryIngestionStore, over: Partial<StepContext>
       results: [{ url: 'https://www.gutenberg.org/ebooks/1', title: 'Texto' }, { url: 'https://blog.com/resumo', title: 'Resumo' }],
       credits: 1,
     }),
-    fetchPage: (url) => Promise.resolve(page(url, TEXTO)),
+    fetchPage: (url) => Promise.resolve(page(url, url.includes('gutenberg') ? TEXTO_GUTENBERG : TEXTO_BLOG)),
     ...over,
   });
   return { ctx, prompts };
