@@ -1,11 +1,11 @@
 import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import { compatible, confirmStructure, mergeDeclared, type StructureCandidate } from './structure.ts';
+import { bestStructureGuess, compatible, confirmStructure, mergeDeclared, type StructureCandidate } from './structure.ts';
 import type { DeclaredChapter } from './types.ts';
 
 const ch = (number: number, title: string | null = null): DeclaredChapter => ({ number, part: null, numberInPart: null, title });
 const tres = [ch(1, 'Do título'), ch(2, 'Do livro'), ch(3, 'A denúncia')];
 const cand = (over: Partial<StructureCandidate>): StructureCandidate => ({
-  sourceId: 's', independenceGroup: 'g', weight: 'D', tiedToIsbn: false, chapters: tres, ...over,
+  sourceId: 's', independenceGroup: 'g', weight: 'D', tiedToIsbn: false, chapters: tres, complete: true, ...over,
 });
 
 Deno.test('compatible: mesma contagem e títulos iguais onde os dois têm título', () => {
@@ -80,4 +80,46 @@ Deno.test('confirmStructure: dois D concordando e um D incompatível não confir
     cand({ sourceId: 'b', independenceGroup: 'b.com' }),
     cand({ sourceId: 'c', independenceGroup: 'c.com', chapters: [ch(1, 'Do título'), ch(2, 'Outro'), ch(3, 'A denúncia')] }),
   ]), null);
+});
+
+// Spec §11, item 24: lista parcial apoia os capítulos que traz e só conta como grupo se chega ao fim.
+const vinte4 = Array.from({ length: 24 }, (_, i) => ch(i + 1));
+
+Deno.test('confirmStructure: lista completa e parcial que chega ao último capítulo, de grupos independentes, confirmam (caso 1984)', () => {
+  const r = confirmStructure([
+    cand({ sourceId: 'escola', independenceGroup: 'uol.com.br', chapters: vinte4 }),
+    cand({ sourceId: 'resumo', independenceGroup: 'resumoporcapitulo.com.br', complete: false, chapters: vinte4.slice(2) }),
+    cand({ sourceId: 'litcharts', independenceGroup: 'litcharts.com', complete: false, chapters: [ch(1, 'Chapter 1')] }),
+  ]);
+  assertEquals([r?.basis, r?.chapters.length, r?.chapters[0].title], ['independent', 24, null]);
+});
+
+Deno.test('confirmStructure: parcial que não chega ao fim não confirma a contagem sozinha', () => {
+  assertEquals(confirmStructure([
+    cand({ sourceId: 'a', independenceGroup: 'a.com', chapters: vinte4 }),
+    cand({ sourceId: 'b', independenceGroup: 'b.com', complete: false, chapters: vinte4.slice(0, 5) }),
+  ]), null);
+});
+
+Deno.test('confirmStructure: parcial com número além do último ou título diferente é conflito', () => {
+  const doisGrupos = [cand({ sourceId: 'a', independenceGroup: 'a.com' }), cand({ sourceId: 'b', independenceGroup: 'b.com' })];
+  assertEquals(confirmStructure([...doisGrupos, cand({ sourceId: 'p', independenceGroup: 'p.com', complete: false, chapters: [ch(3), ch(4)] })]), null);
+  assertEquals(confirmStructure([...doisGrupos, cand({ sourceId: 'q', independenceGroup: 'q.com', complete: false, chapters: [ch(2, 'Outro')] })]), null);
+  assertEquals(confirmStructure([...doisGrupos, cand({ sourceId: 'r', independenceGroup: 'r.com', complete: false, chapters: [ch(2, 'Do livro')] })])?.chapters.length, 3);
+});
+
+Deno.test('confirmStructure: lista parcial nunca vira hipótese de estrutura, mesmo começando no 1', () => {
+  assertEquals(confirmStructure([
+    cand({ sourceId: 'a', independenceGroup: 'a.com', complete: false }),
+    cand({ sourceId: 'b', independenceGroup: 'b.com', complete: false }),
+  ]), null);
+});
+
+Deno.test('bestStructureGuess: prefere a maior lista completa; sem nenhuma, a maior que começa no 1', () => {
+  assertEquals(bestStructureGuess([
+    cand({ complete: false, chapters: vinte4 }),
+    cand({ chapters: [ch(1), ch(2)] }),
+  ])?.length, 2);
+  assertEquals(bestStructureGuess([cand({ complete: false, chapters: vinte4.slice(2) }), cand({ complete: false, chapters: vinte4 })])?.length, 24);
+  assertEquals(bestStructureGuess([cand({ complete: false, chapters: vinte4.slice(2) })]), null);
 });

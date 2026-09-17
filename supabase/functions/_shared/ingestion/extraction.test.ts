@@ -42,6 +42,8 @@ Deno.test('parseExtraction: estrutura e afirmações válidas', () => {
     ],
   }));
   assertEquals(r.structure, [{ number: 13, part: null, numberInPart: null, title: 'Capitu' }]);
+  assertEquals(r.structureComplete, false, 'sem "estrutura_completa": true a lista é parcial');
+  assertEquals(parseExtraction(JSON.stringify({ estrutura: [], estrutura_completa: true, afirmacoes: [] })).structureComplete, true);
   assertEquals(r.claims[0].kind, 'event');
   assertEquals(r.claims[0].chapterRef, { number: 13, part: null, numberInPart: null, title: 'Capitu' });
   assertEquals(r.claims[1].isInterpretation, true, 'tema é sempre interpretação');

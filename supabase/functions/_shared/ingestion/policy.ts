@@ -115,7 +115,7 @@ export function decideSource(input: PolicyInput): PolicyDecision {
       return accept(domainPolicy.sourceType ?? 'open_license_text', 'A', `repositório autorizado: ${domainPolicy.domain}`);
     }
     if (isPublisher || domainPolicy?.sourceType === 'publisher') return accept('publisher', 'A');
-    return reject('texto_integral_sem_autorizacao');
+    return accept('PDF_content', 'B');
   }
 
   if (domainPolicy?.policy === 'allowed' && domainPolicy.weight && domainPolicy.sourceType) {

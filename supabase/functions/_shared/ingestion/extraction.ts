@@ -84,10 +84,12 @@ ${DELIMITER}
 
 Devolva APENAS um objeto JSON:
 {"estrutura":[{"numero":1,"parte":null,"numero_na_parte":null,"titulo":null}],
+ "estrutura_completa":false,
  "afirmacoes":[{"capitulo":{"numero":1,"parte":null,"numero_na_parte":null,"titulo":null},"tipo":"evento","texto":"...","interpretacao":false,"antecipa":false}]}
 
 Regras:
 - "estrutura": só os capítulos que a fonte lista ou cujos cabeçalhos aparecem no texto. "numero" é a posição do capítulo no livro inteiro; "parte" e "numero_na_parte" quando o livro é dividido em partes. Não invente capítulos.
+- "estrutura_completa": true só quando o bloco traz a lista de TODOS os capítulos do livro (um sumário ou índice inteiro). Página sobre um capítulo, resumo de parte do livro ou lista cortada: false.
 - "afirmacoes": fatos e leituras sobre o livro, cada um em uma frase sua, com no máximo ${MAX_STATEMENT_CHARS} caracteres. Nunca copie frases da fonte.
 - "capitulo": preencha só quando a fonte indica em que capítulo aquilo acontece (cabeçalho, resumo capítulo a capítulo, ou o capítulo em andamento). Se a fonte fala do livro inteiro ou você não tem certeza, use null.
 - "tipo": "evento", "personagem", "relacao", "argumento" (não-ficção) ou "tema".
@@ -106,6 +108,8 @@ export interface ExtractedClaim {
 
 export interface ExtractionResult {
   structure: DeclaredChapter[];
+  /** A fonte declarou listar todos os capítulos (spec §11, item 24). */
+  structureComplete: boolean;
   claims: ExtractedClaim[];
   rejected: { item: unknown; reason: string }[];
 }
@@ -141,7 +145,7 @@ function toChapterRef(value: unknown): ChapterRef | null {
 
 export function parseExtraction(raw: string): ExtractionResult {
   const json = extractJson(raw, 'object') as Record<string, unknown>;
-  const result: ExtractionResult = { structure: [], claims: [], rejected: [] };
+  const result: ExtractionResult = { structure: [], structureComplete: json.estrutura_completa === true, claims: [], rejected: [] };
 
   for (const item of Array.isArray(json.estrutura) ? json.estrutura : []) {
     const v = (item ?? {}) as Record<string, unknown>;

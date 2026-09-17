@@ -138,6 +138,29 @@ Deno.test('fetchOpenLibraryEdition: junta edição, autor e obra', async () => {
   });
 });
 
+Deno.test('fetchOpenLibraryEdition: edição sem autores usa o autor e a data da obra (BER-59)', async () => {
+  const fetchFn = fakeFetch({
+    'https://openlibrary.org/isbn/9780000000004.json': {
+      title: 'Livro Traduzido', publishers: ['Editora Exemplo'], publish_date: '2009', languages: [{ key: '/languages/por' }],
+      contributors: [{ role: 'Translator', name: 'Tradutora Exemplo' }], works: [{ key: '/works/OL2W' }],
+    },
+    'https://openlibrary.org/works/OL2W.json': { authors: [{ author: { key: '/authors/OL2A' }, type: { key: '/type/author_role' } }] },
+    'https://openlibrary.org/authors/OL2A.json': { name: 'Autor Exemplo', death_date: '21 January 1950' },
+    'https://openlibrary.org/works/OL2W/editions.json?limit=100': {
+      entries: [
+        { publish_date: '2009', languages: [{ key: '/languages/por' }] },
+        { publish_date: 'June 8, 1949', languages: [{ key: '/languages/eng' }] },
+        { publish_date: 'sem data' },
+      ],
+    },
+  });
+  const edition = await fetchOpenLibraryEdition('9780000000004', fetchFn);
+  assertEquals(
+    [edition?.authors, edition?.authorDeathYear, edition?.firstPublishYear, edition?.originalLanguage],
+    [['Autor Exemplo'], 1950, 1949, 'en'],
+  );
+});
+
 Deno.test('fetchOpenLibraryEdition: ISBN inexistente devolve null; 503 lança transitório', async () => {
   assertEquals(await fetchOpenLibraryEdition('9780000000002', fakeFetch({})), null);
   await assertRejects(

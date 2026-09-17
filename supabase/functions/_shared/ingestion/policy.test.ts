@@ -71,9 +71,9 @@ Deno.test('domínio da lista usa o peso e o tipo dela; editora ganha B', () => {
   assertEquals([e.sourceType, e.weight], ['publisher', 'B']);
 });
 
-Deno.test('texto integral de obra protegida sem sinal de autorização é rejeitado (spec §5.4)', () => {
+Deno.test('texto integral de obra protegida sem sinal de autorização é aceito como PDF_content B', () => {
   const d = decideSource(input({ page: livroInteiro }));
-  assertEquals([d.decision, d.reason], ['rejected', 'texto_integral_sem_autorizacao']);
+  assertEquals([d.decision, d.sourceType, d.weight], ['accepted', 'PDF_content', 'B']);
 });
 
 Deno.test('texto integral em domínio público, no idioma original, é fonte A com a base registrada', () => {
@@ -92,7 +92,7 @@ Deno.test('tradução de obra em domínio público não passa pela regra de dom�
     page: page({ isBookFile: true, wordCount: 90000, pageLanguage: 'pt' }),
     edition: { authorDeathYear: 1950, firstPublicationYear: 1949, originalLanguage: 'en', publisherDomains: [] },
   }));
-  assertEquals(d.reason, 'texto_integral_sem_autorizacao');
+  assertEquals([d.decision, d.sourceType, d.weight], ['accepted', 'PDF_content', 'B']);
 });
 
 Deno.test('texto integral com licença aberta, de repositório autorizado ou da editora é aceito como A', () => {

@@ -3,7 +3,7 @@ import { fakeContext, NOW, page, seedRun, stepRow } from '../../test-support/ing
 import { MemoryIngestionStore } from '../../test-support/memoryIngestionStore.ts';
 import { LIMITS } from '../budget.ts';
 import { PermanentStepError } from '../queue.ts';
-import { DomainThrottle, type FetchDeps, fetchPage, MAX_BYTES, MAX_REDIRECTS } from '../sources/fetch-page.ts';
+import { DomainThrottle, type FetchDeps, fetchPage, MAX_BYTES, MAX_REDIRECTS, SourceRejectedError } from '../sources/fetch-page.ts';
 import { UnsafeUrlError } from '../ssrf.ts';
 import { DeferStepError } from './context.ts';
 import { runDiscoverStep } from './discover.ts';
@@ -180,9 +180,8 @@ Deno.test('fetch: PDF de livro protegido sem autorização é rejeitado e contad
     fetchPage: (url) => Promise.resolve(page(url, RESUMO.repeat(10), { kind: 'pdf', html: null, pdfPages: 300 })),
   });
   const outcome = await runFetchStep(stepRow(run, 'fetch', 'https://arquivos.example/livro.pdf'), run, ctx);
-  assertEquals(store.sources[0].rejectionReason, 'texto_integral_sem_autorizacao');
-  assertEquals(outcome.stats?.pdfs_rejeitados, 1);
-  assertEquals(store.texts.size, 0);
+  assertEquals([store.sources[0].decision, store.sources[0].sourceType, store.sources[0].weight], ['accepted', 'PDF_content', 'B']);
+  assertEquals(await store.getSourceText(store.sources[0].id), RESUMO.repeat(10));
 });
 
 Deno.test('publisherDomainMatches: domínio com o nome da editora', () => {
@@ -214,4 +213,63 @@ Deno.test('discover: créditos de busca terminada hoje contam mesmo com o run co
   assertEquals(await store.sumTavilyCreditsSince(new Date(Date.UTC(2026, 8, 16)).toISOString()), LIMITS.maxTavilyCreditsPerDay);
   const err = await assertRejects(() => runDiscoverStep(stepRow(hoje.run, 'discover', 'q2'), hoje.run, ctx), DeferStepError);
   assertEquals([err.until, buscas], ['2026-09-17T00:05:00.000Z', 1]);
+});
+
+// Limite de CPU da Edge Function (BER-59): PDF longo segue em lotes, e a extração só começa no fim.
+Deno.test('fetch: PDF longo aceito guarda o primeiro lote e enfileira o próximo em vez da extração', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seedRun(store);
+  // Repositório autorizado: aceito pela política em qualquer versão da regra de texto integral.
+  store.policies.push({ domain: 'dominio.example', policy: 'allowed', weight: 'A', sourceType: 'public_domain_text', authorizesFullText: true, hostCountry: 'BR' });
+  const ctx = fakeContext(store, {
+    fetchPage: (url) => Promise.resolve(page(url, RESUMO, { kind: 'pdf', html: null, pdfPages: 120, pdfNextPage: 51 })),
+  });
+  const outcome = await runFetchStep(stepRow(run, 'fetch', 'https://dominio.example/livro.pdf'), run, ctx);
+  const source = store.sources[0];
+  assertEquals([source.decision, source.sourceType], ['accepted', 'public_domain_text']);
+  assertEquals(outcome.enqueue, [{
+    kind: 'fetch',
+    subject: 'https://dominio.example/livro.pdf#bereading-pagina-51',
+    payload: { continuacao: source.id, url: 'https://dominio.example/livro.pdf', pagina: 51 },
+  }]);
+  assertEquals(await store.getSourceText(source.id), RESUMO);
+});
+
+Deno.test('fetch: continuação acrescenta o lote e, no último, enfileira a extração', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seedRun(store);
+  await store.saveSourceText('fonte-1', 'lote 1');
+  const pedidos: (number | undefined)[] = [];
+  const ctx = fakeContext(store, {
+    fetchPage: (url, _before, options) => {
+      pedidos.push(options?.pdfFromPage);
+      const ultimo = options?.pdfFromPage === 101;
+      return Promise.resolve(page(url, ultimo ? 'lote 3' : 'lote 2', { kind: 'pdf', html: null, pdfPages: 120, pdfNextPage: ultimo ? null : 101 }));
+    },
+  });
+  const payload = (pagina: number) => ({ continuacao: 'fonte-1', url: 'https://dominio.example/livro.pdf', pagina });
+
+  const meio = await runFetchStep(stepRow(run, 'fetch', 'https://dominio.example/livro.pdf#bereading-pagina-51', payload(51)), run, ctx);
+  assertEquals(meio.enqueue?.map((s) => s.subject), ['https://dominio.example/livro.pdf#bereading-pagina-101']);
+  const fim = await runFetchStep(stepRow(run, 'fetch', 'https://dominio.example/livro.pdf#bereading-pagina-101', payload(101)), run, ctx);
+  assertEquals(fim.enqueue, [{ kind: 'extract', subject: 'fonte-1#0' }]);
+  assertEquals(pedidos, [51, 101]);
+  assertEquals(await store.getSourceText('fonte-1'), 'lote 1\nlote 2\nlote 3');
+  assertEquals(store.sources.length, 0, 'continuação não cria fonte nova');
+});
+
+Deno.test('fetch: continuação sem texto guardado não baixa; recusada no meio extrai o que já tem', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seedRun(store);
+  const payload = { continuacao: 'sumiu', url: 'https://dominio.example/livro.pdf', pagina: 51 };
+  const semTexto = await runFetchStep(stepRow(run, 'fetch', 'https://dominio.example/livro.pdf#bereading-pagina-51', payload), run, fakeContext(store));
+  assertEquals([semTexto.enqueue, semTexto.payload?.texto_ja_descartado], [undefined, true]);
+
+  await store.saveSourceText('fonte-2', 'lote 1');
+  const recusado = await runFetchStep(
+    stepRow(run, 'fetch', 'https://dominio.example/livro.pdf#bereading-pagina-51', { ...payload, continuacao: 'fonte-2' }),
+    run,
+    fakeContext(store, { fetchPage: () => Promise.reject(new SourceRejectedError('robots', 'robots mudou')) }),
+  );
+  assertEquals([recusado.enqueue, recusado.payload?.lote_interrompido], [[{ kind: 'extract', subject: 'fonte-2#0' }], 'robots']);
 });

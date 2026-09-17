@@ -2,6 +2,7 @@
 // Contexto real dos passos (BER-59): Supabase, Anthropic/OpenAI, Tavily, Open Library,
 // Google Books e o fetch seguro. robots.txt fica em cache durante a execução do worker
 // (refinamento 8 do plano).
+import process from 'node:process';
 import { callAI } from '../ai.ts';
 import { notifyOps } from '../ops-alert.ts';
 import { createServiceClient } from '../supabase-client.ts';
@@ -38,11 +39,21 @@ export function buildProductionContext(): StepContext {
     },
     fetchEdition: (isbn) => fetchOpenLibraryEdition(isbn),
     fetchGoogle: (isbn) => fetchGoogleBooks(isbn),
-    fetchPage: (url, beforeRequest) => fetchPage(url, deps, throttle, beforeRequest),
+    fetchPage: (url, beforeRequest, options) => fetchPage(url, deps, throttle, beforeRequest, options),
     fetchRobots: (origin) => {
       if (!robots.has(origin)) robots.set(origin, fetchRobots(origin, deps, throttle));
       return robots.get(origin)!;
     },
     notify: notifyOps,
+    cpuMs: () => {
+      // `process.cpuUsage` vem da compatibilidade com Node do Deno; se o Edge Runtime não
+      // expuser, o worker fica só com o orçamento de relógio (BER-59).
+      try {
+        const usage = process.cpuUsage();
+        return (usage.user + usage.system) / 1000;
+      } catch {
+        return null;
+      }
+    },
   };
 }
