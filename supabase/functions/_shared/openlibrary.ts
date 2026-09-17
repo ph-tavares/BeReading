@@ -1,9 +1,10 @@
-// supabase/functions/lookup-book-by-isbn/openlibrary.ts
+// supabase/functions/_shared/openlibrary.ts
 //
 // BER-72: metadado bibliográfico por ISBN (título, editora, ano, total de páginas),
 // para resolver qual edição o leitor tem em mãos ao cadastrar um livro fora do
 // catálogo (BER-60). Lógica pura isolada de `index.ts` para o teste exercitar o
 // código real — mesmo padrão de `retry-pending-quizzes/filter.ts`.
+// Movido para _shared na BER-59: a ingestão reaproveita normalizeIsbn e buildCoverUrl.
 //
 // Investigação que fundamenta o design (10-11/09/2026, ver comentário na BER-72):
 // nem Open Library nem Google Books expõem paginação por capítulo — só o total de

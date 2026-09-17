@@ -6,7 +6,7 @@
 // fluxo existir.
 import { createServiceClient } from '../_shared/supabase-client.ts';
 import { authErrorResponse, resolveUserId } from '../_shared/auth.ts';
-import { isValidIsbnFormat, normalizeIsbn, parseOpenLibraryEdition } from './openlibrary.ts';
+import { isValidIsbnFormat, normalizeIsbn, parseOpenLibraryEdition } from '../_shared/openlibrary.ts';
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
