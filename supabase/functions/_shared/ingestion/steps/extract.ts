@@ -43,6 +43,9 @@ export const runExtractStep: StepExecutor = async (step, run, ctx) => {
     temperature: 0,
     timeoutMs: AI_STEP_TIMEOUT_MS,
   });
+  // O gasto vai ao run antes de parsear (BER-59): resposta inválida também custou, e se ficasse
+  // no resultado do passo, que só é somado quando ele termina bem, o teto de custo não a veria.
+  await ctx.store.incrementRunStats(run.id, aiUsageDelta(result.model, result.usage));
   const parsed = parseExtraction(result.text);
 
   // Retentativa do mesmo bloco (spec §7): substitui as afirmações que já tinha gravado, não duplica.
@@ -58,7 +61,6 @@ export const runExtractStep: StepExecutor = async (step, run, ctx) => {
 
   return {
     enqueue: isLast ? [] : [{ kind: 'extract', subject: `${sourceId}#${index + 1}`, payload: { previousChapter: lastChapter } }],
-    stats: aiUsageDelta(result.model, result.usage),
     payload: { afirmacoes: parsed.claims.length, descartadas: parsed.rejected.length },
   };
 };

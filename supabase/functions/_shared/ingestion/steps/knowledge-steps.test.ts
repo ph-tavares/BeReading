@@ -1,4 +1,4 @@
-import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assertEquals, assertRejects } from 'https://deno.land/std@0.208.0/assert/mod.ts';
 import { fakeContext, NOW, seedRun, stepRow } from '../../test-support/ingestionContext.ts';
 import { MemoryIngestionStore } from '../../test-support/memoryIngestionStore.ts';
 import type { AIRequest } from '../../ai.ts';
@@ -53,7 +53,9 @@ Deno.test('extract: grava afirmações e estrutura, passa o capítulo corrente a
     kind: 'extract', subject: `${source.id}#1`,
     payload: { previousChapter: { number: 1, part: null, numberInPart: null, title: 'A chegada' } },
   }]);
-  assertEquals(primeiro.stats, { tokens_entrada: 1000, tokens_saida: 100, custo_ia_microusd: 1500 });
+  // BER-59: o gasto de IA vai ao run assim que a IA responde, não no resultado do passo.
+  assertEquals(primeiro.stats, undefined);
+  assertEquals((await store.getRun(run.id)).stats, { tokens_entrada: 1000, tokens_saida: 100, custo_ia_microusd: 1500 });
   assertEquals(await store.getSourceText(source.id) !== null, true);
 
   const ultimo = await runExtractStep(stepRow(run, 'extract', `${source.id}#1`, primeiro.enqueue![0].payload), run, ctx);
@@ -146,7 +148,8 @@ Deno.test('verify: agrupa pela IA, publica fatos confirmados com as fontes e age
   assertEquals(knowledge1[0].facts.map((f) => f.statement), ['Ana chega à cidade de trem.']);
   assertEquals(store.factSources.map((fs) => fs.sourceId).sort(), [blog.id, gut.id].sort());
   assertEquals(prompts.length, 1);
-  assertEquals(outcome1.stats?.custo_ia_microusd, 1500);
+  assertEquals(outcome1.stats, undefined);
+  assertEquals((await store.getRun(run.id)).stats.custo_ia_microusd, 1500);
 
   // Capítulo 2: uma afirmação só, de blog. Não chama IA, não confirma, agenda rebusca.
   await runVerifyStep(stepRow(run, 'verify', '2'), run, ctx);
@@ -253,4 +256,28 @@ Deno.test('extract e verify: chamam a IA com timeout de 60 s (BER-59)', async ()
   await runVerifyStep(stepRow(run, 'verify', '1'), run, ctx);
 
   assertEquals(timeouts, [60_000, 60_000]);
+});
+
+Deno.test('extract: resposta da IA que não parseia ainda soma o custo ao run (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seedRun(store);
+  const source = await addSource(store, run, 'blog.com', 'D');
+  await store.saveSourceText(source.id, 'texto');
+  const ai = () => Promise.resolve({ text: 'não é JSON', model: 'claude-haiku-4-5', usage: { inputTokens: 1000, outputTokens: 100 } });
+
+  await assertRejects(() => runExtractStep(stepRow(run, 'extract', `${source.id}#0`), run, fakeContext(store, { ai })));
+
+  assertEquals((await store.getRun(run.id)).stats.custo_ia_microusd, 1500);
+});
+
+Deno.test('verify: com o teto de custo atingido, pula sem chamar a IA nem publicar (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run, edition } = await seedRun(store);
+  await store.replaceEditionChapters(edition.id, DOIS_CAPITULOS, 1);
+  const caro = { ...run, stats: { custo_ia_microusd: 2_000_000 } };
+
+  const outcome = await runVerifyStep(stepRow(run, 'verify', '1'), caro, fakeContext(store));
+
+  assertEquals(outcome, { payload: { skipped: 'limite' }, runStatusReason: 'limite' });
+  assertEquals(store.knowledge, []);
 });

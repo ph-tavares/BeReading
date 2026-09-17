@@ -2,7 +2,7 @@
 // Passo `verify` (BER-59, spec §6.2): junta as afirmações localizadas no capítulo (de todos
 // os runs, para a rebusca somar ao que já havia), pede à IA só o agrupamento e publica o
 // que as regras confirmam. Nada confirmado agenda nova busca em 7 dias.
-import { aiUsageDelta, type Stats } from '../budget.ts';
+import { aiUsageDelta, exceededLimit } from '../budget.ts';
 import { batchClaims, buildGroupingPrompt, type Grouping, GROUPING_MAX_TOKENS, parseGrouping } from '../grouping.ts';
 import { assignIndependenceGroups } from '../independence.ts';
 import { locateChapter } from '../locate.ts';
@@ -11,18 +11,16 @@ import type { EditionChapter } from '../types.ts';
 import { type SourceSupport, verifyChapter } from '../verify.ts';
 import { AI_STEP_TIMEOUT_MS, type StepExecutor } from './context.ts';
 
-function sumStats(a: Stats, b: Stats): Stats {
-  const out = { ...a };
-  for (const [key, value] of Object.entries(b)) out[key] = (out[key] ?? 0) + value;
-  return out;
-}
-
 function chapterLabel(c: EditionChapter): string {
   const position = c.partLabel && c.numberInPart !== null ? `${c.partLabel}, capítulo ${c.numberInPart}` : `capítulo ${c.number}`;
   return c.title ? `${position} ("${c.title}")` : position;
 }
 
 export const runVerifyStep: StepExecutor = async (step, run, ctx) => {
+  // Teto de custo atingido (BER-59, spec §7): este run não chama mais IA, então o conhecimento
+  // do capítulo não é publicado por ele; o `publish` fecha o run como `partial` por `limite`.
+  if (exceededLimit(run.stats) === 'custo') return { payload: { skipped: 'limite' }, runStatusReason: 'limite' };
+
   const chapters = await ctx.store.listEditionChapters(run.editionId);
   const chapter = chapters.find((c) => c.number === Number(step.subject));
   if (!chapter) return { payload: { skipped: 'capitulo_inexistente' } };
@@ -44,7 +42,6 @@ export const runVerifyStep: StepExecutor = async (step, run, ctx) => {
   );
   const usable = claims.filter((c) => supports.has(c.sourceId));
 
-  let stats: Stats = {};
   const grouping: Grouping = { groups: [], contradictions: [] };
   if (usable.length === 1) {
     grouping.groups.push([usable[0].id]);
@@ -52,7 +49,8 @@ export const runVerifyStep: StepExecutor = async (step, run, ctx) => {
     for (const batch of batchClaims(usable)) {
       const inputs = batch.map((c) => ({ id: c.id, statement: c.statement }));
       const result = await ctx.ai({ prompt: buildGroupingPrompt(chapterLabel(chapter), inputs), maxTokens: GROUPING_MAX_TOKENS, temperature: 0, timeoutMs: AI_STEP_TIMEOUT_MS });
-      stats = sumStats(stats, aiUsageDelta(result.model, result.usage));
+      // Gasto registrado no run assim que a IA responde, antes de parsear (BER-59): nada escapa do teto.
+      await ctx.store.incrementRunStats(run.id, aiUsageDelta(result.model, result.usage));
       const parsed = parseGrouping(result.text, inputs);
       const offset = grouping.groups.length;
       grouping.groups.push(...parsed.groups);
@@ -76,5 +74,5 @@ export const runVerifyStep: StepExecutor = async (step, run, ctx) => {
     nextRecheckAt: verification.status === 'insufficient' ? new Date(ctx.now() + RECHECK_AFTER_MS).toISOString() : null,
   });
 
-  return { stats, payload: { status: verification.status, fatos: verification.facts.length, afirmacoes: usable.length } };
+  return { payload: { status: verification.status, fatos: verification.facts.length, afirmacoes: usable.length } };
 };
