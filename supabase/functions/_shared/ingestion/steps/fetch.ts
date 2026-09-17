@@ -6,10 +6,10 @@ import { registrableDomain, simhash } from '../independence.ts';
 import { detectLanguage } from '../language.ts';
 import { decideSource, detectLicense, looksLikeLoginOrPaywall, type PolicyDecision, type RejectionReason } from '../policy.ts';
 import { hasNoAiSignal } from '../robots.ts';
-import { BOOK_FILE_MIN_PAGES, countWords, type FetchedPage, SourceRejectedError } from '../sources/fetch-page.ts';
+import { BOOK_FILE_MIN_PAGES, type BeforeRequest, countWords, type FetchedPage, SourceRejectedError } from '../sources/fetch-page.ts';
 import { UnsafeUrlError } from '../ssrf.ts';
 import type { NewSource } from '../store.ts';
-import type { StepExecutor } from './context.ts';
+import type { StepContext, StepExecutor, StepOutcome } from './context.ts';
 
 const GENERIC_PUBLISHER_WORDS = /\b(editora|editorial|livros|grupo|publishing|publishers|books|ltda)\b/g;
 
@@ -53,6 +53,8 @@ export const runFetchStep: StepExecutor = async (step, run, ctx) => {
     if (!robots.isAllowed(url.pathname + url.search)) return 'robots';
     return null;
   };
+
+  if (typeof step.payload.continuacao === 'string') return continuePdf(step.payload, beforeRequest, ctx);
 
   let fetched: FetchedPage;
   try {
@@ -111,9 +113,50 @@ export const runFetchStep: StepExecutor = async (step, run, ctx) => {
   if (!accepted) return { stats: sourceDelta(decision, isBookFile), payload: { decisao: 'rejected', motivo: decision.reason } };
 
   await ctx.store.saveSourceText(source.id, fetched.text);
+  // PDF longo segue em lotes de páginas, um passo por lote, e só vai para a extração no fim. A
+  // política já decidiu com o primeiro lote: idioma, contagem de páginas e sinais de autorização
+  // não mudam no resto do arquivo (BER-59, limite de CPU da Edge Function).
+  const next = fetched.kind === 'pdf' ? fetched.pdfNextPage : null;
   return {
-    enqueue: [{ kind: 'extract', subject: `${source.id}#0` }],
+    enqueue: [next ? pdfContinuation(step.subject, source.id, next) : { kind: 'extract', subject: `${source.id}#0` }],
     stats: sourceDelta(decision, isBookFile),
-    payload: { decisao: 'accepted', fonte: source.id },
+    payload: { decisao: 'accepted', fonte: source.id, ...(next ? { paginas_lidas: next - 1, paginas: fetched.pdfPages } : {}) },
   };
 };
+
+function pdfContinuation(url: string, sourceId: string, page: number) {
+  // O assunto precisa ser único por lote: o índice (run_id, kind, subject) deduplica passos.
+  return { kind: 'fetch' as const, subject: `${url}#bereading-pagina-${page}`, payload: { continuacao: sourceId, url, pagina: page } };
+}
+
+async function continuePdf(payload: Record<string, unknown>, beforeRequest: BeforeRequest, ctx: StepContext): Promise<StepOutcome> {
+  const sourceId = String(payload.continuacao);
+  const url = String(payload.url);
+  const page = Number(payload.pagina);
+  const extract = { kind: 'extract' as const, subject: `${sourceId}#0` };
+
+  const previous = await ctx.store.getSourceText(sourceId);
+  // Texto apagado pelo prazo de 24 h: não há o que completar nem extrair.
+  if (previous === null) return { payload: { texto_ja_descartado: true } };
+
+  let fetched: FetchedPage;
+  try {
+    fetched = await ctx.fetchPage(url, beforeRequest, { pdfFromPage: page });
+  } catch (err) {
+    // O arquivo mudou ou passou a ser recusado entre um lote e outro: extrai o que já foi lido.
+    if (err instanceof SourceRejectedError || err instanceof UnsafeUrlError) {
+      return { enqueue: [extract], payload: { lote_interrompido: err instanceof SourceRejectedError ? err.reason : 'endereco_nao_publico' } };
+    }
+    throw err;
+  }
+  if (fetched.kind !== 'pdf' || fetched.status >= 400) {
+    return { enqueue: [extract], payload: { lote_interrompido: `status ${fetched.status}` } };
+  }
+
+  await ctx.store.saveSourceText(sourceId, `${previous}\n${fetched.text}`);
+  const next = fetched.pdfNextPage;
+  return {
+    enqueue: [next ? pdfContinuation(url, sourceId, next) : extract],
+    payload: { paginas_lidas: next ? next - 1 : fetched.pdfPages },
+  };
+}

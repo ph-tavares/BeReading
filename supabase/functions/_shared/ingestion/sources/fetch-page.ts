@@ -5,7 +5,7 @@
 // decisão de usar ou não o texto é da política, não daqui.
 import { Readability } from 'npm:@mozilla/readability@0.6.0';
 import { parseHTML } from 'npm:linkedom@0.18.13';
-import { extractText, getDocumentProxy } from 'npm:unpdf@1.8.1';
+import { getDocumentProxy } from 'npm:unpdf@1.8.1';
 import { PermanentStepError } from '../queue.ts';
 import { ALLOW_ALL, parseRobots, type RobotsRules, USER_AGENT } from '../robots.ts';
 import { assertPublicUrl, type ResolveFn } from '../ssrf.ts';
@@ -16,6 +16,12 @@ export const MAX_REDIRECTS = 3;
 export const MAX_PDF_PAGES = 1000;
 /** PDF a partir deste número de páginas é tratado como arquivo de livro. */
 export const BOOK_FILE_MIN_PAGES = 40;
+/**
+ * Páginas de PDF lidas por passo (BER-59). A Edge Function tem 2 s de CPU por chamada, e extrair
+ * as 384 páginas de um PDF de 1984 de uma vez gastou 1,1 a 1,8 s numa máquina local, e estourou
+ * em produção. 50 páginas custam em torno de 150 ms locais; o resto vira passos seguintes.
+ */
+export const PDF_PAGES_PER_BATCH = 50;
 export const DOMAIN_INTERVAL_MS = 2_000;
 
 /**
@@ -66,7 +72,28 @@ export interface FetchedPage {
   title: string | null;
   html: string | null;
   pdfPages: number | null;
+  /** Próxima página do PDF a ler num passo seguinte; null quando o PDF acabou ou não é PDF. */
+  pdfNextPage: number | null;
   headers: Headers;
+}
+
+export interface FetchOptions {
+  /** Primeira página do PDF a extrair (padrão 1). */
+  pdfFromPage?: number;
+}
+
+// Mesmo formato do `extractText` do unpdf com `mergePages`: quebra de linha onde o PDF marca fim
+// de linha, páginas separadas por quebra de linha.
+async function pdfPagesText(pdf: Awaited<ReturnType<typeof getDocumentProxy>>, from: number, to: number): Promise<string> {
+  const pages: string[] = [];
+  for (let n = from; n <= to; n++) {
+    const content = await (await pdf.getPage(n)).getTextContent();
+    pages.push(content.items.map((item) => {
+      const i = item as { str?: string; hasEOL?: boolean };
+      return (i.str ?? '') + (i.hasEOL ? '\n' : '');
+    }).join(''));
+  }
+  return pages.join('\n');
 }
 
 export function countWords(text: string): number {
@@ -144,10 +171,16 @@ async function request(
   throw new SourceRejectedError('redirecionamentos_demais', `mais de ${MAX_REDIRECTS} redirecionamentos a partir de ${url}`);
 }
 
-export async function fetchPage(url: string, deps: FetchDeps, throttle: DomainThrottle, beforeRequest?: BeforeRequest): Promise<FetchedPage> {
+export async function fetchPage(
+  url: string,
+  deps: FetchDeps,
+  throttle: DomainThrottle,
+  beforeRequest?: BeforeRequest,
+  options: FetchOptions = {},
+): Promise<FetchedPage> {
   const { res, finalUrl } = await request(url, deps, throttle, beforeRequest);
   const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
-  const base = { finalUrl, status: res.status, headers: res.headers, title: null, html: null, pdfPages: null };
+  const base = { finalUrl, status: res.status, headers: res.headers, title: null, html: null, pdfPages: null, pdfNextPage: null };
 
   if (res.status >= 400) {
     await res.body?.cancel();
@@ -175,10 +208,13 @@ export async function fetchPage(url: string, deps: FetchDeps, throttle: DomainTh
     if (pdf.numPages > MAX_PDF_PAGES) {
       throw new SourceRejectedError('pdf_paginas_demais', `PDF com ${pdf.numPages} páginas`, true);
     }
-    const { text } = await extractText(pdf, { mergePages: true }).catch((err) => {
+    const from = Math.max(1, options.pdfFromPage ?? 1);
+    if (from > pdf.numPages) return { ...base, kind: 'pdf', text: '', pdfPages: pdf.numPages };
+    const to = Math.min(pdf.numPages, from + PDF_PAGES_PER_BATCH - 1);
+    const text = await pdfPagesText(pdf, from, to).catch((err) => {
       throw unreadable(err);
     });
-    return { ...base, kind: 'pdf', text: String(text), pdfPages: pdf.numPages };
+    return { ...base, kind: 'pdf', text, pdfPages: pdf.numPages, pdfNextPage: to < pdf.numPages ? to + 1 : null };
   }
 
   if (contentType.includes('text/html') || contentType.includes('application/xhtml')) {

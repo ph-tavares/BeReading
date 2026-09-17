@@ -18,6 +18,11 @@ import type { StepKind } from './types.ts';
 // o worker morria com os passos em `running` e eles voltavam como trava velha para sempre.
 export const CLAIM_BATCH = 1;
 export const WORKER_TIME_BUDGET_MS = 70_000;
+/**
+ * CPU por chamada (BER-59): a Edge Function morre com `CPU Time exceeded` aos 2 s. O worker para
+ * de reivindicar passo novo depois de 1 s, deixando folga para o passo em andamento.
+ */
+export const WORKER_CPU_BUDGET_MS = 1_000;
 /** Texto bruto de run abortado é apagado depois disto (spec §4). */
 export const SOURCE_TEXT_TTL_MS = 24 * 60 * 60 * 1000;
 export const RECHECK_EDITIONS_PER_CYCLE = 5;
@@ -28,6 +33,8 @@ export interface WorkerReport {
   failed: number;
   deferred: number;
   rechecks: number;
+  /** CPU gasta na chamada, quando o runtime expõe; aparece na resposta do cron para conferir a folga. */
+  cpuMs?: number;
 }
 
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -160,7 +167,12 @@ export async function runWorker(ctx: StepContext, executors: Record<StepKind, St
     await ctx.notify('ingestion', `falha ao recuperar runs parados: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  while (ctx.now() - started < WORKER_TIME_BUDGET_MS) {
+  const cpuStart = ctx.cpuMs();
+  const cpuUsed = () => {
+    const now = ctx.cpuMs();
+    return cpuStart === null || now === null ? null : now - cpuStart;
+  };
+  while (ctx.now() - started < WORKER_TIME_BUDGET_MS && (cpuUsed() ?? 0) < WORKER_CPU_BUDGET_MS) {
     const steps = await ctx.store.claimSteps(CLAIM_BATCH, iso(ctx.now() - STALE_LOCK_MS));
     if (steps.length === 0) break;
     const touched = new Set<string>();
@@ -170,5 +182,7 @@ export async function runWorker(ctx: StepContext, executors: Record<StepKind, St
     }
     for (const runId of touched) await advanceRun(runId, ctx);
   }
+  const cpu = cpuUsed();
+  if (cpu !== null) report.cpuMs = Math.round(cpu);
   return report;
 }

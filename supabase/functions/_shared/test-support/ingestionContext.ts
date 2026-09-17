@@ -27,6 +27,7 @@ export function fakeContext(store: MemoryIngestionStore, over: Partial<StepConte
       return Promise.resolve();
     },
     notifications,
+    cpuMs: () => null,
     ...over,
   };
 }
@@ -54,5 +55,5 @@ export function stepRow(run: RunRow, kind: StepKind, subject: string, payload: R
 }
 
 export function page(url: string, text: string, over: Partial<FetchedPage> = {}): FetchedPage {
-  return { finalUrl: url, status: 200, kind: 'html', text, title: null, html: '<html></html>', pdfPages: null, headers: new Headers(), ...over };
+  return { finalUrl: url, status: 200, kind: 'html', text, title: null, html: '<html></html>', pdfPages: null, pdfNextPage: null, headers: new Headers(), ...over };
 }

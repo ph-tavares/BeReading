@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertRejects, assertStringIncludes } from 'https://deno.land/std@0.208.0/assert/mod.ts';
 import { PermanentStepError } from '../queue.ts';
 import { UnsafeUrlError } from '../ssrf.ts';
+import { syntheticPdf } from '../../test-support/syntheticPdf.ts';
 import {
   countWords,
   DomainThrottle,
@@ -10,6 +11,7 @@ import {
   htmlToText,
   MAX_REDIRECTS,
   MAX_BYTES,
+  PDF_PAGES_PER_BATCH,
   readLimited,
   SourceRejectedError,
 } from './fetch-page.ts';
@@ -140,4 +142,18 @@ Deno.test('fetchRobots: 404 libera; 5xx bloqueia; arquivo é respeitado', async 
   const regras = deps({ 'https://ex.com/robots.txt': () => new Response('User-agent: *\nDisallow: /privado') });
   const rules = await fetchRobots('https://ex.com', regras, new DomainThrottle(regras));
   assertEquals([rules.isAllowed('/privado/1'), rules.isAllowed('/livre')], [false, true]);
+});
+
+Deno.test('fetchPage: PDF é lido em lotes de páginas e indica a próxima (BER-59, limite de CPU)', async () => {
+  const pdf = () => new Response(syntheticPdf(120), { headers: { 'content-type': 'application/pdf' } });
+  const d = deps({ 'https://ex.com/livro.pdf': pdf });
+  const primeiro = await fetchPage('https://ex.com/livro.pdf', d, new DomainThrottle(d));
+  assertEquals([primeiro.kind, primeiro.pdfPages, primeiro.pdfNextPage], ['pdf', 120, PDF_PAGES_PER_BATCH + 1]);
+  assertStringIncludes(primeiro.text, `Pagina ${PDF_PAGES_PER_BATCH}`);
+  assertEquals(primeiro.text.includes(`Pagina ${PDF_PAGES_PER_BATCH + 1}`), false);
+
+  const ultimo = await fetchPage('https://ex.com/livro.pdf', d, new DomainThrottle(d), undefined, { pdfFromPage: 101 });
+  assertEquals([ultimo.pdfPages, ultimo.pdfNextPage], [120, null]);
+  assertStringIncludes(ultimo.text, 'Pagina 120');
+  assertEquals(ultimo.text.includes('Pagina 100'), false);
 });

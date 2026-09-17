@@ -266,3 +266,16 @@ Deno.test('runWorker: falha ao listar runs parados avisa e não impede o worker 
   assert(report.processed > 0);
   assert(ctx.notifications.some((n) => n.includes('lista explodiu')));
 });
+
+Deno.test('runWorker: para de reivindicar passo depois de 1 s de CPU na chamada e informa o gasto (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const a = await seed(store);
+  await seed(store);
+  const leituras = [100, 100, 1_300, 1_300];
+  const ctx = fakeContext(store, { cpuMs: () => leituras.shift() ?? 1_300 });
+  const executados: string[] = [];
+  const report = await runWorker(ctx, { ...EXECUTORS, edition: (step) => { executados.push(step.runId); return Promise.resolve({}); } });
+  assertEquals(executados, [a.run.id]);
+  assertEquals(report.cpuMs, 1_200);
+  assertEquals(store.steps.filter((s) => s.kind === 'edition').map((s) => s.status), ['done', 'pending']);
+});
