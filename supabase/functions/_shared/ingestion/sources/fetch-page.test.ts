@@ -13,6 +13,7 @@ import {
   MAX_BYTES,
   PDF_PAGES_PER_BATCH,
   readLimited,
+  stripControlChars,
   SourceRejectedError,
 } from './fetch-page.ts';
 
@@ -156,4 +157,13 @@ Deno.test('fetchPage: PDF é lido em lotes de páginas e indica a próxima (BER-
   assertEquals([ultimo.pdfPages, ultimo.pdfNextPage], [120, null]);
   assertStringIncludes(ultimo.text, 'Pagina 120');
   assertEquals(ultimo.text.includes('Pagina 100'), false);
+});
+
+Deno.test('fetchPage: byte nulo e caractere de controle saem do texto (BER-59)', async () => {
+  assertEquals(stripControlChars('a\u0000b\u0007c\td\ne'), 'abc\td\ne');
+  const d = deps({
+    'https://ex.com/sujo.txt': () => new Response('inicio\u0000fim', { headers: { 'content-type': 'text/plain' } }),
+  });
+  const fetched = await fetchPage('https://ex.com/sujo.txt', d, new DomainThrottle(d));
+  assertEquals(fetched.text, 'iniciofim');
 });

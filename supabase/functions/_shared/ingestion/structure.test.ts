@@ -123,3 +123,21 @@ Deno.test('bestStructureGuess: prefere a maior lista completa; sem nenhuma, a ma
   assertEquals(bestStructureGuess([cand({ complete: false, chapters: vinte4.slice(2) }), cand({ complete: false, chapters: vinte4 })])?.length, 24);
   assertEquals(bestStructureGuess([cand({ complete: false, chapters: vinte4.slice(2) })]), null);
 });
+
+// Caso do run de 1984 (BER-59): uma lista completa sem títulos (24), um índice parcial que começa
+// no capítulo 3 e numera a parte por conta própria, e um texto integral (peso A) que só tinha parte
+// do livro. Antes, o texto integral virava uma segunda estrutura completa e derrubava as duas.
+Deno.test('confirmStructure: texto integral parcial e índice com numeração de parte própria não impedem a confirmação', () => {
+  const comParte = (n: number, inPart: number) => ({ ...ch(n), numberInPart: inPart });
+  const completa = Array.from({ length: 24 }, (_, i) => comParte(i + 1, i < 8 ? i + 1 : i < 18 ? i - 7 : i - 17));
+  const indiceParcial = Array.from({ length: 22 }, (_, i) => comParte(i + 3, i < 6 ? i + 1 : i < 16 ? i - 5 : i - 15));
+  const textoIntegral = Array.from({ length: 9 }, (_, i) => ch(i + 1, i < 2 ? 'Chapter ' + (i + 1) : null));
+
+  const r = confirmStructure([
+    cand({ sourceId: 'escola', independenceGroup: 'uol.com.br', chapters: completa }),
+    cand({ sourceId: 'indice', independenceGroup: 'resumo.com.br', complete: false, chapters: indiceParcial }),
+    cand({ sourceId: 'gut', independenceGroup: 'gutenberg.net.au', weight: 'A', complete: false, chapters: textoIntegral }),
+  ]);
+
+  assertEquals([r?.basis, r?.chapters.length], ['independent', 24]);
+});

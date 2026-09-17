@@ -279,7 +279,7 @@ A estrutura declarada pelas fontes passa pelas mesmas regras de independência:
 | Buscas por run | 30 | run `partial`, motivo `limite` |
 | Fontes lidas por run | 60 | idem |
 | Custo estimado por run | US$ 2,00 | idem |
-| Créditos Tavily por dia | 30 | runs aguardam o dia seguinte |
+| Créditos Tavily por dia | 120 (era 30) | runs aguardam o dia seguinte |
 | Runs novos por dia | 10 | idem |
 | `INGESTION_ENABLED` | `true` | `false` para tudo sem deploy |
 
@@ -454,3 +454,27 @@ Decididos depois do primeiro teste em produção (*1984*, Companhia das Letras, 
     tradutores); o autor e o ano da primeira publicação vêm da obra, com a edição mais antiga como
     reserva para o ano.
 
+Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores em produção:
+
+28. **Byte nulo sai do texto extraído.** O Postgres recusa caracteres de controle em coluna text,
+    e um PDF do archive.org derrubou o passo com "unsupported Unicode escape sequence" ao gravar
+    o texto. `stripControlChars` tira os caracteres de controle (menos tabulação, quebra de linha
+    e retorno) de HTML, PDF e texto puro, antes de qualquer gravação.
+29. **Busca por capítulo cabe na cota diária do Tavily.** O passo `structure` enfileirava até o
+    teto de buscas do run sem olhar a cota do dia; a busca além da cota é adiada para o dia
+    seguinte e, como a segunda tentativa de estrutura espera a coleta terminar, o run inteiro
+    ficava horas parado. Agora o número de buscas por capítulo é limitado também pelo que sobra
+    da cota diária.
+30. **Cota diária do Tavily passa de 30 para 120 créditos.** Um livro sozinho chega ao teto de
+    buscas do run (30 = 5 sobre o livro + uma por capítulo), então 30 por dia não cobria nem um
+    livro: o segundo teste do *1984* parou na 28ª busca. 120 dá quatro livros por dia. O teto que
+    importa de verdade é o do plano do Tavily (1.000 créditos por mês no gratuito, ~33 livros);
+    a cota diária é só a trava contra gastar o mês inteiro de uma vez.
+31. **Só a extração diz se a lista de capítulos é completa.** Peso A (texto integral) não conta
+    mais como lista completa: no segundo teste do 1984, a página do Gutenberg AU tinha parte do
+    livro, declarou 9 capítulos e virou uma segunda estrutura completa que rivalizava com a de 24
+    — as duas caíam. Custo aceito: sem nenhuma fonte com sumário completo, a estrutura não
+    confirma nem com o texto integral na mão.
+32. **Lista parcial é comparada só por número e título.** Parte e número dentro da parte ficam de
+    fora: quem lista um trecho costuma renumerar a parte (no mesmo teste, o índice que começava no
+    capítulo 3 chamava-o de primeiro da parte), e isso sozinho bloqueava a confirmação.

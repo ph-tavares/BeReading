@@ -73,9 +73,18 @@ export function compatible(a: DeclaredChapter[], b: DeclaredChapter[]): boolean 
   return a.every((x, i) => sameChapter(x, b[i]));
 }
 
-/** Lista parcial cabe na estrutura completa: nenhum número além do último e cada capítulo bate. */
+/**
+ * Lista parcial cabe na estrutura completa: nenhum número além do último e nenhum título diferente
+ * no mesmo capítulo. Parte e número dentro da parte não entram na comparação (BER-59): quem lista
+ * só um trecho costuma reiniciar a contagem da parte, e no teste de 1984 o índice que começava no
+ * capítulo 3 numerava-o como o primeiro da parte, o que sozinho derrubava a confirmação.
+ */
 function fitsInto(full: DeclaredChapter[], partial: DeclaredChapter[]): boolean {
-  return partial.every((p) => p.number <= full.length && sameChapter(full[p.number - 1], p));
+  return partial.every((p) => {
+    if (p.number > full.length) return false;
+    const f = full[p.number - 1];
+    return !(f.title && p.title) || normalizeTitle(f.title) === normalizeTitle(p.title);
+  });
 }
 
 function compatibleWithAll(members: StructureCandidate[], candidate: StructureCandidate): boolean {

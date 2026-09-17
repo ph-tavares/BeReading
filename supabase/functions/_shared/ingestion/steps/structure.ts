@@ -3,6 +3,7 @@
 // confirma a estrutura da edição, localiza as afirmações já extraídas e busca de novo os
 // capítulos com menos de 2 grupos independentes falando deles.
 import { LIMITS } from '../budget.ts';
+import { startOfUtcDay } from '../queue.ts';
 import { assignIndependenceGroups } from '../independence.ts';
 import { locateChapter } from '../locate.ts';
 import { buildChapterQuery } from '../queries.ts';
@@ -26,14 +27,23 @@ export const runStructureStep: StepExecutor = async (step, run, ctx) => {
     .filter((s) => (s.declaredStructure?.length ?? 0) > 0)
     .map((s) => ({
       sourceId: s.id, independenceGroup: groups.get(s.id)!, weight: s.weight!, tiedToIsbn: s.tiedToIsbn, chapters: s.declaredStructure!,
-      // Texto integral (peso A) traz os cabeçalhos do livro todo: a lista dele é completa por natureza.
-      complete: (s.declaredStructureComplete ?? false) || s.weight === 'A',
+      // Só a própria extração diz se a fonte lista todos os capítulos. Peso A não basta: no teste
+      // de 1984 (BER-59), a página do Gutenberg AU tinha parte do livro e declarou 9 capítulos,
+      // virando uma segunda estrutura completa que rivalizava com a de 24 e derrubava as duas.
+      complete: s.declaredStructureComplete ?? false,
     }));
   const forQueries = {
     title: edition.title ?? '', authors: edition.authors, publisher: edition.publisher,
     authorDeathYear: edition.authorDeathYear, firstPublishYear: edition.firstPublishYear,
   };
-  const searchesLeft = Math.max(0, LIMITS.maxSearchesPerRun - (run.stats.buscas ?? 0));
+  // Buscas que ainda cabem: teto do run e o que sobrou da cota diária do Tavily. Sem o segundo,
+  // uma busca enfileirada além da cota é adiada para o dia seguinte e segura o run inteiro, porque
+  // a segunda tentativa de estrutura espera a coleta terminar (visto no teste de 1984, BER-59).
+  const spentToday = await ctx.store.sumTavilyCreditsSince(startOfUtcDay(ctx.now()));
+  const searchesLeft = Math.max(0, Math.min(
+    LIMITS.maxSearchesPerRun - (run.stats.buscas ?? 0),
+    LIMITS.maxTavilyCreditsPerDay - spentToday,
+  ));
 
   const confirmed = confirmStructure(candidates);
   if (!confirmed) {
