@@ -68,6 +68,44 @@ Deno.test('parseTableOfContents: parte por nível, sem "Parte" no título (BER-5
   ]);
 });
 
+Deno.test('parseTableOfContents: capítulo solto no topo, seções e três níveis não somem nem deslocam a numeração (BER-59 I8)', () => {
+  assertEquals(parseTableOfContents([
+    { level: 0, title: 'Prólogo' },
+    { level: 0, title: 'Parte 1' },
+    { level: 1, title: 'Cap 1' },
+    { level: 1, title: 'Cap 2' },
+    { level: 0, title: 'Epílogo' },
+  ]), [
+    { number: 1, part: null, numberInPart: null, title: 'Prólogo' },
+    { number: 2, part: 'Parte 1', numberInPart: 1, title: 'Cap 1' },
+    { number: 3, part: 'Parte 1', numberInPart: 2, title: 'Cap 2' },
+    { number: 4, part: null, numberInPart: null, title: 'Epílogo' },
+  ]);
+  assertEquals(parseTableOfContents([
+    { level: 0, title: 'Capítulo 1' },
+    { level: 1, title: '1.1' },
+    { level: 1, title: '1.2' },
+    { level: 0, title: 'Capítulo 2' },
+  ]), [
+    { number: 1, part: null, numberInPart: null, title: 'Capítulo 1' },
+    { number: 2, part: null, numberInPart: null, title: 'Capítulo 2' },
+  ]);
+  assertEquals(parseTableOfContents([
+    { level: 0, title: 'Parte 1' },
+    { level: 1, title: 'Cap 1' },
+    { level: 2, title: 'Seção a' },
+    { level: 1, title: 'Cap 2' },
+  ]), [
+    { number: 1, part: 'Parte 1', numberInPart: 1, title: 'Cap 1' },
+    { number: 2, part: 'Parte 1', numberInPart: 2, title: 'Cap 2' },
+  ]);
+  // Níveis relativos: sumário que começa no nível 1 é lido como se começasse no 0.
+  assertEquals(parseTableOfContents([{ level: 1, title: 'Parte A' }, { level: 2, title: 'Um' }, { level: 2, title: 'Dois' }]), [
+    { number: 1, part: 'Parte A', numberInPart: 1, title: 'Um' },
+    { number: 2, part: 'Parte A', numberInPart: 2, title: 'Dois' },
+  ]);
+});
+
 Deno.test('originalLanguageFromEditions: idioma da edição mais antiga', () => {
   assertEquals(originalLanguageFromEditions([
     { publish_date: '2009', languages: [{ key: '/languages/por' }] },

@@ -79,6 +79,14 @@ export async function recoverStalledRuns(ctx: StepContext): Promise<void> {
         await ctx.notify('ingestion', `run ${run.id} terminou failed: publish_falhou`);
       } else {
         await advanceRun(run.id, ctx);
+        // Run que o planejador não consegue mover (ex.: o `ingest-book` criou o run e falhou ao
+        // enfileirar o passo `edition`) ficaria aberto para sempre, bloqueando novo pedido da
+        // edição com 409 e ocupando vaga de recuperação a cada ciclo. Fecha e avisa (BER-59).
+        const after = await ctx.store.listSteps(run.id);
+        if (!after.some((s) => s.status === 'pending' || s.status === 'running')) {
+          await ctx.store.updateRun(run.id, { status: 'failed', statusReason: 'run_sem_progresso', finishedAt: iso(ctx.now()) });
+          await ctx.notify('ingestion', `run ${run.id} terminou failed: run_sem_progresso`);
+        }
       }
     } catch (err) {
       // Um run com problema não pode parar o worker nem os outros runs.
@@ -146,7 +154,11 @@ export async function runWorker(ctx: StepContext, executors: Record<StepKind, St
   } catch (err) {
     await ctx.notify('ingestion', `falha ao agendar rebuscas: ${err instanceof Error ? err.message : String(err)}`);
   }
-  await recoverStalledRuns(ctx);
+  try {
+    await recoverStalledRuns(ctx);
+  } catch (err) {
+    await ctx.notify('ingestion', `falha ao recuperar runs parados: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   while (ctx.now() - started < WORKER_TIME_BUDGET_MS) {
     const steps = await ctx.store.claimSteps(CLAIM_BATCH, iso(ctx.now() - STALE_LOCK_MS));

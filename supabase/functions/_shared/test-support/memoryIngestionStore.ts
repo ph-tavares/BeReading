@@ -152,7 +152,7 @@ export class MemoryIngestionStore implements IngestionStore {
     const maxAttempts = MAX_RETRIES + 1;
     const stale = (s: StepRow) => s.status === 'running' && s.lockedAt !== null && s.lockedAt < staleBeforeIso;
     for (const step of this.steps.filter((s) => stale(s) && s.attempts >= maxAttempts)) {
-      Object.assign(step, { status: 'failed', error: 'worker_morreu', lockedAt: null });
+      Object.assign(step, { status: 'failed', error: 'worker_morreu', lockedAt: null, finishedAt: now });
     }
     const ready = this.steps
       .filter((s) => (s.status === 'pending' && s.nextAttemptAt <= now) || stale(s))

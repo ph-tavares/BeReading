@@ -35,6 +35,7 @@ export function parseYear(value: unknown): number | null {
 }
 
 const PART_HEADER = /^(parte|part|livro|book)\b/i;
+const CHAPTER_HEADER = /^(cap[ií]tulo|chapter|cap\.)\s*[\divxlc]/i;
 
 // BER-59 (I8): entrada de sumário que não é capítulo de verdade (prefácio, notas, índice etc.).
 // Comparado normalizado (sem acento, minúsculo, sem pontuação final) para não depender de como
@@ -64,9 +65,9 @@ interface TocEntry {
 
 // Um nível 0 é cabeçalho de parte quando existe algo mais fundo antes do próximo nível 0 (a
 // obra pode não usar "Parte"/"Part" no título — ex.: "Genesis", "Exodus").
-function isFollowedByDeeper(entries: TocEntry[], index: number): boolean {
+function isFollowedByDeeper(entries: TocEntry[], index: number, base: number): boolean {
   for (let i = index + 1; i < entries.length; i++) {
-    const level = entries[i].level ?? 0;
+    const level = (entries[i].level ?? 0) - base;
     if (level > 0) return true;
     if (level === 0) return false;
   }
@@ -95,20 +96,29 @@ export function parseTableOfContents(toc: unknown): DeclaredChapter[] {
 
   const hasLevels = entries.some((e) => e.level !== null && e.level > 0);
   if (hasLevels) {
-    // BER-59 (I8): sumário com hierarquia real (a Open Library manda `level`) usa a
-    // profundidade máxima como capítulo; nível 0 seguido de algo mais fundo é parte.
-    const deepest = entries.reduce((max, e) => Math.max(max, e.level ?? 0), 0);
+    // BER-59 (I8): sumário com hierarquia (a Open Library manda `level`). Níveis relativos ao
+    // mais raso. Topo com filhos é parte, salvo quando o título já diz que é capítulo ("Capítulo
+    // 1" com "1.1", "1.2" embaixo: os filhos são seções). Topo sem filhos é capítulo solto
+    // (prólogo, epílogo) e encerra a parte corrente. Filho direto de parte é capítulo; o resto é
+    // seção e não entra, senão a numeração dos capítulos seguintes desloca.
+    const base = entries.reduce((min, e) => Math.min(min, e.level ?? 0), Infinity);
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
-      const level = e.level ?? 0;
-      if (level === 0 && isFollowedByDeeper(entries, i)) {
-        part = e.title;
+      const level = (e.level ?? 0) - base;
+      if (level === 0) {
+        if (isFollowedByDeeper(entries, i, base) && !CHAPTER_HEADER.test(e.title)) {
+          part = e.title;
+          inPart = 0;
+          continue;
+        }
+        part = null;
         inPart = 0;
+        chapters.push({ number: chapters.length + 1, part: null, numberInPart: null, title: e.title });
         continue;
       }
-      if (level !== deepest) continue;
+      if (level !== 1 || part === null) continue;
       inPart += 1;
-      chapters.push({ number: chapters.length + 1, part, numberInPart: part ? inPart : null, title: e.title });
+      chapters.push({ number: chapters.length + 1, part, numberInPart: inPart, title: e.title });
     }
     return chapters;
   }

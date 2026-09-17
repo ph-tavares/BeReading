@@ -239,3 +239,30 @@ Deno.test('recoverStalledRuns: erro num run avisa e não impede os outros (BER-5
   assertEquals(ctx.notifications.length, 1);
   assertEquals(store.steps.filter((s) => s.runId === b.run.id && s.kind === 'structure').length, 1);
 });
+
+Deno.test('recoverStalledRuns: run sem nenhum passo (enfileirar falhou) fecha como failed e libera a edição (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const edition = await store.insertEdition('9780000000002', null);
+  const orfao = await store.createRun(edition.id, {});
+  envelhecer(store, orfao.id);
+
+  const ctx = fakeContext(store);
+  await recoverStalledRuns(ctx);
+
+  const final = await store.getRun(orfao.id);
+  assertEquals([final.status, final.statusReason], ['failed', 'run_sem_progresso']);
+  assertEquals(await store.findActiveRun(edition.id), null);
+  assertEquals(ctx.notifications.length, 1);
+});
+
+Deno.test('runWorker: falha ao listar runs parados avisa e não impede o worker de processar passos (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  await seed(store);
+  store.listStalledRuns = () => Promise.reject(new Error('lista explodiu'));
+  const { ctx } = pipelineContext(store);
+
+  const report = await runWorker(ctx);
+
+  assert(report.processed > 0);
+  assert(ctx.notifications.some((n) => n.includes('lista explodiu')));
+});

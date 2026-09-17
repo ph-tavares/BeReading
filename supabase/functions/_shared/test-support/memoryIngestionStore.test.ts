@@ -113,6 +113,7 @@ Deno.test('claimSteps: passo com trava velha e 4 tentativas vira failed worker_m
 
   assertEquals(claimed.map((s) => [s.subject, s.attempts]), [['reaproveitado', 3]]);
   assertEquals([store.steps[0].status, store.steps[0].error, store.steps[0].lockedAt], ['failed', 'worker_morreu', null]);
+  assertNotEquals(store.steps[0].finishedAt, null);
 });
 
 Deno.test('finishStep: finishedAt só quando o passo termina em done ou failed (BER-59)', async () => {
