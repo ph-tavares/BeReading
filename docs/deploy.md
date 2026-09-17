@@ -273,10 +273,15 @@ capítulo é spoiler, e só as functions com chave de servidor acessam.
 
 - `ingest-book` (interna) recebe `{ "isbn": "...", "book_id": "<uuid, opcional>" }`, cria o run e
   enfileira o primeiro passo. Devolve `202` com `run_id`.
-- O `pg_cron` chama `process-ingestion` a cada minuto (job `process-ingestion`). Cada chamada
-  reivindica um passo por vez e para de reivindicar outro depois de até 70 s, para caber no
-  relógio da Edge Function; o que sobrar fica para a chamada seguinte.
-- Como o `pg_cron` dispara a cada minuto sem esperar a chamada anterior terminar, invocações do
+- O `pg_cron` confere a cada 20 s se há trabalho (passo pronto, trava velha ou run aberto) e só
+  então chama `process-ingestion` (job `process-ingestion`, migration `20260918150000`). Com a
+  fila vazia, chama uma vez a cada 10 min, para limpar texto vencido e agendar rebuscas.
+- Cada chamada reivindica um passo por vez e para de reivindicar outro depois de 70 s de relógio
+  **ou 1 s de CPU**: a Edge Function morre com `CPU Time exceeded` aos 2 s. A resposta da chamada
+  traz `cpuMs` quando o runtime expõe o gasto (veja em `net._http_response`).
+- PDF é lido em lotes de 50 páginas, um passo `fetch` por lote (assunto `…#bereading-pagina-N`);
+  a extração só começa depois do último lote.
+- Como o `pg_cron` dispara sem esperar a chamada anterior terminar, invocações do
   worker podem se sobrepor. Isso é aceito: `claim_ingestion_steps` reivindica cada passo com
   trava exclusiva (`for update skip locked`), então duas invocações nunca executam o mesmo passo;
   o limite por domínio (`fetchPage`/`fetchRobots`), porém, é por invocação, não global.
@@ -324,7 +329,7 @@ select kind, subject, status, attempts, next_attempt_at, error
 from public.ingestion_steps where run_id = '<run_id>' and status <> 'done'
 order by created_at;
 
--- Fontes rejeitadas por motivo (inclui PDFs de livro protegido sem autorização)
+-- Fontes rejeitadas por motivo
 select rejection_reason, is_book_file, count(*)
 from public.ingestion_sources where run_id = '<run_id>' and decision = 'rejected'
 group by 1, 2 order by 3 desc;
@@ -385,8 +390,9 @@ Mudança de lista vai por migration quando for permanente, para não divergir do
 
 ### Regras que não mudam sem decisão do time
 
-- Texto integral de obra protegida sem sinal de autorização é rejeitado
-  (`texto_integral_sem_autorizacao`). Mudar isso exige parecer jurídico (spec §10).
+- Texto integral sem sinal de autorização: decisão de 17/09/2026 de aceitar como `web`, peso A
+  (spec §11, item 23). Até então era rejeitado com `texto_integral_sem_autorizacao`. Para listar
+  esses textos: `is_book_file and decision = 'accepted' and public_domain_basis is null`.
 - Texto bruto de fonte só existe em `ingestion_source_texts`, apagado ao fim da extração e fora do
   backup (`-x public.ingestion_source_texts` no `backup.yml`).
 

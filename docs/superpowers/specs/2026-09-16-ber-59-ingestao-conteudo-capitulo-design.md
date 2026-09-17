@@ -170,7 +170,8 @@ Tudo em código, aplicado **antes** de o texto chegar à IA. Toda decisão vai p
    - domínio oficial da editora, do autor ou de instituição;
    - repositório de acesso aberto na lista `allowed`.
 
-   **Sem sinal, texto integral de obra protegida é rejeitado** (`texto_integral_sem_autorizacao`).
+   **Sem sinal:** rejeitado com `texto_integral_sem_autorizacao` até 17/09/2026; desde então,
+   aceito como `web`, peso A (decisão de produto, §11 item 23).
    Resumo, resenha, análise, guia de estudo e trecho não são texto integral e seguem as regras
    normais em qualquer domínio.
 5. **Domínio público:** regra do país aplicável (Brasil: 70 anos contados de 1º de janeiro do ano
@@ -358,9 +359,8 @@ migração do progresso dos leitores) é o primeiro item do próximo ciclo.
 - ISBN da edição de cada livro do piloto e a escolha da não-ficção argumentativa.
 - Gabarito às cegas dos 8 capítulos de aceitação.
 - Conta no Tavily e secret `TAVILY_API_KEY` em produção.
-- **Texto integral de obra protegida sem sinal de autorização:** a política deste design rejeita e
-  registra o motivo. O time defende consumir; a decisão de mudar essa regra fica com o time e deve
-  vir com parecer jurídico. O relatório de rejeitados (§8.6) dá o número para essa conversa.
+- **Texto integral de obra protegida sem sinal de autorização:** o time decidiu aceitar em
+  17/09/2026 (§11, item 23). Parecer jurídico continua pendente.
 
 ## 11. Refinamentos do plano de implementação
 
@@ -421,3 +421,35 @@ Decididos ao executar o plano (PR 1 e PR 2):
     ainda vai para uma única invocação; o efeito aceito é que o limite por domínio de
     `fetchPage`/`fetchRobots` (spec §5) é por invocação, não compartilhado entre invocações
     simultâneas.
+
+Decididos depois do primeiro teste em produção (*1984*, Companhia das Letras, ISBN 9788535914849,
+17/09/2026; run `partial` por estrutura não confirmada, registrado na BER-59):
+
+23. **Texto integral sem sinal de autorização é aceito** (decisão de produto do time, tomada sem
+    parecer jurídico; o risco foi apontado na conversa e está na BER-59). PDF de livro inteiro ou
+    página com volume de corpo de livro sem domínio público, licença aberta, repositório autorizado
+    nem editora entra como `source_type = 'web'`, peso A, sem `public_domain_basis`. Efeitos: peso A
+    confirma fato com uma única fonte (§6.2); na auditoria, esses textos são os de
+    `is_book_file = true` aceitos sem `public_domain_basis`. Domínios bloqueados continuam
+    rejeitados antes desta regra.
+24. **Lista de capítulos parcial não é edição rival.** A extração devolve `estrutura_completa`
+    (gravado em `ingestion_sources.declared_structure_complete`); texto integral (peso A) conta como
+    lista completa. Só lista completa vira hipótese de estrutura. Lista parcial (números seguidos a
+    partir de qualquer capítulo) apoia os capítulos que traz, conta como grupo independente só se
+    chega ao último capítulo, e é conflito se tiver número além do último ou capítulo que não bate.
+    Custo aceito: uma edição com capítulos a menos no fim não se distingue de uma lista cortada.
+25. **Segunda tentativa de estrutura.** Sem confirmação na primeira tentativa, o passo `structure`
+    busca capítulo a capítulo pelo melhor palpite (a maior lista completa; sem nenhuma, a maior que
+    começa no capítulo 1), dentro do teto de buscas do run, e o planejador agenda `structure` de
+    novo (assunto `2`) quando a coleta terminar. O motivo `estrutura_nao_confirmada` só é gravado
+    se a segunda tentativa também falhar. O palpite nunca localiza fato.
+26. **Limite de 2 s de CPU da Edge Function.** Extrair um PDF de 384 páginas de uma vez estourou o
+    limite e derrubou o worker quatro vezes. PDF é lido em lotes de 50 páginas, um passo por lote,
+    com a política decidida no primeiro lote; o worker para de reivindicar passo depois de 1 s de
+    CPU na chamada (via `process.cpuUsage`; sem ele, só o orçamento de relógio vale); o cron passa
+    a cada 20 s e só chama quando há passo pronto ou run aberto, mais uma chamada a cada 10 min
+    para limpeza e rebuscas.
+27. **Autor pela obra.** Registro de edição da Open Library pode não trazer `authors` (só
+    tradutores); o autor e o ano da primeira publicação vêm da obra, com a edição mais antiga como
+    reserva para o ano.
+
