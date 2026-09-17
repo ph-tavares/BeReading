@@ -39,3 +39,19 @@ Deno.test('assertPublicUrl: aceita quando resolver retorna null (sem DNS no runt
   const url = await assertPublicUrl('https://example.com/path', noDns);
   assertEquals(url.hostname, 'example.com');
 });
+
+Deno.test('isPrivateAddress: IPv4 embutido em IPv6 (mapeado, compatível, NAT64, 6to4), multicast e TEST-NET', () => {
+  for (const ip of ['::ffff:7f00:1', '::ffff:a9fe:a9fe', '0:0:0:0:0:ffff:7f00:1', '::7f00:1', '64:ff9b::a9fe:a9fe', '2002:7f00:1::', 'ff02::1', '192.0.2.5']) {
+    assertEquals(isPrivateAddress(ip), true, ip);
+  }
+  for (const ip of ['::ffff:808:808', '2002:808:808::', '2606:4700::1111']) {
+    assertEquals(isPrivateAddress(ip), false, ip);
+  }
+});
+
+Deno.test('assertPublicUrl: recusa IPv4 privado escrito como IPv6', async () => {
+  const pub = resolvesTo('8.8.8.8');
+  for (const raw of ['http://[::ffff:127.0.0.1]/', 'http://[::ffff:169.254.169.254]/', 'http://[::127.0.0.1]/', 'http://[64:ff9b::a9fe:a9fe]/']) {
+    await assertRejects(() => assertPublicUrl(raw, pub), UnsafeUrlError, undefined, raw);
+  }
+});

@@ -20,21 +20,61 @@ function ipv4ToNumber(ip: string): number | null {
 
 const IPV4_BLOCKED: [string, number][] = [
   ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16],
-  ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['224.0.0.0', 4], ['240.0.0.0', 4],
+  ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15],
+  ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4],
 ];
+
+function isPrivateIpv4(v4: number): boolean {
+  return IPV4_BLOCKED.some(([base, bits]) => {
+    const start = ipv4ToNumber(base)!;
+    return v4 >= start && v4 < start + 2 ** (32 - bits);
+  });
+}
+
+/** Expande um IPv6 (com `::` e cauda IPv4 opcional) em 8 hextetos; `null` se não for IPv6 válido. */
+function expandIpv6(address: string): number[] | null {
+  let text = address;
+  const lastColon = text.lastIndexOf(':');
+  if (lastColon < 0) return null;
+  const last = text.slice(lastColon + 1);
+  if (last.includes('.')) {
+    const v4 = ipv4ToNumber(last);
+    if (v4 === null) return null;
+    text = `${text.slice(0, lastColon + 1)}${Math.floor(v4 / 65536).toString(16)}:${(v4 % 65536).toString(16)}`;
+  }
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+  const groups = (half: string) => (half === '' ? [] : half.split(':'));
+  const head = groups(halves[0]);
+  const tail = halves.length === 2 ? groups(halves[1]) : [];
+  if (![...head, ...tail].every((g) => /^[0-9a-f]{1,4}$/.test(g))) return null;
+  const explicit = head.length + tail.length;
+  if (halves.length === 1 ? explicit !== 8 : explicit > 7) return null;
+  const fill = halves.length === 2 ? Array(8 - explicit).fill('0') : [];
+  return [...head, ...fill, ...tail].map((g) => parseInt(g, 16));
+}
 
 export function isPrivateAddress(ip: string): boolean {
   const address = ip.replace(/^\[|\]$/g, '').toLowerCase();
   const v4 = ipv4ToNumber(address);
-  if (v4 !== null) {
-    return IPV4_BLOCKED.some(([base, bits]) => {
-      const start = ipv4ToNumber(base)!;
-      return v4 >= start && v4 < start + 2 ** (32 - bits);
-    });
-  }
-  if (address.startsWith('::ffff:')) return isPrivateAddress(address.slice(7));
-  if (address === '::1' || address === '::') return true;
-  return /^f[cd]/.test(address) || /^fe[89ab]/.test(address);
+  if (v4 !== null) return isPrivateIpv4(v4);
+
+  // BER-59: `new URL` normaliza `[::ffff:127.0.0.1]` para `[::ffff:7f00:1]`, e NAT64/6to4
+  // também levam a um IPv4. Sem expandir e extrair o IPv4 embutido, esses endereços
+  // passariam pela guarda e alcançariam loopback ou metadados de nuvem.
+  const h = expandIpv6(address);
+  if (h === null) return true; // não é IP reconhecível: recusa (fail-closed)
+  const embedded = () => isPrivateIpv4(h[6] * 65536 + h[7]);
+  const zeros = (n: number) => h.slice(0, n).every((x) => x === 0);
+  if (zeros(8)) return true; // ::
+  if (zeros(7) && h[7] === 1) return true; // ::1
+  if (zeros(5) && h[5] === 0xffff) return embedded(); // IPv4-mapped ::ffff:0:0/96
+  if (zeros(6)) return embedded(); // IPv4-compatible ::/96
+  if (h[0] === 0x64 && h[1] === 0xff9b && h.slice(2, 6).every((x) => x === 0)) return embedded(); // NAT64 64:ff9b::/96
+  if (h[0] === 0x2002) return isPrivateIpv4(h[1] * 65536 + h[2]); // 6to4 2002::/16
+  if ((h[0] & 0xfe00) === 0xfc00) return true; // fc00::/7
+  if ((h[0] & 0xffc0) === 0xfe80) return true; // fe80::/10
+  return (h[0] & 0xff00) === 0xff00; // ff00::/8 multicast
 }
 
 export async function assertPublicUrl(raw: string, resolve: ResolveFn): Promise<URL> {
