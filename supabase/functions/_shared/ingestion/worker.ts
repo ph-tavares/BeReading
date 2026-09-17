@@ -134,8 +134,18 @@ export async function runWorker(ctx: StepContext, executors: Record<StepKind, St
   const started = ctx.now();
   const report: WorkerReport = { processed: 0, failed: 0, deferred: 0, rechecks: 0 };
 
-  await ctx.store.deleteSourceTextsBefore(iso(started - SOURCE_TEXT_TTL_MS));
-  report.rechecks = await scheduleRechecks(ctx);
+  // BER-59 (M4): limpeza de texto vencido e agendamento de rebusca não podem derrubar o ciclo
+  // inteiro — um erro nelas não pode impedir os passos já na fila de serem processados.
+  try {
+    await ctx.store.deleteSourceTextsBefore(iso(started - SOURCE_TEXT_TTL_MS));
+  } catch (err) {
+    await ctx.notify('ingestion', `falha ao apagar texto bruto vencido: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  try {
+    report.rechecks = await scheduleRechecks(ctx);
+  } catch (err) {
+    await ctx.notify('ingestion', `falha ao agendar rebuscas: ${err instanceof Error ? err.message : String(err)}`);
+  }
   await recoverStalledRuns(ctx);
 
   while (ctx.now() - started < WORKER_TIME_BUDGET_MS) {

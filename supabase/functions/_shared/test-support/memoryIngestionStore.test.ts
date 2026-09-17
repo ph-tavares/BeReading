@@ -143,3 +143,22 @@ Deno.test('listStalledRuns: run sem passo criado há 1 minuto não volta; criado
   const stalled = await store.listStalledRuns(10, new Date(now - 5 * 60_000).toISOString());
   assertEquals(stalled.map((r) => r.id), [velho.id]);
 });
+
+Deno.test('findActiveRun: acha run queued/running da edição; ignora terminado e de outra edição (BER-59 M1)', async () => {
+  const store = new MemoryIngestionStore();
+  const edition = await store.insertEdition('9788535910663', null);
+  const outraEdicao = await store.insertEdition('9780000000009', null);
+
+  assertEquals(await store.findActiveRun(edition.id), null);
+
+  const done = await store.createRun(edition.id, {});
+  await store.updateRun(done.id, { status: 'succeeded', finishedAt: new Date().toISOString() });
+  assertEquals(await store.findActiveRun(edition.id), null);
+
+  await store.createRun(outraEdicao.id, {});
+  assertEquals(await store.findActiveRun(edition.id), null);
+
+  const running = await store.createRun(edition.id, {});
+  const active = await store.findActiveRun(edition.id);
+  assertEquals(active?.id, running.id);
+});

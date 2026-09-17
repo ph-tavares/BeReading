@@ -172,6 +172,15 @@ export class SupabaseIngestionStore implements IngestionStore {
     return count ?? 0;
   }
 
+  async findActiveRun(editionId: string) {
+    // BER-59 (M1): uma linha basta, sem paginação (só existe um run `queued`/`running` por vez
+    // por edição, e este método é exatamente o que garante isso em `ingest-book`).
+    const { data, error, status } = await this.db.from('ingestion_runs').select('*')
+      .eq('edition_id', editionId).in('status', ['queued', 'running']).limit(1).maybeSingle();
+    if (error) throw storeError(status, `findActiveRun: ${error.message}`);
+    return data ? toRun(data) : null;
+  }
+
   async listStalledRuns(limit: number, startedBeforeIso: string) {
     // Duas consultas em vez de uma função SQL (BER-59): runs abertos página a página, e para cada
     // lote os que ainda têm passo ativo. Para no `limit`; o resto fica para o próximo ciclo.

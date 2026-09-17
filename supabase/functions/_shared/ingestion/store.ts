@@ -140,6 +140,8 @@ export interface IngestionStore {
 
   createRun(editionId: string, payload: RunRow['payload']): Promise<RunRow>;
   getRun(id: string): Promise<RunRow>;
+  /** Run `queued`/`running` da edição, se existir (BER-59 M1): evita duas ingestões da mesma edição ao mesmo tempo. */
+  findActiveRun(editionId: string): Promise<RunRow | null>;
   updateRun(id: string, patch: { status?: RunStatus; statusReason?: string | null; finishedAt?: string | null; structureDivergence?: unknown }): Promise<void>;
   incrementRunStats(id: string, delta: Record<string, number>): Promise<void>;
   countRunsSince(iso: string): Promise<number>;

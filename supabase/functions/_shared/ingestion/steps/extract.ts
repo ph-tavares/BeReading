@@ -18,7 +18,9 @@ export const runExtractStep: StepExecutor = async (step, run, ctx) => {
   }
 
   const text = await ctx.store.getSourceText(sourceId);
-  if (text === null) return { payload: { skipped: 'texto_ja_descartado' } };
+  // BER-59 (M6): sem stat, um TTL agressivo ou reexecução tardia apagaria blocos de conteúdo em
+  // silêncio — a contagem no run deixa visível quanto texto a extração perdeu por atraso.
+  if (text === null) return { payload: { skipped: 'texto_ja_descartado' }, stats: { blocos_sem_texto: 1 } };
 
   const chunks = splitIntoChunks(text);
   const chunk = chunks[index];

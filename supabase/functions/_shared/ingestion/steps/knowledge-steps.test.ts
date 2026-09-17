@@ -73,6 +73,16 @@ Deno.test('extract: com o teto de custo atingido, descarta o texto sem chamar a 
   assertEquals([outcome.runStatusReason, await store.getSourceText(source.id)], ['limite', null]);
 });
 
+Deno.test('extract: texto já descartado soma blocos_sem_texto ao run (BER-59 M6)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seedRun(store);
+  const source = await addSource(store, run, 'blog.com', 'D');
+  // Sem saveSourceText: o texto já foi apagado (TTL, custo estourado ou passo repetido tarde demais).
+  const outcome = await runExtractStep(stepRow(run, 'extract', `${source.id}#0`), run, fakeContext(store));
+  assertEquals(outcome.payload, { skipped: 'texto_ja_descartado' });
+  assertEquals(outcome.stats, { blocos_sem_texto: 1 });
+});
+
 Deno.test('extract: reexecutar o mesmo bloco substitui as afirmações em vez de duplicar', async () => {
   const store = new MemoryIngestionStore(() => NOW);
   const { run } = await seedRun(store);

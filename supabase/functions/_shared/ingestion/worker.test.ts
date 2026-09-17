@@ -149,6 +149,31 @@ Deno.test('scheduleRechecks: run que falha ao criar só adia a rebusca em 7 dias
   assertEquals(due, [{ editionId: edition.id, chapterNumbers: [1] }]);
 });
 
+Deno.test('runWorker: falha ao apagar texto bruto vencido avisa a operação e não impede o worker de processar passos (BER-59 M4)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  await seed(store);
+  store.deleteSourceTextsBefore = () => Promise.reject(new Error('disco cheio'));
+  const { ctx } = pipelineContext(store);
+
+  const report = await runWorker(ctx);
+
+  assert(report.processed > 0);
+  assert(ctx.notifications.some((n) => n.includes('disco cheio')));
+});
+
+Deno.test('runWorker: falha ao agendar rebuscas avisa a operação e não impede o worker de processar passos (BER-59 M4)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  await seed(store);
+  store.dueRechecks = () => Promise.reject(new Error('rebusca explodiu'));
+  const { ctx } = pipelineContext(store);
+
+  const report = await runWorker(ctx);
+
+  assertEquals(report.rechecks, 0);
+  assert(report.processed > 0);
+  assert(ctx.notifications.some((n) => n.includes('rebusca explodiu')));
+});
+
 Deno.test('runWorker: passo adiado devolve a tentativa que a reivindicação contou (BER-59)', async () => {
   const store = new MemoryIngestionStore(() => NOW);
   await seed(store);

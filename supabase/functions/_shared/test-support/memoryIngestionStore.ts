@@ -117,6 +117,10 @@ export class MemoryIngestionStore implements IngestionStore {
     return this.runs.filter((r) => r.startedAt >= iso).length;
   }
 
+  async findActiveRun(editionId: string) {
+    return this.runs.find((r) => r.editionId === editionId && (r.status === 'queued' || r.status === 'running')) ?? null;
+  }
+
   async listStalledRuns(limit: number, startedBeforeIso: string) {
     const active = new Set(this.steps.filter((s) => s.status === 'pending' || s.status === 'running').map((s) => s.runId));
     return this.runs

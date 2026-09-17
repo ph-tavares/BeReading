@@ -4,6 +4,7 @@
 // (operação manual) e o CRON_SECRET, que o cron lê do Vault — o mesmo desenho do
 // retry-pending-quizzes (BER-33, BER-84).
 import { assertInternalCaller, authErrorResponse } from '../_shared/auth.ts';
+import { ingestionDisabled } from '../_shared/ingestion/kill-switch.ts';
 import { buildProductionContext } from '../_shared/ingestion/production-context.ts';
 import type { StepContext } from '../_shared/ingestion/steps/context.ts';
 import { runWorker } from '../_shared/ingestion/worker.ts';
@@ -32,7 +33,7 @@ export async function handler(req: Request, deps: ProcessIngestionDeps = default
     return authErrorResponse(err);
   }
 
-  if (deps.getEnv('INGESTION_ENABLED') === 'false') {
+  if (ingestionDisabled(deps.getEnv('INGESTION_ENABLED'))) {
     return json(200, { data: { skipped: 'INGESTION_ENABLED=false' }, error: null });
   }
 
