@@ -38,3 +38,9 @@ $$;
 -- só o worker (service_role) reivindica passos.
 revoke all on function public.claim_ingestion_steps(int, timestamptz) from public, anon, authenticated;
 grant execute on function public.claim_ingestion_steps(int, timestamptz) to service_role;
+
+-- BER-59: a cota diária do Tavily somava os créditos dos runs iniciados hoje, e um run começado
+-- ontem que buscava hoje ficava de fora. `finished_at` marca quando o passo virou `done`/`failed`,
+-- para a cota contar os créditos das buscas terminadas no dia. Coluna nula, sem default: os passos
+-- antigos não entram na soma, o que só afeta o dia da migração.
+alter table public.ingestion_steps add column finished_at timestamptz;

@@ -51,6 +51,8 @@ export interface StepRow {
   attempts: number;
   nextAttemptAt: string;
   lockedAt: string | null;
+  /** Quando virou `done`/`failed` (BER-59): a cota diária do Tavily conta pelo fim da busca, não pelo início do run. */
+  finishedAt: string | null;
   error: string | null;
   payload: Record<string, unknown>;
 }
@@ -143,7 +145,8 @@ export interface IngestionStore {
   countRunsSince(iso: string): Promise<number>;
   /** Runs `queued`/`running` sem nenhum passo `pending`/`running` (BER-59): ninguém mais os avançaria. */
   listStalledRuns(limit: number): Promise<RunRow[]>;
-  sumRunStatSince(key: string, iso: string): Promise<number>;
+  /** Soma `payload.creditos` dos passos `discover` terminados (`done`) desde `iso` (BER-59). */
+  sumTavilyCreditsSince(iso: string): Promise<number>;
 
   enqueueSteps(steps: NewStep[]): Promise<void>;
   claimSteps(limit: number, staleBeforeIso: string): Promise<StepRow[]>;

@@ -83,7 +83,7 @@ const toRun = (r: Row): RunRow => ({
 
 const toStep = (r: Row): StepRow => ({
   id: r.id, runId: r.run_id, kind: r.kind, subject: r.subject, status: r.status, attempts: r.attempts,
-  nextAttemptAt: r.next_attempt_at, lockedAt: r.locked_at, error: r.error, payload: r.payload ?? {},
+  nextAttemptAt: r.next_attempt_at, lockedAt: r.locked_at, finishedAt: r.finished_at, error: r.error, payload: r.payload ?? {},
 });
 
 const toSource = (r: Row): SourceRow => ({
@@ -194,9 +194,12 @@ export class SupabaseIngestionStore implements IngestionStore {
     return stalled.slice(0, limit);
   }
 
-  async sumRunStatSince(key: string, iso: string) {
-    const rows = await selectAll(() => this.db.from('ingestion_runs').select('stats').gte('started_at', iso), 'sumRunStatSince');
-    return rows.reduce((sum: number, r: Row) => sum + Number(r.stats?.[key] ?? 0), 0);
+  async sumTavilyCreditsSince(iso: string) {
+    const rows = await selectAll(
+      () => this.db.from('ingestion_steps').select('id, payload').eq('kind', 'discover').eq('status', 'done').gte('finished_at', iso),
+      'sumTavilyCreditsSince',
+    );
+    return rows.reduce((sum: number, r: Row) => sum + (Number(r.payload?.creditos) || 0), 0);
   }
 
   async enqueueSteps(steps: NewStep[]) {
@@ -215,7 +218,9 @@ export class SupabaseIngestionStore implements IngestionStore {
   }
 
   async finishStep(id: string, patch: { status: StepRow['status']; attempts?: number; nextAttemptAt?: string; error?: string | null; payload?: Record<string, unknown> }) {
-    const row: Row = { status: patch.status, locked_at: null };
+    // `finished_at` marca o fim do passo (BER-59); volta a null se ele for reagendado.
+    const finished = patch.status === 'done' || patch.status === 'failed';
+    const row: Row = { status: patch.status, locked_at: null, finished_at: finished ? new Date().toISOString() : null };
     if (patch.attempts !== undefined) row.attempts = patch.attempts;
     if (patch.nextAttemptAt !== undefined) row.next_attempt_at = patch.nextAttemptAt;
     if (patch.error !== undefined) row.error = patch.error;

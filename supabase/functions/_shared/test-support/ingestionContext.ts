@@ -49,7 +49,7 @@ export async function seedRun(
 export function stepRow(run: RunRow, kind: StepKind, subject: string, payload: Record<string, unknown> = {}): StepRow {
   return {
     id: crypto.randomUUID(), runId: run.id, kind, subject, status: 'running', attempts: 0,
-    nextAttemptAt: new Date(NOW).toISOString(), lockedAt: new Date(NOW).toISOString(), error: null, payload,
+    nextAttemptAt: new Date(NOW).toISOString(), lockedAt: new Date(NOW).toISOString(), finishedAt: null, error: null, payload,
   };
 }
 

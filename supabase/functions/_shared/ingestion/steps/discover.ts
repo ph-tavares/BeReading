@@ -8,7 +8,9 @@ import { DeferStepError, type StepExecutor } from './context.ts';
 export const runDiscoverStep: StepExecutor = async (step, run, ctx) => {
   if (exceededLimit(run.stats)) return { payload: { skipped: 'limite' }, runStatusReason: 'limite' };
 
-  const spentToday = await ctx.store.sumRunStatSince('creditos_tavily', startOfUtcDay(ctx.now()));
+  // Conta pelo fim de cada busca (BER-59): somar os runs iniciados hoje deixava de fora as buscas
+  // feitas hoje por um run que começou ontem, e a cota diária do Tavily estourava.
+  const spentToday = await ctx.store.sumTavilyCreditsSince(startOfUtcDay(ctx.now()));
   if (spentToday >= LIMITS.maxTavilyCreditsPerDay) throw new DeferStepError(nextUtcDay(ctx.now()));
 
   const response = await ctx.search(step.subject);
@@ -20,6 +22,6 @@ export const runDiscoverStep: StepExecutor = async (step, run, ctx) => {
   return {
     enqueue: fresh.map((r) => ({ kind: 'fetch' as const, subject: r.url, payload: { title: r.title } })),
     stats: searchDelta(response.credits),
-    payload: { resultados: response.results.length, enfileirados: fresh.length },
+    payload: { resultados: response.results.length, enfileirados: fresh.length, creditos: response.credits },
   };
 };

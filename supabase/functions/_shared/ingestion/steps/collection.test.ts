@@ -52,6 +52,7 @@ Deno.test('discover: enfileira downloads novos, sem repetir, respeitando o teto 
   const outcome = await runDiscoverStep(stepRow(run, 'discover', 'q'), run, ctx);
   assertEquals(outcome.enqueue, [{ kind: 'fetch', subject: 'https://nova.com/y', payload: { title: 'nova' } }]);
   assertEquals(outcome.stats, { buscas: 1, creditos_tavily: 1 });
+  assertEquals(outcome.payload?.creditos, 1);
 });
 
 Deno.test('discover: pula quando o run bateu teto e adia quando a cota diária acabou', async () => {
@@ -62,7 +63,9 @@ Deno.test('discover: pula quando o run bateu teto e adia quando a cota diária a
   const noTeto = { ...run, stats: { buscas: LIMITS.maxSearchesPerRun } };
   assertEquals(await runDiscoverStep(stepRow(run, 'discover', 'q'), noTeto, ctx), { payload: { skipped: 'limite' }, runStatusReason: 'limite' });
 
-  await store.incrementRunStats(run.id, { creditos_tavily: LIMITS.maxTavilyCreditsPerDay });
+  // BER-59: a cota diária conta os créditos dos `discover` terminados hoje, não as estatísticas do run.
+  await store.enqueueSteps([{ runId: run.id, kind: 'discover', subject: 'gastou' }]);
+  await store.finishStep(store.steps[0].id, { status: 'done', payload: { creditos: LIMITS.maxTavilyCreditsPerDay } });
   const err = await assertRejects(() => runDiscoverStep(stepRow(run, 'discover', 'q'), run, ctx), DeferStepError);
   assertEquals(err.until, '2026-09-17T00:05:00.000Z');
 });
@@ -126,4 +129,28 @@ Deno.test('publisherDomainMatches: domínio com o nome da editora', () => {
   assertEquals(publisherDomainMatches('intrinseca.com.br', 'Intrínseca'), true);
   assertEquals(publisherDomainMatches('blog.com', 'Companhia das Letras'), false);
   assertEquals(publisherDomainMatches('ab.com', 'AB'), false);
+});
+
+Deno.test('discover: créditos de busca terminada hoje contam mesmo com o run começado ontem (BER-59)', async () => {
+  let clock = NOW - 24 * 60 * 60 * 1000;
+  const store = new MemoryIngestionStore(() => clock);
+  const ontem = await seedRun(store);
+  await store.enqueueSteps([
+    { runId: ontem.run.id, kind: 'discover', subject: 'terminou ontem' },
+    { runId: ontem.run.id, kind: 'discover', subject: 'terminou hoje' },
+  ]);
+  await store.finishStep(store.steps[0].id, { status: 'done', payload: { creditos: LIMITS.maxTavilyCreditsPerDay } });
+  clock = NOW;
+  const hoje = await seedRun(store);
+  let buscas = 0;
+  const ctx = fakeContext(store, { search: () => (buscas++, Promise.resolve({ results: [], credits: 1 })) });
+
+  // Só o de ontem: a cota de hoje está livre.
+  await runDiscoverStep(stepRow(hoje.run, 'discover', 'q1'), hoje.run, ctx);
+  assertEquals(buscas, 1);
+
+  await store.finishStep(store.steps[1].id, { status: 'done', payload: { creditos: LIMITS.maxTavilyCreditsPerDay } });
+  assertEquals(await store.sumTavilyCreditsSince(new Date(Date.UTC(2026, 8, 16)).toISOString()), LIMITS.maxTavilyCreditsPerDay);
+  const err = await assertRejects(() => runDiscoverStep(stepRow(hoje.run, 'discover', 'q2'), hoje.run, ctx), DeferStepError);
+  assertEquals([err.until, buscas], ['2026-09-17T00:05:00.000Z', 1]);
 });

@@ -122,8 +122,10 @@ export class MemoryIngestionStore implements IngestionStore {
     return this.runs.filter((r) => (r.status === 'queued' || r.status === 'running') && !active.has(r.id)).slice(0, limit);
   }
 
-  async sumRunStatSince(key: string, iso: string) {
-    return this.runs.filter((r) => r.startedAt >= iso).reduce((sum, r) => sum + (r.stats[key] ?? 0), 0);
+  async sumTavilyCreditsSince(iso: string) {
+    return this.steps
+      .filter((s) => s.kind === 'discover' && s.status === 'done' && s.finishedAt !== null && s.finishedAt >= iso)
+      .reduce((sum, s) => sum + (Number(s.payload.creditos) || 0), 0);
   }
 
   async enqueueSteps(steps: NewStep[]) {
@@ -132,7 +134,7 @@ export class MemoryIngestionStore implements IngestionStore {
       if (exists) continue;
       this.steps.push({
         id: crypto.randomUUID(), runId: step.runId, kind: step.kind, subject: step.subject, status: 'pending', attempts: 0,
-        nextAttemptAt: step.nextAttemptAt ?? this.iso(), lockedAt: null, error: null, payload: step.payload ?? {},
+        nextAttemptAt: step.nextAttemptAt ?? this.iso(), lockedAt: null, finishedAt: null, error: null, payload: step.payload ?? {},
       });
     }
   }
@@ -160,7 +162,8 @@ export class MemoryIngestionStore implements IngestionStore {
 
   async finishStep(id: string, patch: { status: StepRow['status']; attempts?: number; nextAttemptAt?: string; error?: string | null; payload?: Record<string, unknown> }) {
     const step = this.steps.find((s) => s.id === id) ?? notFound('passo', id);
-    Object.assign(step, defined(patch), { lockedAt: null });
+    const finished = patch.status === 'done' || patch.status === 'failed';
+    Object.assign(step, defined(patch), { lockedAt: null, finishedAt: finished ? this.iso() : null });
   }
 
   async listSteps(runId: string) {

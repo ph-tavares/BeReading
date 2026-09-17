@@ -114,3 +114,18 @@ Deno.test('claimSteps: passo com trava velha e 4 tentativas vira failed worker_m
   assertEquals(claimed.map((s) => [s.subject, s.attempts]), [['reaproveitado', 3]]);
   assertEquals([store.steps[0].status, store.steps[0].error, store.steps[0].lockedAt], ['failed', 'worker_morreu', null]);
 });
+
+Deno.test('finishStep: finishedAt só quando o passo termina em done ou failed (BER-59)', async () => {
+  const now = Date.parse('2026-09-16T10:00:00.000Z');
+  const store = new MemoryIngestionStore(() => now);
+  const edition = await store.insertEdition('9788535910663', null);
+  const run = await store.createRun(edition.id, {});
+  await store.enqueueSteps([{ runId: run.id, kind: 'discover', subject: 'x' }, { runId: run.id, kind: 'discover', subject: 'y' }]);
+  const [x, y] = store.steps;
+  assertEquals(x.finishedAt, null);
+  await store.finishStep(x.id, { status: 'pending' });
+  assertEquals(x.finishedAt, null);
+  await store.finishStep(x.id, { status: 'done' });
+  await store.finishStep(y.id, { status: 'failed' });
+  assertEquals([x.finishedAt, y.finishedAt], [new Date(now).toISOString(), new Date(now).toISOString()]);
+});
