@@ -46,6 +46,28 @@ Deno.test('parseTableOfContents: cabeçalho de parte reinicia a numeração na p
   assertEquals(parseTableOfContents(undefined), []);
 });
 
+Deno.test('parseTableOfContents: capítulo de apoio (prefácio, notas etc.) não desloca a numeração (BER-59 I8)', () => {
+  assertEquals(parseTableOfContents(['Prefácio', 'Capítulo 1', 'Capítulo 2', 'Notas']), [
+    { number: 1, part: null, numberInPart: null, title: 'Capítulo 1' },
+    { number: 2, part: null, numberInPart: null, title: 'Capítulo 2' },
+  ]);
+});
+
+Deno.test('parseTableOfContents: parte por nível, sem "Parte" no título (BER-59 I8)', () => {
+  const toc = parseTableOfContents([
+    { level: 0, title: 'Genesis' },
+    { level: 1, title: 'In the Beginning' },
+    { level: 1, title: 'Noah' },
+    { level: 0, title: 'Exodus' },
+    { level: 1, title: 'Out of Egypt' },
+  ]);
+  assertEquals(toc, [
+    { number: 1, part: 'Genesis', numberInPart: 1, title: 'In the Beginning' },
+    { number: 2, part: 'Genesis', numberInPart: 2, title: 'Noah' },
+    { number: 3, part: 'Exodus', numberInPart: 1, title: 'Out of Egypt' },
+  ]);
+});
+
 Deno.test('originalLanguageFromEditions: idioma da edição mais antiga', () => {
   assertEquals(originalLanguageFromEditions([
     { publish_date: '2009', languages: [{ key: '/languages/por' }] },

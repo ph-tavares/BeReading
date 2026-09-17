@@ -36,21 +36,91 @@ export function parseYear(value: unknown): number | null {
 
 const PART_HEADER = /^(parte|part|livro|book)\b/i;
 
+// BER-59 (I8): entrada de sumário que não é capítulo de verdade (prefácio, notas, índice etc.).
+// Comparado normalizado (sem acento, minúsculo, sem pontuação final) para não depender de como
+// a Open Library capitaliza ou pontua o título.
+const FRONT_MATTER = new Set([
+  'prefacio', 'introducao', 'apresentacao', 'nota', 'notas', 'nota do autor', 'nota do tradutor',
+  'nota da edicao', 'agradecimentos', 'indice', 'sumario', 'bibliografia', 'posfacio', 'epigrafe',
+  'dedicatoria', 'glossario', 'cronologia', 'preface', 'introduction', 'foreword', 'acknowledgments',
+  'acknowledgements', 'notes', 'contents', 'bibliography', 'afterword', 'dedication', 'glossary',
+  'chronology', 'index',
+]);
+
+function normalizeTitle(title: string): string {
+  return title
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // remove acento (forma decomposta)
+    .toLowerCase()
+    .trim()
+    .replace(/[.,;:!?]+$/, '')
+    .trim();
+}
+
+interface TocEntry {
+  title: string;
+  level: number | null;
+}
+
+// Um nível 0 é cabeçalho de parte quando existe algo mais fundo antes do próximo nível 0 (a
+// obra pode não usar "Parte"/"Part" no título — ex.: "Genesis", "Exodus").
+function isFollowedByDeeper(entries: TocEntry[], index: number): boolean {
+  for (let i = index + 1; i < entries.length; i++) {
+    const level = entries[i].level ?? 0;
+    if (level > 0) return true;
+    if (level === 0) return false;
+  }
+  return false;
+}
+
 export function parseTableOfContents(toc: unknown): DeclaredChapter[] {
   if (!Array.isArray(toc)) return [];
-  const chapters: DeclaredChapter[] = [];
-  let part: string | null = null;
-  let inPart = 0;
+
+  const entries: TocEntry[] = [];
   for (const entry of toc) {
     const title = typeof entry === 'string' ? entry : typeof entry?.title === 'string' ? entry.title : null;
     if (!title || !title.trim()) continue;
-    if (PART_HEADER.test(title.trim())) {
-      part = title.trim();
+    // BER-59 (I8): capítulo de apoio some do sumário para não deslocar a numeração dos
+    // capítulos de verdade (ex.: "Prefácio", "Capítulo 1", "Notas" → só 1 capítulo).
+    if (FRONT_MATTER.has(normalizeTitle(title))) continue;
+    const level = typeof entry === 'object' && entry !== null && typeof (entry as { level?: unknown }).level === 'number'
+      ? (entry as { level: number }).level
+      : null;
+    entries.push({ title: title.trim(), level });
+  }
+
+  const chapters: DeclaredChapter[] = [];
+  let part: string | null = null;
+  let inPart = 0;
+
+  const hasLevels = entries.some((e) => e.level !== null && e.level > 0);
+  if (hasLevels) {
+    // BER-59 (I8): sumário com hierarquia real (a Open Library manda `level`) usa a
+    // profundidade máxima como capítulo; nível 0 seguido de algo mais fundo é parte.
+    const deepest = entries.reduce((max, e) => Math.max(max, e.level ?? 0), 0);
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      const level = e.level ?? 0;
+      if (level === 0 && isFollowedByDeeper(entries, i)) {
+        part = e.title;
+        inPart = 0;
+        continue;
+      }
+      if (level !== deepest) continue;
+      inPart += 1;
+      chapters.push({ number: chapters.length + 1, part, numberInPart: part ? inPart : null, title: e.title });
+    }
+    return chapters;
+  }
+
+  for (const e of entries) {
+    if (PART_HEADER.test(e.title)) {
+      part = e.title;
       inPart = 0;
       continue;
     }
     inPart += 1;
-    chapters.push({ number: chapters.length + 1, part, numberInPart: part ? inPart : null, title: title.trim() });
+    chapters.push({ number: chapters.length + 1, part, numberInPart: part ? inPart : null, title: e.title });
   }
   return chapters;
 }
