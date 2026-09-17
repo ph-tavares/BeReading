@@ -24,7 +24,7 @@ async function setup() {
   }
   await store.insertClaims(chapters.map((c) => ({
     runId: run.id, sourceId: source.id, chapterRef: { number: c.number, part: null, numberInPart: null, title: null },
-    kind: 'event' as const, statement: `afirmação ${c.number}`, isInterpretation: false, forwardReference: false,
+    kind: 'event' as const, statement: `afirmação ${c.number}`, isInterpretation: false, forwardReference: false, chunkIndex: null,
   })));
   const claims = await store.listClaimsForRun(run.id);
   await store.setClaimLocations(claims.map((c, i) => ({ id: c.id, editionChapterId: chapters[i].id, located: true })));
@@ -83,4 +83,83 @@ Deno.test('updateRun e finishStep: campo undefined no patch não apaga o valor (
   await store.finishStep(step.id, { status: 'done', attempts: undefined, error: undefined });
   const [after] = await store.listSteps(run.id);
   assertEquals([after.status, after.attempts, after.error], ['done', 1, 'falhou']);
+});
+
+Deno.test('claimSteps: incrementa attempts do passo reivindicado (BER-59)', async () => {
+  const now = Date.parse('2026-09-16T10:00:00.000Z');
+  const store = new MemoryIngestionStore(() => now);
+  const edition = await store.insertEdition('9788535910663', null);
+  const run = await store.createRun(edition.id, {});
+  await store.enqueueSteps([{ runId: run.id, kind: 'discover', subject: 'x' }]);
+  const [claimed] = await store.claimSteps(1, new Date(now - 5 * 60_000).toISOString());
+  assertEquals([claimed.status, claimed.attempts], ['running', 1]);
+  assertEquals(store.steps[0].attempts, 1);
+});
+
+Deno.test('claimSteps: passo com trava velha e 4 tentativas vira failed worker_morreu e não volta (BER-59)', async () => {
+  const now = Date.parse('2026-09-16T10:00:00.000Z');
+  const store = new MemoryIngestionStore(() => now);
+  const edition = await store.insertEdition('9788535910663', null);
+  const run = await store.createRun(edition.id, {});
+  await store.enqueueSteps([
+    { runId: run.id, kind: 'discover', subject: 'morto' },
+    { runId: run.id, kind: 'discover', subject: 'reaproveitado' },
+  ]);
+  const old = new Date(now - 10 * 60_000).toISOString();
+  Object.assign(store.steps[0], { status: 'running', lockedAt: old, attempts: 4 });
+  Object.assign(store.steps[1], { status: 'running', lockedAt: old, attempts: 2 });
+
+  const claimed = await store.claimSteps(10, new Date(now - 5 * 60_000).toISOString());
+
+  assertEquals(claimed.map((s) => [s.subject, s.attempts]), [['reaproveitado', 3]]);
+  assertEquals([store.steps[0].status, store.steps[0].error, store.steps[0].lockedAt], ['failed', 'worker_morreu', null]);
+  assertNotEquals(store.steps[0].finishedAt, null);
+});
+
+Deno.test('finishStep: finishedAt só quando o passo termina em done ou failed (BER-59)', async () => {
+  const now = Date.parse('2026-09-16T10:00:00.000Z');
+  const store = new MemoryIngestionStore(() => now);
+  const edition = await store.insertEdition('9788535910663', null);
+  const run = await store.createRun(edition.id, {});
+  await store.enqueueSteps([{ runId: run.id, kind: 'discover', subject: 'x' }, { runId: run.id, kind: 'discover', subject: 'y' }]);
+  const [x, y] = store.steps;
+  assertEquals(x.finishedAt, null);
+  await store.finishStep(x.id, { status: 'pending' });
+  assertEquals(x.finishedAt, null);
+  await store.finishStep(x.id, { status: 'done' });
+  await store.finishStep(y.id, { status: 'failed' });
+  assertEquals([x.finishedAt, y.finishedAt], [new Date(now).toISOString(), new Date(now).toISOString()]);
+});
+
+Deno.test('listStalledRuns: run sem passo criado há 1 minuto não volta; criado há 6 minutos volta (BER-59)', async () => {
+  const now = Date.parse('2026-09-16T10:00:00.000Z');
+  let clock = now - 6 * 60_000;
+  const store = new MemoryIngestionStore(() => clock);
+  const edition = await store.insertEdition('9788535910663', null);
+  const velho = await store.createRun(edition.id, { recheckChapters: [1] });
+  clock = now - 60_000;
+  await store.createRun(edition.id, { recheckChapters: [2] });
+  clock = now;
+
+  const stalled = await store.listStalledRuns(10, new Date(now - 5 * 60_000).toISOString());
+  assertEquals(stalled.map((r) => r.id), [velho.id]);
+});
+
+Deno.test('findActiveRun: acha run queued/running da edição; ignora terminado e de outra edição (BER-59 M1)', async () => {
+  const store = new MemoryIngestionStore();
+  const edition = await store.insertEdition('9788535910663', null);
+  const outraEdicao = await store.insertEdition('9780000000009', null);
+
+  assertEquals(await store.findActiveRun(edition.id), null);
+
+  const done = await store.createRun(edition.id, {});
+  await store.updateRun(done.id, { status: 'succeeded', finishedAt: new Date().toISOString() });
+  assertEquals(await store.findActiveRun(edition.id), null);
+
+  await store.createRun(outraEdicao.id, {});
+  assertEquals(await store.findActiveRun(edition.id), null);
+
+  const running = await store.createRun(edition.id, {});
+  const active = await store.findActiveRun(edition.id);
+  assertEquals(active?.id, running.id);
 });

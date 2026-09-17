@@ -431,5 +431,12 @@ verify_jwt = false
 [functions.retry-pending-quizzes]
 verify_jwt = false
 
+# BER-59: ingestão de conteúdo de capítulo (internas; o guard está no handler).
+[functions.ingest-book]
+verify_jwt = false
+
+[functions.process-ingestion]
+verify_jwt = false
+
 # check-chapter-completion não tem chamador em nenhum ponto do repo — deixada como
 # está de propósito. Ver nota no PR.

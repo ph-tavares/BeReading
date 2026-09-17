@@ -3,6 +3,7 @@
 // que os passos usam: índice único dos passos, reivindicação com trava velha, soma de
 // estatística, cascata de conhecimento. Helper de teste — não é código de produção.
 import type { DomainPolicy } from '../ingestion/policy.ts';
+import { MAX_RETRIES } from '../ingestion/queue.ts';
 import { MAX_RECHECKS } from '../ingestion/recheck.ts';
 import type {
   ClaimRow,
@@ -116,8 +117,21 @@ export class MemoryIngestionStore implements IngestionStore {
     return this.runs.filter((r) => r.startedAt >= iso).length;
   }
 
-  async sumRunStatSince(key: string, iso: string) {
-    return this.runs.filter((r) => r.startedAt >= iso).reduce((sum, r) => sum + (r.stats[key] ?? 0), 0);
+  async findActiveRun(editionId: string) {
+    return this.runs.find((r) => r.editionId === editionId && (r.status === 'queued' || r.status === 'running')) ?? null;
+  }
+
+  async listStalledRuns(limit: number, startedBeforeIso: string) {
+    const active = new Set(this.steps.filter((s) => s.status === 'pending' || s.status === 'running').map((s) => s.runId));
+    return this.runs
+      .filter((r) => (r.status === 'queued' || r.status === 'running') && r.startedAt < startedBeforeIso && !active.has(r.id))
+      .slice(0, limit);
+  }
+
+  async sumTavilyCreditsSince(iso: string) {
+    return this.steps
+      .filter((s) => s.kind === 'discover' && s.status === 'done' && s.finishedAt !== null && s.finishedAt >= iso)
+      .reduce((sum, s) => sum + (Number(s.payload.creditos) || 0), 0);
   }
 
   async enqueueSteps(steps: NewStep[]) {
@@ -126,27 +140,36 @@ export class MemoryIngestionStore implements IngestionStore {
       if (exists) continue;
       this.steps.push({
         id: crypto.randomUUID(), runId: step.runId, kind: step.kind, subject: step.subject, status: 'pending', attempts: 0,
-        nextAttemptAt: step.nextAttemptAt ?? this.iso(), lockedAt: null, error: null, payload: step.payload ?? {},
+        nextAttemptAt: step.nextAttemptAt ?? this.iso(), lockedAt: null, finishedAt: null, error: null, payload: step.payload ?? {},
       });
     }
   }
 
   async claimSteps(limit: number, staleBeforeIso: string) {
+    // Espelha `public.claim_ingestion_steps` (BER-59): trava velha que já teve todas as
+    // tentativas é de worker que morreu nelas; falha em vez de voltar à fila para sempre.
     const now = this.iso();
+    const maxAttempts = MAX_RETRIES + 1;
+    const stale = (s: StepRow) => s.status === 'running' && s.lockedAt !== null && s.lockedAt < staleBeforeIso;
+    for (const step of this.steps.filter((s) => stale(s) && s.attempts >= maxAttempts)) {
+      Object.assign(step, { status: 'failed', error: 'worker_morreu', lockedAt: null, finishedAt: now });
+    }
     const ready = this.steps
-      .filter((s) => (s.status === 'pending' && s.nextAttemptAt <= now) || (s.status === 'running' && s.lockedAt !== null && s.lockedAt < staleBeforeIso))
+      .filter((s) => (s.status === 'pending' && s.nextAttemptAt <= now) || stale(s))
       .sort((a, b) => a.nextAttemptAt.localeCompare(b.nextAttemptAt))
       .slice(0, limit);
     for (const step of ready) {
       step.status = 'running';
       step.lockedAt = now;
+      step.attempts += 1;
     }
     return ready.map((s) => ({ ...s, payload: { ...s.payload } }));
   }
 
   async finishStep(id: string, patch: { status: StepRow['status']; attempts?: number; nextAttemptAt?: string; error?: string | null; payload?: Record<string, unknown> }) {
     const step = this.steps.find((s) => s.id === id) ?? notFound('passo', id);
-    Object.assign(step, defined(patch), { lockedAt: null });
+    const finished = patch.status === 'done' || patch.status === 'failed';
+    Object.assign(step, defined(patch), { lockedAt: null, finishedAt: finished ? this.iso() : null });
   }
 
   async listSteps(runId: string) {
@@ -200,6 +223,10 @@ export class MemoryIngestionStore implements IngestionStore {
 
   async insertClaims(claims: NewClaim[]) {
     for (const claim of claims) this.claims.push({ id: crypto.randomUUID(), editionChapterId: null, located: false, ...claim });
+  }
+
+  async deleteClaimsForChunk(sourceId: string, chunkIndex: number) {
+    this.claims = this.claims.filter((c) => !(c.sourceId === sourceId && c.chunkIndex === chunkIndex));
   }
 
   async listClaimsForRun(runId: string) {
@@ -302,10 +329,10 @@ export class MemoryIngestionStore implements IngestionStore {
     return [...byEdition.entries()].slice(0, limit).map(([editionId, chapterNumbers]) => ({ editionId, chapterNumbers: chapterNumbers.sort((a, b) => a - b) }));
   }
 
-  async markRechecksScheduled(editionId: string, chapterNumbers: number[]) {
+  async markRechecksScheduled(editionId: string, chapterNumbers: number[], nextRecheckAtIso: string) {
     for (const chapter of this.chapters.filter((c) => c.editionId === editionId && chapterNumbers.includes(c.number))) {
       const k = this.knowledge.find((x) => x.editionChapterId === chapter.id);
-      if (k) Object.assign(k, { recheckCount: k.recheckCount + 1, nextRecheckAt: null });
+      if (k) Object.assign(k, { recheckCount: k.recheckCount + 1, nextRecheckAt: nextRecheckAtIso });
     }
   }
 

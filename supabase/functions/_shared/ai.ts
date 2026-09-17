@@ -22,6 +22,12 @@ export interface AIRequest {
   prompt: string;
   maxTokens: number;
   temperature?: number;
+  /**
+   * Aborta a chamada depois disto (BER-59). O worker da ingestão roda dentro do relógio de
+   * 150 s da Edge Function: uma resposta pendurada mataria o worker no meio do passo. Sem
+   * valor, nada muda para generate-questions e evaluate-answer.
+   */
+  timeoutMs?: number;
 }
 
 /** Erro de API com o status HTTP, para a fila distinguir 429/5xx (transitório) do resto. */
@@ -38,6 +44,7 @@ function toNumber(value: unknown): number {
 export async function callAI(req: AIRequest): Promise<AIResult> {
   const provider = Deno.env.get('AI_PROVIDER') ?? 'openai';
   const sampling = req.temperature === undefined ? {} : { temperature: req.temperature };
+  const abort = req.timeoutMs === undefined ? {} : { signal: AbortSignal.timeout(req.timeoutMs) };
 
   if (provider === 'anthropic') {
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
@@ -45,6 +52,7 @@ export async function callAI(req: AIRequest): Promise<AIResult> {
     if (!apiKey) throw new Error('ANTHROPIC_API_KEY env var not set');
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {
+      ...abort,
       method: 'POST',
       headers: {
         'x-api-key': apiKey,
@@ -76,6 +84,7 @@ export async function callAI(req: AIRequest): Promise<AIResult> {
   if (!apiKey) throw new Error('AI_API_KEY env var not set');
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    ...abort,
     method: 'POST',
     headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({

@@ -83,7 +83,7 @@ const toRun = (r: Row): RunRow => ({
 
 const toStep = (r: Row): StepRow => ({
   id: r.id, runId: r.run_id, kind: r.kind, subject: r.subject, status: r.status, attempts: r.attempts,
-  nextAttemptAt: r.next_attempt_at, lockedAt: r.locked_at, error: r.error, payload: r.payload ?? {},
+  nextAttemptAt: r.next_attempt_at, lockedAt: r.locked_at, finishedAt: r.finished_at, error: r.error, payload: r.payload ?? {},
 });
 
 const toSource = (r: Row): SourceRow => ({
@@ -106,6 +106,7 @@ const fromSource = (s: Partial<NewSource>): Row => {
 const toClaim = (r: Row): ClaimRow => ({
   id: r.id, runId: r.run_id, sourceId: r.source_id, chapterRef: r.chapter_ref, editionChapterId: r.edition_chapter_id,
   kind: r.kind, statement: r.statement, isInterpretation: r.is_interpretation, forwardReference: r.forward_reference, located: r.located,
+  chunkIndex: r.chunk_index,
 });
 
 const toChapter = (r: Row): EditionChapter => ({
@@ -171,9 +172,43 @@ export class SupabaseIngestionStore implements IngestionStore {
     return count ?? 0;
   }
 
-  async sumRunStatSince(key: string, iso: string) {
-    const rows = await selectAll(() => this.db.from('ingestion_runs').select('stats').gte('started_at', iso), 'sumRunStatSince');
-    return rows.reduce((sum: number, r: Row) => sum + Number(r.stats?.[key] ?? 0), 0);
+  async findActiveRun(editionId: string) {
+    // BER-59 (M1): uma linha basta, sem paginação (só existe um run `queued`/`running` por vez
+    // por edição, e este método é exatamente o que garante isso em `ingest-book`).
+    const { data, error, status } = await this.db.from('ingestion_runs').select('*')
+      .eq('edition_id', editionId).in('status', ['queued', 'running']).limit(1).maybeSingle();
+    if (error) throw storeError(status, `findActiveRun: ${error.message}`);
+    return data ? toRun(data) : null;
+  }
+
+  async listStalledRuns(limit: number, startedBeforeIso: string) {
+    // Duas consultas em vez de uma função SQL (BER-59): runs abertos página a página, e para cada
+    // lote os que ainda têm passo ativo. Para no `limit`; o resto fica para o próximo ciclo.
+    const stalled: RunRow[] = [];
+    for (let from = 0; stalled.length < limit; from += ID_CHUNK) {
+      const runs = must(
+        await this.db.from('ingestion_runs').select('*').in('status', ['queued', 'running']).lt('started_at', startedBeforeIso).order('id').range(from, from + ID_CHUNK - 1),
+        'listStalledRuns',
+      );
+      if (runs.length === 0) break;
+      const ids = runs.map((r: Row) => r.id);
+      const activeRows = await selectAll(
+        () => this.db.from('ingestion_steps').select('id, run_id').in('run_id', ids).in('status', ['pending', 'running']),
+        'listStalledRuns(steps)',
+      );
+      const active = new Set(activeRows.map((r: Row) => r.run_id));
+      stalled.push(...runs.filter((r: Row) => !active.has(r.id)).map(toRun));
+      if (runs.length < ID_CHUNK) break;
+    }
+    return stalled.slice(0, limit);
+  }
+
+  async sumTavilyCreditsSince(iso: string) {
+    const rows = await selectAll(
+      () => this.db.from('ingestion_steps').select('id, payload').eq('kind', 'discover').eq('status', 'done').gte('finished_at', iso),
+      'sumTavilyCreditsSince',
+    );
+    return rows.reduce((sum: number, r: Row) => sum + (Number(r.payload?.creditos) || 0), 0);
   }
 
   async enqueueSteps(steps: NewStep[]) {
@@ -192,7 +227,9 @@ export class SupabaseIngestionStore implements IngestionStore {
   }
 
   async finishStep(id: string, patch: { status: StepRow['status']; attempts?: number; nextAttemptAt?: string; error?: string | null; payload?: Record<string, unknown> }) {
-    const row: Row = { status: patch.status, locked_at: null };
+    // `finished_at` marca o fim do passo (BER-59); volta a null se ele for reagendado.
+    const finished = patch.status === 'done' || patch.status === 'failed';
+    const row: Row = { status: patch.status, locked_at: null, finished_at: finished ? new Date().toISOString() : null };
     if (patch.attempts !== undefined) row.attempts = patch.attempts;
     if (patch.nextAttemptAt !== undefined) row.next_attempt_at = patch.nextAttemptAt;
     if (patch.error !== undefined) row.error = patch.error;
@@ -266,9 +303,13 @@ export class SupabaseIngestionStore implements IngestionStore {
     if (claims.length === 0) return;
     const rows = claims.map((c) => ({
       run_id: c.runId, source_id: c.sourceId, chapter_ref: c.chapterRef, kind: c.kind, statement: c.statement,
-      is_interpretation: c.isInterpretation, forward_reference: c.forwardReference,
+      is_interpretation: c.isInterpretation, forward_reference: c.forwardReference, chunk_index: c.chunkIndex,
     }));
     ok(await this.db.from('ingestion_claims').insert(rows), 'insertClaims');
+  }
+
+  async deleteClaimsForChunk(sourceId: string, chunkIndex: number) {
+    ok(await this.db.from('ingestion_claims').delete().eq('source_id', sourceId).eq('chunk_index', chunkIndex), 'deleteClaimsForChunk');
   }
 
   async listClaimsForRun(runId: string) {
@@ -359,12 +400,12 @@ export class SupabaseIngestionStore implements IngestionStore {
     return [...byEdition.entries()].slice(0, limit).map(([editionId, chapterNumbers]) => ({ editionId, chapterNumbers: chapterNumbers.sort((a, b) => a - b) }));
   }
 
-  async markRechecksScheduled(editionId: string, chapterNumbers: number[]) {
+  async markRechecksScheduled(editionId: string, chapterNumbers: number[], nextRecheckAtIso: string) {
     const chapters = await this.listEditionChapters(editionId);
     for (const chapter of chapters.filter((c) => chapterNumbers.includes(c.number))) {
       const current = must<Row>(await this.db.from('chapter_knowledge').select('recheck_count').eq('edition_chapter_id', chapter.id).single(), 'markRechecksScheduled(select)');
       ok(
-        await this.db.from('chapter_knowledge').update({ recheck_count: current.recheck_count + 1, next_recheck_at: null }).eq('edition_chapter_id', chapter.id),
+        await this.db.from('chapter_knowledge').update({ recheck_count: current.recheck_count + 1, next_recheck_at: nextRecheckAtIso }).eq('edition_chapter_id', chapter.id),
         'markRechecksScheduled(update)',
       );
     }

@@ -51,6 +51,8 @@ export interface StepRow {
   attempts: number;
   nextAttemptAt: string;
   lockedAt: string | null;
+  /** Quando virou `done`/`failed` (BER-59): a cota diária do Tavily conta pelo fim da busca, não pelo início do run. */
+  finishedAt: string | null;
   error: string | null;
   payload: Record<string, unknown>;
 }
@@ -95,6 +97,8 @@ export interface ClaimRow {
   isInterpretation: boolean;
   forwardReference: boolean;
   located: boolean;
+  /** Bloco de texto da fonte de onde veio (BER-59): permite ao passo `extract` reexecutado substituir, não duplicar. */
+  chunkIndex: number | null;
 }
 
 export type NewClaim = Omit<ClaimRow, 'id' | 'editionChapterId' | 'located'>;
@@ -136,10 +140,19 @@ export interface IngestionStore {
 
   createRun(editionId: string, payload: RunRow['payload']): Promise<RunRow>;
   getRun(id: string): Promise<RunRow>;
+  /** Run `queued`/`running` da edição, se existir (BER-59 M1): evita duas ingestões da mesma edição ao mesmo tempo. */
+  findActiveRun(editionId: string): Promise<RunRow | null>;
   updateRun(id: string, patch: { status?: RunStatus; statusReason?: string | null; finishedAt?: string | null; structureDivergence?: unknown }): Promise<void>;
   incrementRunStats(id: string, delta: Record<string, number>): Promise<void>;
   countRunsSince(iso: string): Promise<number>;
-  sumRunStatSince(key: string, iso: string): Promise<number>;
+  /**
+   * Runs `queued`/`running` sem nenhum passo `pending`/`running` (BER-59): ninguém mais os avançaria.
+   * Só os iniciados antes de `startedBeforeIso`: um run recém-criado ainda não teve os passos
+   * enfileirados, e replanejá-lo cedo (rebusca sem `discover`) verificaria e publicaria sem buscar.
+   */
+  listStalledRuns(limit: number, startedBeforeIso: string): Promise<RunRow[]>;
+  /** Soma `payload.creditos` dos passos `discover` terminados (`done`) desde `iso` (BER-59). */
+  sumTavilyCreditsSince(iso: string): Promise<number>;
 
   enqueueSteps(steps: NewStep[]): Promise<void>;
   claimSteps(limit: number, staleBeforeIso: string): Promise<StepRow[]>;
@@ -159,6 +172,8 @@ export interface IngestionStore {
   deleteSourceTextsBefore(iso: string): Promise<void>;
 
   insertClaims(claims: NewClaim[]): Promise<void>;
+  /** Apaga as afirmações já gravadas de um bloco, para o passo `extract` reexecutado substituir em vez de duplicar. */
+  deleteClaimsForChunk(sourceId: string, chunkIndex: number): Promise<void>;
   listClaimsForRun(runId: string): Promise<ClaimRow[]>;
   setClaimLocations(updates: { id: string; editionChapterId: string | null; located: boolean }[]): Promise<void>;
   /** Afirmações localizadas no capítulo, de todos os runs, sem as que antecipam. */
@@ -170,6 +185,7 @@ export interface IngestionStore {
   /** Conhecimento dos capítulos com número ≤ `maxChapterNumber`, em ordem. */
   listKnowledge(editionId: string, maxChapterNumber: number): Promise<KnowledgeRow[]>;
   dueRechecks(nowIso: string, limit: number): Promise<{ editionId: string; chapterNumbers: number[] }[]>;
-  markRechecksScheduled(editionId: string, chapterNumbers: number[]): Promise<void>;
+  /** Incrementa `recheck_count` e adia `next_recheck_at` para `nextRecheckAtIso` (BER-59: nunca `null`, senão um run que falhar depois desta chamada perde o capítulo para sempre). */
+  markRechecksScheduled(editionId: string, chapterNumbers: number[], nextRecheckAtIso: string): Promise<void>;
   listBookChapters(bookId: string): Promise<{ number: number; title: string | null }[]>;
 }

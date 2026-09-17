@@ -103,13 +103,47 @@ export async function assertPublicUrl(raw: string, resolve: ResolveFn): Promise<
 }
 
 /**
- * Resolve A e AAAA via `Deno.resolveDns`. Se o runtime não expuser DNS, devolve `null`
- * (fallback para checagem de host acima, BER-59). Se o hostname não resolve, devolve `[]`
- * e `assertPublicUrl` rejeita (fail-closed). Conferir no Edge Runtime na primeira execução real (Tarefa 19).
+ * Constrói um `ResolveFn` a partir de um resolvedor de DNS (BER-59, spec §5.9). Sem
+ * `resolver` (runtime não expõe DNS), devolve `null` — fallback para a checagem de host em
+ * `assertPublicUrl`. Caso contrário, consulta A e AAAA: uma rejeição `Deno.errors.NotFound`
+ * conta como "sem registros" para aquele tipo; qualquer outra rejeição (timeout, permissão,
+ * `NotSupported`, rede) vira `TypeError` com o host, que `isTransientError` trata como
+ * transitório (BER-59): o passo é repetido em vez de recusar a URL por engano ou falhar de vez
+ * com um erro que a fila classificaria como permanente. O resultado é a concatenação dos endereços
+ * encontrados (possivelmente `[]`, e então `assertPublicUrl` recusa por fail-closed).
  */
-export const defaultResolve: ResolveFn = async (hostname) => {
-  const resolver = (Deno as { resolveDns?: typeof Deno.resolveDns }).resolveDns;
-  if (typeof resolver !== 'function') return null;
-  const results = await Promise.allSettled([resolver(hostname, 'A'), resolver(hostname, 'AAAA')]);
-  return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
-};
+export function makeResolve(
+  resolver: ((host: string, type: 'A' | 'AAAA') => Promise<string[]>) | undefined,
+): ResolveFn {
+  if (!resolver) return () => Promise.resolve(null);
+  return async (hostname) => {
+    const lookup = async (type: 'A' | 'AAAA'): Promise<string[]> => {
+      try {
+        return await resolver(hostname, type);
+      } catch (err) {
+        if (err instanceof Deno.errors.NotFound) return [];
+        const message = err instanceof Error ? err.message : String(err);
+        throw new TypeError(`DNS falhou para ${hostname}: ${message}`);
+      }
+    };
+    const [a, aaaa] = await Promise.all([lookup('A'), lookup('AAAA')]);
+    return [...a, ...aaaa];
+  };
+}
+
+/**
+ * Em produção a checagem de IP não pode ser pulada em silêncio (BER-59, spec §5.9): se o runtime
+ * não expuser DNS, `null` faria `assertPublicUrl` aceitar qualquer host com ponto, inclusive um
+ * nome que aponta para a rede interna. Sem DNS o host é recusado (`[]`, "não resolve"), a menos
+ * que `allowNoDns` libere de propósito.
+ */
+export function requireDns(resolve: ResolveFn, allowNoDns: boolean): ResolveFn {
+  return async (hostname) => {
+    const addresses = await resolve(hostname);
+    return addresses === null && !allowNoDns ? [] : addresses;
+  };
+}
+
+export const defaultResolve: ResolveFn = makeResolve(
+  typeof Deno.resolveDns === 'function' ? (h, t) => Deno.resolveDns(h, t) : undefined,
+);

@@ -261,6 +261,135 @@ vazio. Todas as contagens bateram com produção; o trigger de cadastro precisou
 - **Falha avisa por email** quem fez a última alteração no agendamento do workflow (notificação
   padrão do GitHub para execuções agendadas).
 
+## Ingestão de conteúdo (BER-59)
+
+Monta, a partir de um ISBN, a base de conhecimento verificado de cada capítulo, com fontes legais
+da internet. Design: `docs/superpowers/specs/2026-09-16-ber-59-ingestao-conteudo-capitulo-design.md`.
+
+**Neste ciclo o app não lê nada disto.** As tabelas da ingestão têm RLS sem policy: fato de
+capítulo é spoiler, e só as functions com chave de servidor acessam.
+
+### Como funciona
+
+- `ingest-book` (interna) recebe `{ "isbn": "...", "book_id": "<uuid, opcional>" }`, cria o run e
+  enfileira o primeiro passo. Devolve `202` com `run_id`.
+- O `pg_cron` chama `process-ingestion` a cada minuto (job `process-ingestion`). Cada chamada
+  reivindica um passo por vez e para de reivindicar outro depois de até 70 s, para caber no
+  relógio da Edge Function; o que sobrar fica para a chamada seguinte.
+- Como o `pg_cron` dispara a cada minuto sem esperar a chamada anterior terminar, invocações do
+  worker podem se sobrepor. Isso é aceito: `claim_ingestion_steps` reivindica cada passo com
+  trava exclusiva (`for update skip locked`), então duas invocações nunca executam o mesmo passo;
+  o limite por domínio (`fetchPage`/`fetchRobots`), porém, é por invocação, não global.
+- Um livro leva alguns minutos, conforme o número de fontes e de blocos de texto.
+- `ingestion_claims.chunk_index` identifica o bloco de texto que gerou cada afirmação, para a
+  extração ser idempotente numa retentativa (migration `20260918120000`).
+
+A segunda migration do BER-59 (`20260918120000_ber59_claims_chunk_index.sql`) precisa aplicar
+antes da migration do cron (`20260918130000_ber59_cron_process_ingestion.sql`). A ordem é
+automática pelo nome do arquivo (timestamp).
+
+### Secrets das functions
+
+Definidos com `supabase secrets set` (não são secrets do GitHub):
+
+| Secret | Para quê |
+|---|---|
+| `TAVILY_API_KEY` | Busca de fontes. Conta em tavily.com; o plano gratuito dá 1.000 créditos por mês |
+| `INGESTION_ENABLED` | `false`/`0`/`off`/`no` (sem diferenciar caixa, com ou sem espaço em volta) desligam tudo sem deploy: `ingest-book` devolve 503 e o worker não executa |
+| `INGESTION_ALLOW_NO_DNS` | Desligado por padrão (não definir). Se o runtime não expuser DNS, o download recusa todo host em vez de pular a checagem de IP interno (SSRF); `true` libera sem essa checagem, só com o risco aceito |
+| `ANTHROPIC_API_KEY` / `AI_PROVIDER` | Já existem (quiz). A ingestão usa o mesmo provedor |
+| `CRON_SECRET` | Já existe (BER-33). O cron da ingestão usa o mesmo |
+| `OPS_ALERT_WEBHOOK_URL` | Já existe (BER-39, `_shared/ops-alert.ts`). Opcional: sem ela, os avisos do worker (`ctx.notify`) só vão para os logs da function; com ela, também vão para o webhook (Slack/Discord/ntfy — qualquer um que aceite `POST { text }`) |
+
+### Disparar um livro
+
+```bash
+curl -X POST "https://asfdkzejtuqcgqdcsnac.supabase.co/functions/v1/ingest-book" \
+  -H "apikey: $SUPABASE_SECRET_KEY" -H "Content-Type: application/json" \
+  -d '{"isbn": "9788535914849"}'
+```
+
+`$SUPABASE_SECRET_KEY` é a secret key (`sb_secret_…`, Project Settings → API Keys). Não use a
+publishable. Tetos: 10 runs novos por dia, 30 buscas, 60 fontes e US$ 2,00 por run.
+
+### Acompanhar
+
+```sql
+-- Situação e custo do run
+select status, status_reason, stats, structure_divergence, started_at, finished_at
+from public.ingestion_runs where id = '<run_id>';
+
+-- Passos parados ou com erro
+select kind, subject, status, attempts, next_attempt_at, error
+from public.ingestion_steps where run_id = '<run_id>' and status <> 'done'
+order by created_at;
+
+-- Fontes rejeitadas por motivo (inclui PDFs de livro protegido sem autorização)
+select rejection_reason, is_book_file, count(*)
+from public.ingestion_sources where run_id = '<run_id>' and decision = 'rejected'
+group by 1, 2 order by 3 desc;
+
+-- Resultado por capítulo
+select ec.number, ec.title, ck.status, ck.confidence, count(cf.id) as fatos
+from public.edition_chapters ec
+join public.ingestion_runs r on r.edition_id = ec.edition_id and r.id = '<run_id>'
+left join public.chapter_knowledge ck on ck.edition_chapter_id = ec.id
+left join public.chapter_facts cf on cf.chapter_knowledge_id = ck.id
+group by 1, 2, 3, 4 order by 1;
+
+-- Runs "queued"/"running" sem passo pendente/rodando: o worker já devia ter avançado sozinho
+-- (recoverStalledRuns cuida disso a cada ciclo, 5 min depois de o run começar; se aparecer algo
+-- aqui com mais de alguns minutos, o worker não está rodando ou está caindo antes desse passo).
+select r.id, r.edition_id, r.status, r.status_reason, r.started_at
+from public.ingestion_runs r
+where r.status in ('queued', 'running')
+  and not exists (
+    select 1 from public.ingestion_steps s
+    where s.run_id = r.id and s.status in ('pending', 'running')
+  )
+order by r.started_at;
+```
+
+### Pausar, desligar ou acompanhar o cron
+
+```sql
+-- Últimas execuções do job (sucesso/erro, duração; pg_net é assíncrono, então "sucesso" aqui só
+-- quer dizer que o POST foi disparado, não que o worker terminou sem erro — ver "Acompanhar" acima)
+select start_time, end_time, status, return_message
+from cron.job_run_details
+where jobid = (select jobid from cron.job where jobname = 'process-ingestion')
+order by start_time desc limit 20;
+```
+
+- **Pausar sem tirar do ar:** secret `INGESTION_ENABLED=false` (ou `0`/`off`/`no`) nas functions.
+  O `pg_cron` continua chamando `process-ingestion` a cada minuto, mas a chamada devolve
+  `200 { skipped: ... }` sem tocar a fila nem o worker. Reversível na hora, sem deploy — é o jeito
+  certo para incidente.
+- **Desligar o agendamento de vez:** `select cron.unschedule('process-ingestion');` no SQL Editor.
+  Isso só some enquanto ninguém rodar as migrations nesse projeto: o próximo `db push` reaplica
+  `20260918130000_ber59_cron_process_ingestion.sql` (`cron.schedule`/`cron.alter_job` no `do $do$`)
+  e o job volta. Para desligar de vez **precisa** de uma migration nova que rode
+  `cron.unschedule`, senão o repositório e o banco divergem silenciosamente.
+
+### Lista de domínios
+
+`public.source_domain_policies` decide peso e bloqueio por domínio. Domínio fora da lista entra com
+peso D. Para bloquear um site cujos termos proíbem acesso automatizado:
+
+```sql
+insert into public.source_domain_policies (domain, policy, reason)
+values ('exemplo.com', 'blocked', 'Termos proíbem acesso automatizado');
+```
+
+Mudança de lista vai por migration quando for permanente, para não divergir do repositório.
+
+### Regras que não mudam sem decisão do time
+
+- Texto integral de obra protegida sem sinal de autorização é rejeitado
+  (`texto_integral_sem_autorizacao`). Mudar isso exige parecer jurídico (spec §10).
+- Texto bruto de fonte só existe em `ingestion_source_texts`, apagado ao fim da extração e fora do
+  backup (`-x public.ingestion_source_texts` no `backup.yml`).
+
 ## Troubleshooting
 
 ### `Authorization failed for the access token and project ref pair`

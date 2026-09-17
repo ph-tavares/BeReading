@@ -1,4 +1,4 @@
-// supabase/functions/lookup-book-by-isbn/openlibrary.test.ts
+// supabase/functions/_shared/openlibrary.test.ts
 import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
 import {
   buildCoverUrl,

@@ -361,3 +361,63 @@ migração do progresso dos leitores) é o primeiro item do próximo ciclo.
 - **Texto integral de obra protegida sem sinal de autorização:** a política deste design rejeita e
   registra o motivo. O time defende consumir; a decisão de mudar essa regra fica com o time e deve
   vir com parecer jurídico. O relatório de rejeitados (§8.6) dá o número para essa conversa.
+
+## 11. Refinamentos do plano de implementação
+
+Decididos ao escrever `docs/superpowers/plans/2026-09-16-ber-59-ingestao-conteudo-capitulo.md`:
+
+1. `source_domain_policies` ganha `source_type`, `authorizes_full_text` e `host_country`.
+2. `ingestion_sources` ganha `is_book_file`, `tied_to_isbn` e `declared_structure`.
+3. `book_editions.title` é nullable e a tabela ganha `first_publish_year`.
+4. `ingestion_runs` ganha `payload` (capítulos de rebusca).
+5. O conhecimento do capítulo é gravado no `verify`; o `publish` só fecha o run.
+6. A extração é um passo por bloco de texto, não por fonte.
+7. Domínio público é avaliado no Brasil, nos EUA e no país de hospedagem; o país de origem não vem
+   das bases bibliográficas. O idioma original é o da edição mais antiga da obra na Open Library.
+8. robots.txt fica em cache por execução do worker, não por 24 h.
+9. Estrutura de capítulos confirma com texto primário ou 2 grupos independentes de qualquer peso;
+   a regra mais rígida da §6.2 vale para fatos de enredo.
+
+Decididos ao executar o plano (PR 1 e PR 2):
+
+10. As FKs de `chapter_knowledge.run_id` e `chapter_fact_sources.source_id` são
+    `on delete no action deferrable initially deferred`, para uma poda de run só falhar (nunca
+    apagar em cascata conhecimento publicado), e a checagem adiada até o fim da transação evita a
+    ordem das cascatas travar a purga da edição.
+11. A troca de capítulos de uma edição usa a função transacional `replace_edition_chapters`, que
+    preserva o capítulo com identidade compatível entre a estrutura antiga e a nova (e o
+    conhecimento já ligado a ele) em vez de apagar tudo e recriar.
+12. Resolução de DNS: host que não resolve é rejeitado; NXDOMAIN (sem endereço) é distinto de
+    falha do resolvedor (timeout, rede, permissão), que vira `TypeError` e o passo é repetido como
+    transitório pela fila (§7). `ResolveFn` devolve `null` só quando o runtime não expõe API de
+    DNS; em produção isso recusa o host (fail-closed), a menos que o secret
+    `INGESTION_ALLOW_NO_DNS=true` libere de propósito.
+13. A checagem de SSRF também bloqueia IPv4 escrito como IPv6 (mapeado, compatível, NAT64, 6to4),
+    além de multicast e da faixa TEST-NET.
+14. A estrutura de capítulos não confirma quando existe candidato válido incompatível fora do
+    apoio sem nenhuma fonte ligada ao ISBN, nem quando uma fonte sem títulos serve de ponte entre
+    duas estruturas rivais e as confirmaria ambas.
+15. O delimitador usado para interpolar texto não confiável nos prompts é removido desse texto
+    antes de montar o prompt (defesa contra injeção).
+16. `insertSource` é insert-or-return-existing: uma URL já registrada no run devolve a decisão
+    existente em vez de sobrescrevê-la.
+17. O store do Supabase pagina leituras de lista além do `max_rows` (1000) do PostgREST, e os
+    erros de rede carregam o status HTTP (status 0, sem resposta, é tratado como transitório).
+18. A extração é idempotente por bloco de texto: `ingestion_claims.chunk_index` (migration
+    `20260918120000`) identifica o bloco, e uma retentativa apaga as afirmações daquele bloco
+    antes de reinserir.
+19. Agendar uma rebusca adia `next_recheck_at` (nunca grava `null`) antes de criar o run, para uma
+    falha na criação só atrasar a próxima tentativa em vez de parar de rebuscar o capítulo.
+20. As dependências `npm:` (`tldts`, `linkedom`, `@mozilla/readability`, `unpdf`) são fixadas em
+    versão exata, porque o repositório não tem `deno.lock`.
+21. Risco residual aceito de DNS rebinding: o IP é checado numa resolução e o `fetch` resolve o
+    nome de novo, então um DNS malicioso pode trocar o endereço entre as duas. O `fetch` do Deno
+    não permite fixar o IP resolvido. O impacto é limitado: o worker só faz `GET` sem credencial e
+    nenhuma resposta bruta é devolvida a ninguém (o texto só alimenta a extração e é descartado),
+    então na prática é uma requisição cega.
+22. Overlap de invocações do worker é aceito: `net.http_post` é assíncrono e o `pg_cron` dispara a
+    cada minuto sem esperar a chamada anterior terminar, então duas invocações podem rodar ao
+    mesmo tempo. `claim_ingestion_steps` reivindica com `for update skip locked`, então cada passo
+    ainda vai para uma única invocação; o efeito aceito é que o limite por domínio de
+    `fetchPage`/`fetchRobots` (spec §5) é por invocação, não compartilhado entre invocações
+    simultâneas.

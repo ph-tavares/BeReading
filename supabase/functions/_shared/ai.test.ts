@@ -69,3 +69,22 @@ Deno.test('callAI: status de erro vira exceção com o status na mensagem', asyn
   await withFetch(() => new Response('limite', { status: 429 }), () =>
     assertRejects(() => callAI({ prompt: 'p', maxTokens: 10 }), Error, 'Anthropic API error 429'));
 });
+
+Deno.test('callAI: timeoutMs passa um AbortSignal ao fetch; sem ele, nenhum (BER-59)', async () => {
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+  Deno.env.set('ANTHROPIC_API_KEY', 'k');
+  const signals: unknown[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    signals.push(init?.signal);
+    return Promise.resolve(Response.json({ content: [{ text: 'x' }] }));
+  }) as typeof fetch;
+  try {
+    await callAI({ prompt: 'p', maxTokens: 10, timeoutMs: 60_000 });
+    await callAI({ prompt: 'p', maxTokens: 10 });
+  } finally {
+    globalThis.fetch = original;
+  }
+  assertEquals(signals[0] instanceof AbortSignal, true);
+  assertEquals(signals[1], undefined);
+});
