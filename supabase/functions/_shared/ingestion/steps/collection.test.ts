@@ -3,6 +3,7 @@ import { fakeContext, NOW, page, seedRun, stepRow } from '../../test-support/ing
 import { MemoryIngestionStore } from '../../test-support/memoryIngestionStore.ts';
 import { LIMITS } from '../budget.ts';
 import { PermanentStepError } from '../queue.ts';
+import { DomainThrottle, type FetchDeps, fetchPage } from '../sources/fetch-page.ts';
 import { UnsafeUrlError } from '../ssrf.ts';
 import { DeferStepError } from './context.ts';
 import { runDiscoverStep } from './discover.ts';
@@ -11,6 +12,26 @@ import { publisherDomainMatches, runFetchStep } from './fetch.ts';
 
 // Texto sintético de resumo, com mais de 150 palavras (mínimo útil da política).
 const RESUMO = 'No capítulo um, a personagem Ana chega à cidade e procura o irmão. '.repeat(20);
+
+/** `fetchPage` de verdade sobre uma rede simulada: registra cada URL requisitada (BER-59). */
+function redeFalsa(routes: Record<string, () => Response>) {
+  const requested: string[] = [];
+  const deps: FetchDeps = {
+    fetchFn: ((input: RequestInfo | URL) => {
+      const url = String(input);
+      requested.push(url);
+      return Promise.resolve(routes[url]?.() ?? new Response('nada', { status: 404 }));
+    }) as typeof fetch,
+    resolve: () => Promise.resolve(['93.184.216.34']),
+    sleep: () => Promise.resolve(),
+    now: () => NOW,
+  };
+  const throttle = new DomainThrottle(deps);
+  return {
+    requested,
+    fetchPage: (url: string, beforeRequest?: (url: URL) => Promise<string | null>) => fetchPage(url, deps, throttle, beforeRequest),
+  };
+}
 
 Deno.test('edition: junta Open Library e Google Books, grava sumário ligado ao ISBN e enfileira buscas', async () => {
   const store = new MemoryIngestionStore(() => NOW);
@@ -100,16 +121,30 @@ Deno.test('fetch: resumo aceito guarda o texto temporário, a impressão e enfil
   assertEquals(outcome.enqueue, [{ kind: 'extract', subject: `${source.id}#0` }]);
 });
 
-Deno.test('fetch: robots.txt que proíbe impede o uso e não guarda texto', async () => {
+Deno.test('fetch: robots.txt que proíbe recusa antes de requisitar a página e não guarda texto (BER-59)', async () => {
   const store = new MemoryIngestionStore(() => NOW);
   const { run } = await seedRun(store);
-  const ctx = fakeContext(store, {
-    fetchPage: (url) => Promise.resolve(page(url, RESUMO)),
-    fetchRobots: () => Promise.resolve({ isAllowed: () => false }),
-  });
-  await runFetchStep(stepRow(run, 'fetch', 'https://blog.com/resumo'), run, ctx);
+  const rede = redeFalsa({ 'https://blog.com/resumo': () => new Response(RESUMO, { headers: { 'content-type': 'text/plain' } }) });
+  const ctx = fakeContext(store, { fetchPage: rede.fetchPage, fetchRobots: () => Promise.resolve({ isAllowed: () => false }) });
+  const outcome = await runFetchStep(stepRow(run, 'fetch', 'https://blog.com/resumo'), run, ctx);
   assertEquals(store.sources[0].rejectionReason, 'robots');
+  assertEquals(outcome.stats?.rejeitadas_robots, 1);
+  assertEquals(rede.requested, []);
   assertEquals(store.texts.size, 0);
+});
+
+Deno.test('fetch: redirecionamento para domínio bloqueado é recusado sem requisitar o destino (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  store.policies.push({ domain: 'pirata.example', policy: 'blocked', weight: null, sourceType: null, authorizesFullText: false, hostCountry: null });
+  const { run } = await seedRun(store);
+  const rede = redeFalsa({
+    'https://blog.com/resumo': () => new Response(null, { status: 302, headers: { location: 'https://pirata.example/livro.pdf' } }),
+    'https://pirata.example/livro.pdf': () => new Response(RESUMO, { headers: { 'content-type': 'text/plain' } }),
+  });
+  const outcome = await runFetchStep(stepRow(run, 'fetch', 'https://blog.com/resumo'), run, fakeContext(store, { fetchPage: rede.fetchPage }));
+  assertEquals([store.sources[0].rejectionReason, store.sources[0].url], ['dominio_bloqueado', 'https://blog.com/resumo']);
+  assertEquals(outcome.stats?.rejeitadas_dominio_bloqueado, 1);
+  assertEquals(rede.requested, ['https://blog.com/resumo']);
 });
 
 Deno.test('fetch: PDF de livro protegido sem autorização é rejeitado e contado', async () => {

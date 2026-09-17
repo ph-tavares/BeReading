@@ -36,7 +36,7 @@ export function buildProductionContext(): StepContext {
     },
     fetchEdition: (isbn) => fetchOpenLibraryEdition(isbn),
     fetchGoogle: (isbn) => fetchGoogleBooks(isbn),
-    fetchPage: (url) => fetchPage(url, deps, throttle),
+    fetchPage: (url, beforeRequest) => fetchPage(url, deps, throttle, beforeRequest),
     fetchRobots: (origin) => {
       if (!robots.has(origin)) robots.set(origin, fetchRobots(origin, deps, throttle));
       return robots.get(origin)!;

@@ -4,7 +4,7 @@
 import type { AIRequest, AIResult } from '../../ai.ts';
 import type { Stats } from '../budget.ts';
 import type { RobotsRules } from '../robots.ts';
-import type { FetchedPage } from '../sources/fetch-page.ts';
+import type { BeforeRequest, FetchedPage } from '../sources/fetch-page.ts';
 import type { GoogleBooksVolume } from '../sources/googlebooks.ts';
 import type { OpenLibraryEdition } from '../sources/openlibrary-edition.ts';
 import type { SearchResponse } from '../sources/tavily.ts';
@@ -23,7 +23,8 @@ export interface StepContext {
   search: (query: string) => Promise<SearchResponse>;
   fetchEdition: (isbn: string) => Promise<OpenLibraryEdition | null>;
   fetchGoogle: (isbn: string) => Promise<GoogleBooksVolume | null>;
-  fetchPage: (url: string) => Promise<FetchedPage>;
+  /** `beforeRequest` roda antes de cada salto (inclusive redirecionamentos) e pode recusar a fonte. */
+  fetchPage: (url: string, beforeRequest?: BeforeRequest) => Promise<FetchedPage>;
   fetchRobots: (origin: string) => Promise<RobotsRules>;
   notify: (context: string, message: string) => Promise<void>;
 }

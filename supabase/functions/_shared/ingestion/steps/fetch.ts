@@ -6,7 +6,7 @@ import { registrableDomain, simhash } from '../independence.ts';
 import { detectLanguage } from '../language.ts';
 import { decideSource, detectLicense, looksLikeLoginOrPaywall, type PolicyDecision, type RejectionReason } from '../policy.ts';
 import { hasNoAiSignal } from '../robots.ts';
-import { BOOK_FILE_MIN_PAGES, countWords, type FetchedPage } from '../sources/fetch-page.ts';
+import { BOOK_FILE_MIN_PAGES, countWords, type FetchedPage, SourceRejectedError } from '../sources/fetch-page.ts';
 import { UnsafeUrlError } from '../ssrf.ts';
 import type { NewSource } from '../store.ts';
 import type { StepExecutor } from './context.ts';
@@ -43,18 +43,29 @@ export const runFetchStep: StepExecutor = async (step, run, ctx) => {
   const initialPolicy = domain ? await ctx.store.getDomainPolicy(domain) : null;
   if (initialPolicy?.policy === 'blocked') return reject('dominio_bloqueado');
 
+  // Domínio bloqueado e robots.txt valem para cada salto e antes de baixar (BER-59, spec §5.9):
+  // um redirecionamento não pode levar o worker a baixar de domínio bloqueado ou de caminho que
+  // o robots.txt proíbe.
+  const beforeRequest = async (url: URL): Promise<RejectionReason | null> => {
+    const hopDomain = registrableDomain(url.toString());
+    if (hopDomain && (await ctx.store.getDomainPolicy(hopDomain))?.policy === 'blocked') return 'dominio_bloqueado';
+    const robots = await ctx.fetchRobots(url.origin);
+    if (!robots.isAllowed(url.pathname + url.search)) return 'robots';
+    return null;
+  };
+
   let fetched: FetchedPage;
   try {
-    fetched = await ctx.fetchPage(step.subject);
+    fetched = await ctx.fetchPage(step.subject, beforeRequest);
   } catch (err) {
     if (err instanceof UnsafeUrlError) return reject('endereco_nao_publico');
+    // O motivo vem do gancho acima ou dos limites do download, todos `RejectionReason`.
+    if (err instanceof SourceRejectedError) return reject(err.reason as RejectionReason);
     throw err;
   }
 
   const finalDomain = registrableDomain(fetched.finalUrl) ?? domain;
   const domainPolicy = finalDomain !== domain && finalDomain ? await ctx.store.getDomainPolicy(finalDomain) : initialPolicy;
-  const finalUrl = new URL(fetched.finalUrl);
-  const robots = await ctx.fetchRobots(finalUrl.origin);
   const isBookFile = fetched.kind === 'pdf' && (fetched.pdfPages ?? 0) >= BOOK_FILE_MIN_PAGES;
 
   const decision = decideSource({
@@ -69,7 +80,8 @@ export const runFetchStep: StepExecutor = async (step, run, ctx) => {
       wordCount: countWords(fetched.text),
       license: fetched.html ? detectLicense(fetched.html) : null,
       pageLanguage: detectLanguage(fetched.text.slice(0, 20_000)),
-      robotsAllowed: robots.isAllowed(finalUrl.pathname + finalUrl.search),
+      // O gancho `beforeRequest` já recusou antes do download o que o robots.txt proíbe.
+      robotsAllowed: true,
       noAi: hasNoAiSignal(fetched.headers, fetched.html),
     },
     edition: {

@@ -10,6 +10,7 @@ import {
   htmlToText,
   MAX_REDIRECTS,
   readLimited,
+  SourceRejectedError,
 } from './fetch-page.ts';
 
 // HTML sintético (repositório público: nada de página real de terceiros).
@@ -62,6 +63,21 @@ Deno.test('fetchPage: segue um redirecionamento e devolve texto de HTML', async 
 Deno.test('fetchPage: redirecionamento para endereço interno é recusado', async () => {
   const d = deps({ 'https://ex.com/a': () => new Response(null, { status: 302, headers: { location: 'http://169.254.169.254/latest' } }) });
   await assertRejects(() => fetchPage('https://ex.com/a', d, new DomainThrottle(d)), UnsafeUrlError);
+});
+
+Deno.test('fetchPage: gancho antes de cada salto recusa o destino do redirecionamento sem requisitá-lo (BER-59)', async () => {
+  const d = deps({ 'https://ex.com/a': () => new Response(null, { status: 302, headers: { location: 'https://pirata.example/livro' } }) });
+  const vistos: string[] = [];
+  const err = await assertRejects(
+    () => fetchPage('https://ex.com/a', d, new DomainThrottle(d), (url) => {
+      vistos.push(url.toString());
+      return Promise.resolve(url.hostname === 'pirata.example' ? 'dominio_bloqueado' : null);
+    }),
+    SourceRejectedError,
+  );
+  assertEquals(err.reason, 'dominio_bloqueado');
+  assertEquals(vistos, ['https://ex.com/a', 'https://pirata.example/livro']);
+  assertEquals(d.requested, ['https://ex.com/a']);
 });
 
 Deno.test('fetchPage: redirecionamentos demais é erro permanente', async () => {

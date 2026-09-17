@@ -18,6 +18,23 @@ export const MAX_PDF_PAGES = 1000;
 export const BOOK_FILE_MIN_PAGES = 40;
 export const DOMAIN_INTERVAL_MS = 2_000;
 
+/**
+ * Fonte recusada por um motivo de auditoria, não por falha (BER-59): o passo `fetch` grava a
+ * fonte rejeitada com `reason` em vez de falhar o passo sem deixar linha.
+ */
+export class SourceRejectedError extends PermanentStepError {
+  constructor(readonly reason: string, message: string) {
+    super(message);
+  }
+}
+
+/**
+ * Chamado antes de cada salto, já com o endereço checado e antes de baixar (BER-59): devolve o
+ * motivo para recusar (domínio bloqueado, robots.txt) ou `null`. Checar só a URL final depois do
+ * download baixaria o conteúdo de um domínio bloqueado alcançado por redirecionamento.
+ */
+export type BeforeRequest = (url: URL) => Promise<string | null>;
+
 export interface FetchDeps {
   fetchFn: typeof fetch;
   resolve: ResolveFn;
@@ -98,10 +115,17 @@ function decode(bytes: Uint8Array, contentType: string): string {
   }
 }
 
-async function request(url: string, deps: FetchDeps, throttle: DomainThrottle): Promise<{ res: Response; finalUrl: string }> {
+async function request(
+  url: string,
+  deps: FetchDeps,
+  throttle: DomainThrottle,
+  beforeRequest?: BeforeRequest,
+): Promise<{ res: Response; finalUrl: string }> {
   let current = url;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const parsed = await assertPublicUrl(current, deps.resolve);
+    const reason = beforeRequest ? await beforeRequest(parsed) : null;
+    if (reason) throw new SourceRejectedError(reason, `${parsed} recusada antes do download: ${reason}`);
     await throttle.wait(parsed.hostname);
     const res = await deps.fetchFn(parsed.toString(), {
       redirect: 'manual',
@@ -119,8 +143,8 @@ async function request(url: string, deps: FetchDeps, throttle: DomainThrottle): 
   throw new PermanentStepError(`mais de ${MAX_REDIRECTS} redirecionamentos a partir de ${url}`);
 }
 
-export async function fetchPage(url: string, deps: FetchDeps, throttle: DomainThrottle): Promise<FetchedPage> {
-  const { res, finalUrl } = await request(url, deps, throttle);
+export async function fetchPage(url: string, deps: FetchDeps, throttle: DomainThrottle, beforeRequest?: BeforeRequest): Promise<FetchedPage> {
+  const { res, finalUrl } = await request(url, deps, throttle, beforeRequest);
   const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
   const base = { finalUrl, status: res.status, headers: res.headers, title: null, html: null, pdfPages: null };
 
