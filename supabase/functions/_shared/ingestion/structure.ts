@@ -139,8 +139,15 @@ function build(
 }
 
 export function confirmStructure(candidates: StructureCandidate[]): ConfirmedStructure | null {
-  const valid = candidates.filter((c) => c.complete && isContiguous(c.chapters));
+  const complete = candidates.filter((c) => c.complete && isContiguous(c.chapters));
   const partials = candidates.filter((c) => !(c.complete && isContiguous(c.chapters)) && isContiguousRun(c.chapters));
+
+  // Lista completa que termina antes de um capítulo descrito por uma lista parcial está refutada:
+  // foi lida pela metade. Duas listas completas em desacordo continuam sendo conflito de edição, e
+  // nenhuma confirma. No segundo teste de 1984 (BER-59), uma lista de 23 capítulos rivalizava com a
+  // de 24 e derrubava as duas, embora um índice parcial descrevesse o capítulo 24.
+  const maiorEmParcial = Math.max(...partials.map((p) => p.chapters[p.chapters.length - 1].number), 0);
+  const valid = complete.filter((c) => c.chapters.length >= maiorEmParcial);
 
   const tied = valid.filter((c) => c.tiedToIsbn);
   if (tied.length > 0) {

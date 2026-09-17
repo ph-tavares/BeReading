@@ -478,3 +478,9 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
 32. **Lista parcial é comparada só por número e título.** Parte e número dentro da parte ficam de
     fora: quem lista um trecho costuma renumerar a parte (no mesmo teste, o índice que começava no
     capítulo 3 chamava-o de primeiro da parte), e isso sozinho bloqueava a confirmação.
+33. **Lista completa refutada por lista parcial sai da disputa.** Uma lista que diz terminar no
+    capítulo 23 enquanto um índice parcial descreve o 24 foi lida pela metade, não é outra edição:
+    ela é descartada antes da comparação. Duas listas completas em desacordo continuam sendo
+    conflito de edição e nenhuma confirma. No terceiro teste de 1984, uma lista de 23 capítulos
+    rivalizava com a de 24 e derrubava as duas. Custo aceito: uma fonte que invente um capítulo
+    além do fim descarta as listas corretas, e aí nada confirma — o run fecha `partial`.
