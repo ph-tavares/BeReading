@@ -208,6 +208,7 @@ $$;
 -- conhecimento e as afirmações localizadas). Só capítulo removido ou com parte, número na
 -- parte ou título diferente é apagado (a cascata leva o conhecimento) e reinserido. Tudo numa
 -- função, portanto numa transação: nunca fica edição sem capítulos no meio da troca.
+-- allow-destructive: os DELETE ficam dentro de replace_edition_chapters e só rodam quando a ingestão (BER-59) substitui capítulos de uma edição; aplicar esta migration não apaga dado nenhum.
 create function public.replace_edition_chapters(p_edition_id uuid, p_chapters jsonb, p_confidence numeric)
 returns setof public.edition_chapters
 language plpgsql
