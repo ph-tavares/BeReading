@@ -66,3 +66,18 @@ Deno.test('confirmStructure: fonte sem títulos não une estruturas com títulos
   assertEquals(confirmStructure([a, semTitulos, b]), null);
   assertEquals(confirmStructure([b, a, semTitulos]), null);
 });
+
+Deno.test('confirmStructure: fonte A com 3 capítulos e fonte D com 2 não confirmam (edições em conflito, spec §6.3)', () => {
+  assertEquals(confirmStructure([
+    cand({ sourceId: 'gut', independenceGroup: 'gutenberg.org', weight: 'A' }),
+    cand({ sourceId: 'd', independenceGroup: 'd.com', chapters: [ch(1), ch(2)] }),
+  ]), null);
+});
+
+Deno.test('confirmStructure: dois D concordando e um D incompatível não confirmam', () => {
+  assertEquals(confirmStructure([
+    cand({ sourceId: 'a', independenceGroup: 'a.com' }),
+    cand({ sourceId: 'b', independenceGroup: 'b.com' }),
+    cand({ sourceId: 'c', independenceGroup: 'c.com', chapters: [ch(1, 'Do título'), ch(2, 'Outro'), ch(3, 'A denúncia')] }),
+  ]), null);
+});

@@ -108,6 +108,11 @@ export function confirmStructure(candidates: StructureCandidate[]): ConfirmedStr
   const confirmed = cluster(valid).filter((members) => structureConfirmed(supportsOf(supportersOf(members, valid))));
   if (confirmed.length !== 1) return null;
   const members = confirmed[0];
-  const basis = supportersOf(members, valid).some((m) => m.weight === 'A') ? 'primary' : 'independent';
+  const supporters = supportersOf(members, valid);
+  // Spec §6.3 (BER-59): sem fonte ligada ao ISBN, qualquer fonte válida que discorde da estrutura
+  // pode ser de outra edição — não dá para saber qual vale, então nada confirma. Custo aceito:
+  // uma única fonte errada bloqueia a confirmação e o run fecha como `partial`.
+  if (valid.some((c) => !supporters.includes(c) && !compatibleWithAll(members, c))) return null;
+  const basis = supporters.some((m) => m.weight === 'A') ? 'primary' : 'independent';
   return build(members, valid, basis);
 }
