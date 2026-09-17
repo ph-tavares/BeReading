@@ -32,6 +32,19 @@ type StoredKnowledge = {
   nextRecheckAt: string | null;
 };
 
+const sameText = (a: string | null, b: string | null) => a === null || b === null || a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** Parte, número na parte e título iguais ou ausentes de um dos lados (sem diferenciar caixa e espaços nas pontas). */
+function identityCompatible(current: EditionChapter, next: DeclaredChapter): boolean {
+  return sameText(current.partLabel, next.part)
+    && (current.numberInPart === null || next.numberInPart === null || current.numberInPart === next.numberInPart)
+    && sameText(current.title, next.title);
+}
+
+/** O store do Supabase ignora campo `undefined` no patch; este espelha para não apagar valor por engano. */
+const defined = <T extends object>(patch: T): Partial<T> =>
+  Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as Partial<T>;
+
 function notFound(what: string, id: string): never {
   throw new Error(`${what} não encontrado: ${id}`);
 }
@@ -91,7 +104,7 @@ export class MemoryIngestionStore implements IngestionStore {
   }
 
   async updateRun(id: string, patch: { status?: RunRow['status']; statusReason?: string | null; finishedAt?: string | null; structureDivergence?: unknown }) {
-    Object.assign(await this.getRun(id), patch);
+    Object.assign(await this.getRun(id), defined(patch));
   }
 
   async incrementRunStats(id: string, delta: Record<string, number>) {
@@ -133,7 +146,7 @@ export class MemoryIngestionStore implements IngestionStore {
 
   async finishStep(id: string, patch: { status: StepRow['status']; attempts?: number; nextAttemptAt?: string; error?: string | null; payload?: Record<string, unknown> }) {
     const step = this.steps.find((s) => s.id === id) ?? notFound('passo', id);
-    Object.assign(step, patch, { lockedAt: null });
+    Object.assign(step, defined(patch), { lockedAt: null });
   }
 
   async listSteps(runId: string) {
@@ -212,15 +225,35 @@ export class MemoryIngestionStore implements IngestionStore {
   }
 
   async replaceEditionChapters(editionId: string, chapters: DeclaredChapter[], confidence: number) {
-    const removed = new Set(this.chapters.filter((c) => c.editionId === editionId).map((c) => c.id));
-    this.chapters = this.chapters.filter((c) => c.editionId !== editionId);
-    const removedKnowledge = new Set(this.knowledge.filter((k) => removed.has(k.editionChapterId)).map((k) => k.id));
-    this.knowledge = this.knowledge.filter((k) => !removedKnowledge.has(k.id));
-    this.facts = this.facts.filter((f) => !removedKnowledge.has(f.knowledgeId));
-    for (const claim of this.claims) {
-      if (claim.editionChapterId && removed.has(claim.editionChapterId)) claim.editionChapterId = null;
+    // Mesma semântica de `public.replace_edition_chapters` (BER-59): capítulo cuja identidade
+    // não mudou mantém id e conhecimento; removido ou trocado leva o conhecimento junto (cascata)
+    // e as afirmações localizadas nele ficam sem capítulo (on delete set null).
+    const incoming = new Map(chapters.map((c) => [c.number, c]));
+    const dropped = new Set<string>();
+    for (const current of this.chapters.filter((c) => c.editionId === editionId)) {
+      const next = incoming.get(current.number);
+      if (next && identityCompatible(current, next)) {
+        Object.assign(current, {
+          partLabel: next.part ?? current.partLabel,
+          numberInPart: next.numberInPart ?? current.numberInPart,
+          title: next.title ?? current.title,
+          confidence,
+        });
+        incoming.delete(current.number);
+      } else {
+        dropped.add(current.id);
+      }
     }
-    for (const c of chapters) {
+    this.chapters = this.chapters.filter((c) => !dropped.has(c.id));
+    const droppedKnowledge = new Set(this.knowledge.filter((k) => dropped.has(k.editionChapterId)).map((k) => k.id));
+    this.knowledge = this.knowledge.filter((k) => !droppedKnowledge.has(k.id));
+    const droppedFacts = new Set(this.facts.filter((f) => droppedKnowledge.has(f.knowledgeId)).map((f) => f.id));
+    this.facts = this.facts.filter((f) => !droppedFacts.has(f.id));
+    this.factSources = this.factSources.filter((fs) => !droppedFacts.has(fs.factId));
+    for (const claim of this.claims) {
+      if (claim.editionChapterId && dropped.has(claim.editionChapterId)) claim.editionChapterId = null;
+    }
+    for (const c of incoming.values()) {
       this.chapters.push({ id: crypto.randomUUID(), editionId, number: c.number, partLabel: c.part, numberInPart: c.numberInPart, title: c.title, confidence });
     }
     return this.listEditionChapters(editionId);

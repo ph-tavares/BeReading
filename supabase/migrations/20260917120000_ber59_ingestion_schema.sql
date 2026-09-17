@@ -130,8 +130,11 @@ create index idx_ingestion_claims_chapter on public.ingestion_claims (edition_ch
 create table public.chapter_knowledge (
   id uuid primary key default extensions.uuid_generate_v4(),
   edition_chapter_id uuid not null unique references public.edition_chapters(id) on delete cascade,
-  -- BER-59: runs são auditoria permanente; conhecimento publicado não pode sumir junto — apagar um run que ainda sustenta conhecimento tem que falhar alto.
-  run_id uuid not null references public.ingestion_runs(id) on delete restrict,
+  -- BER-59: runs são auditoria permanente; conhecimento publicado não pode sumir junto — apagar um run
+  -- que ainda sustenta conhecimento tem que falhar alto. `no action` adiado para o commit (e não `restrict`)
+  -- porque o Postgres executa as cascatas em largura: checada na hora, a exclusão da edição inteira falharia
+  -- antes de a cascata pelos capítulos levar o conhecimento. Adiada, a edição some; o run sozinho continua falhando.
+  run_id uuid not null references public.ingestion_runs(id) on delete no action deferrable initially deferred,
   status text not null check (status in ('confirmed', 'partial', 'insufficient')),
   confidence numeric(3,2) not null check (confidence between 0 and 1),
   summary text not null default '',
@@ -152,8 +155,11 @@ create table public.chapter_facts (
 
 create table public.chapter_fact_sources (
   fact_id uuid not null references public.chapter_facts(id) on delete cascade,
-  -- BER-59: sources são auditoria permanente; proveniência de fato publicado não pode sumir junto — apagar uma source que ainda sustenta fato tem que falhar alto.
-  source_id uuid not null references public.ingestion_sources(id) on delete restrict,
+  -- BER-59: sources são auditoria permanente; proveniência de fato publicado não pode sumir junto — apagar
+  -- uma source que ainda sustenta fato tem que falhar alto. `no action` adiado para o commit (e não `restrict`)
+  -- porque o Postgres executa as cascatas em largura: checada na hora, a exclusão da edição inteira falharia
+  -- antes de a cascata pelos capítulos levar os fatos. Adiada, a edição some; a source sozinha continua falhando.
+  source_id uuid not null references public.ingestion_sources(id) on delete no action deferrable initially deferred,
   primary key (fact_id, source_id)
 );
 
@@ -197,10 +203,69 @@ as $$
    where r.id = p_run_id;
 $$;
 
+-- Troca a estrutura de capítulos de uma edição (BER-59). Reingerir não pode apagar o
+-- conhecimento de capítulo cuja identidade não mudou: ele mantém o id (e com isso o
+-- conhecimento e as afirmações localizadas). Só capítulo removido ou com parte, número na
+-- parte ou título diferente é apagado (a cascata leva o conhecimento) e reinserido. Tudo numa
+-- função, portanto numa transação: nunca fica edição sem capítulos no meio da troca.
+create function public.replace_edition_chapters(p_edition_id uuid, p_chapters jsonb, p_confidence numeric)
+returns setof public.edition_chapters
+language plpgsql
+set search_path = ''
+as $$
+declare
+  item jsonb;
+  v_number int;
+  v_part text;
+  v_number_in_part int;
+  v_title text;
+  existing public.edition_chapters%rowtype;
+begin
+  delete from public.edition_chapters c
+   where c.edition_id = p_edition_id
+     and c.number not in (select (e ->> 'number')::int from jsonb_array_elements(p_chapters) e);
+
+  for item in select * from jsonb_array_elements(p_chapters) loop
+    v_number := (item ->> 'number')::int;
+    v_part := item ->> 'part_label';
+    v_number_in_part := (item ->> 'number_in_part')::int;
+    v_title := item ->> 'title';
+
+    select * into existing
+      from public.edition_chapters c
+     where c.edition_id = p_edition_id and c.number = v_number
+       for update;
+
+    if found
+       and (existing.part_label is null or v_part is null or lower(trim(existing.part_label)) = lower(trim(v_part)))
+       and (existing.number_in_part is null or v_number_in_part is null or existing.number_in_part = v_number_in_part)
+       and (existing.title is null or v_title is null or lower(trim(existing.title)) = lower(trim(v_title))) then
+      update public.edition_chapters c
+         set part_label = coalesce(v_part, c.part_label),
+             number_in_part = coalesce(v_number_in_part, c.number_in_part),
+             title = coalesce(v_title, c.title),
+             confidence = p_confidence
+       where c.id = existing.id;
+    else
+      if found then
+        delete from public.edition_chapters c where c.id = existing.id;
+      end if;
+      insert into public.edition_chapters (edition_id, number, part_label, number_in_part, title, confidence)
+      values (p_edition_id, v_number, v_part, v_number_in_part, v_title, p_confidence);
+    end if;
+  end loop;
+
+  return query
+    select * from public.edition_chapters c where c.edition_id = p_edition_id order by c.number;
+end
+$$;
+
 revoke all on function public.claim_ingestion_steps(int, timestamptz) from public, anon, authenticated;
 revoke all on function public.increment_ingestion_run_stats(uuid, jsonb) from public, anon, authenticated;
 grant execute on function public.claim_ingestion_steps(int, timestamptz) to service_role;
 grant execute on function public.increment_ingestion_run_stats(uuid, jsonb) to service_role;
+revoke all on function public.replace_edition_chapters(uuid, jsonb, numeric) from public, anon, authenticated;
+grant execute on function public.replace_edition_chapters(uuid, jsonb, numeric) to service_role;
 
 insert into public.source_domain_policies
   (domain, policy, weight, source_type, authorizes_full_text, host_country, reason)
@@ -248,6 +313,11 @@ begin
     if has_table_privilege('anon', format('public.%I', t), 'select')
        or has_table_privilege('authenticated', format('public.%I', t), 'select') then
       raise exception 'BER-59: anon/authenticated ainda leem public.%', t;
+    end if;
+    -- Escrita também: sem ela, o cliente poderia injetar fato publicado ou apagar conhecimento.
+    if has_table_privilege('anon', format('public.%I', t), 'insert, update, delete')
+       or has_table_privilege('authenticated', format('public.%I', t), 'insert, update, delete') then
+      raise exception 'BER-59: anon/authenticated ainda escrevem em public.%', t;
     end if;
   end loop;
 end
