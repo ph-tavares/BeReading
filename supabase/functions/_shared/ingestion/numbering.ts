@@ -18,3 +18,37 @@ export function sourceNumbersWholeBook(declared: DeclaredChapter[] | null, chapt
   const maiorDeclarado = Math.max(0, ...(declared ?? []).map((c) => c.number));
   return maiorDeclarado > maiorParte;
 }
+
+/**
+ * A fonte sabe mesmo em que capítulo cada coisa acontece? Página sobre um capítulo só (declara 1 ou
+ * 2 capítulos) sabe. Guia capítulo a capítulo, que declara muitos e espalha as afirmações por
+ * vários, sabe. Resumo do livro inteiro que declara 24 capítulos e joga tudo no capítulo 1 não sabe
+ * — foi o que levou a Sala 101 e o bilhete de Julia para o capítulo 1 do 1984 (BER-59).
+ */
+export const MIN_DISTINCT_CHAPTERS = 3;
+
+export function chapterRefsLookReliable(declaredChapters: number, distinctChaptersInClaims: number): boolean {
+  if (declaredChapters < MIN_DISTINCT_CHAPTERS) return true;
+  return distinctChaptersInClaims >= MIN_DISTINCT_CHAPTERS;
+}
+
+/** Fontes cuja atribuição de capítulo é confiável, olhando as afirmações que cada uma gerou. */
+export function reliableSources(
+  sources: { id: string; declaredStructure: { number: number }[] | null }[],
+  claims: { sourceId: string; chapterRef: { number: number | null; numberInPart: number | null; part: string | null } | null }[],
+): Set<string> {
+  const distintos = new Map<string, Set<string>>();
+  for (const claim of claims) {
+    if (!claim.chapterRef) continue;
+    const chave = JSON.stringify([claim.chapterRef.part, claim.chapterRef.number, claim.chapterRef.numberInPart]);
+    const set = distintos.get(claim.sourceId) ?? new Set<string>();
+    set.add(chave);
+    distintos.set(claim.sourceId, set);
+  }
+  return new Set(
+    sources
+      .filter((s) => chapterRefsLookReliable((s.declaredStructure ?? []).length, distintos.get(s.id)?.size ?? 0))
+      .map((s) => s.id),
+  );
+}
+

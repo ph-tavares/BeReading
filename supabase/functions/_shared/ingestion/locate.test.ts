@@ -1,6 +1,6 @@
 import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
 import { locateChapter, looksForwardReferencing, normalizePart, normalizeTitle, partsOf } from './locate.ts';
-import { sourceNumbersWholeBook } from './numbering.ts';
+import { chapterRefsLookReliable, reliableSources, sourceNumbersWholeBook } from './numbering.ts';
 import type { ChapterRef, EditionChapter } from './types.ts';
 
 const ref = (over: Partial<ChapterRef>): ChapterRef => ({ number: null, part: null, numberInPart: null, title: null, ...over });
@@ -118,4 +118,33 @@ Deno.test('sourceNumbersWholeBook: só com número maior que a maior parte', () 
   assertEquals(sourceNumbersWholeBook(lista(10), MIL984), false, '10 cabe na maior parte: pode ser numeração por parte');
   assertEquals(sourceNumbersWholeBook(null, MIL984), false);
   assertEquals(sourceNumbersWholeBook(null, COM_TITULOS), true, 'sem partes não há ambiguidade');
+});
+
+// Caso do quinto teste de 1984 (BER-59): uma página resumia o livro inteiro, declarava os 24
+// capítulos e marcava todas as afirmações como capítulo 1 — a Sala 101 e o bilhete de Julia
+// entraram no primeiro capítulo por causa dela.
+Deno.test('chapterRefsLookReliable: resumo do livro inteiro que joga tudo num capítulo não é confiável', () => {
+  assertEquals(chapterRefsLookReliable(24, 1), false);
+  assertEquals(chapterRefsLookReliable(23, 17), true, 'guia capítulo a capítulo espalha as afirmações');
+  assertEquals(chapterRefsLookReliable(1, 1), true, 'página de um capítulo só sabe onde está');
+  assertEquals(chapterRefsLookReliable(2, 1), true);
+});
+
+Deno.test('reliableSources: separa o guia capítulo a capítulo do resumo do livro inteiro', () => {
+  const lista = (n: number) => Array.from({ length: n }, (_, i) => ({ number: i + 1 }));
+  const claim = (sourceId: string, number: number) => ({
+    sourceId,
+    chapterRef: { number, numberInPart: null, part: null },
+  });
+  const fontes = [
+    { id: 'resumo', declaredStructure: lista(24) },
+    { id: 'guia', declaredStructure: lista(23) },
+    { id: 'pagina', declaredStructure: lista(1) },
+  ];
+  const claims = [
+    claim('resumo', 1), claim('resumo', 1), claim('resumo', 1),
+    claim('guia', 1), claim('guia', 7), claim('guia', 19),
+    claim('pagina', 1),
+  ];
+  assertEquals([...reliableSources(fontes, claims)].sort(), ['guia', 'pagina']);
 });

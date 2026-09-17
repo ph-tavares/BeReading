@@ -503,3 +503,12 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
       isso só aparece no título ou na URL da página.
     Custo aceito: fonte que numera por parte sem dizer a parte perde as afirmações, em vez de
     colocá-las no capítulo errado.
+36. **Fonte que resume o livro inteiro não sabe em que capítulo cada coisa acontece.** No quinto
+    teste do 1984, uma página com resumo geral declarava os 24 capítulos e marcou as 20
+    afirmações dela como capítulo 1 — a Sala 101, o bilhete de Julia e o quarto acima da loja do
+    sr. Charrington foram parar no primeiro capítulo. A atribuição de capítulo de uma fonte só é
+    aceita quando ela declara menos de 3 capítulos (página de um capítulo só) ou quando espalha
+    as afirmações por pelo menos 3 capítulos distintos (guia capítulo a capítulo). Custo aceito e
+    medido: no 1984, isso descarta as 20 afirmações da fonte errada, mas também deixa o livro sem
+    cobertura, porque as fontes ricas (texto integral e guias por capítulo) numeram por parte sem
+    dizer a parte — resolver isso é o passo seguinte, não este.
