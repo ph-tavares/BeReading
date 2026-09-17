@@ -172,6 +172,28 @@ export class SupabaseIngestionStore implements IngestionStore {
     return count ?? 0;
   }
 
+  async listStalledRuns(limit: number) {
+    // Duas consultas em vez de uma função SQL (BER-59): runs abertos página a página, e para cada
+    // lote os que ainda têm passo ativo. Para no `limit`; o resto fica para o próximo ciclo.
+    const stalled: RunRow[] = [];
+    for (let from = 0; stalled.length < limit; from += ID_CHUNK) {
+      const runs = must(
+        await this.db.from('ingestion_runs').select('*').in('status', ['queued', 'running']).order('id').range(from, from + ID_CHUNK - 1),
+        'listStalledRuns',
+      );
+      if (runs.length === 0) break;
+      const ids = runs.map((r: Row) => r.id);
+      const activeRows = await selectAll(
+        () => this.db.from('ingestion_steps').select('id, run_id').in('run_id', ids).in('status', ['pending', 'running']),
+        'listStalledRuns(steps)',
+      );
+      const active = new Set(activeRows.map((r: Row) => r.run_id));
+      stalled.push(...runs.filter((r: Row) => !active.has(r.id)).map(toRun));
+      if (runs.length < ID_CHUNK) break;
+    }
+    return stalled.slice(0, limit);
+  }
+
   async sumRunStatSince(key: string, iso: string) {
     const rows = await selectAll(() => this.db.from('ingestion_runs').select('stats').gte('started_at', iso), 'sumRunStatSince');
     return rows.reduce((sum: number, r: Row) => sum + Number(r.stats?.[key] ?? 0), 0);

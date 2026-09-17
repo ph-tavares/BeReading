@@ -117,6 +117,11 @@ export class MemoryIngestionStore implements IngestionStore {
     return this.runs.filter((r) => r.startedAt >= iso).length;
   }
 
+  async listStalledRuns(limit: number) {
+    const active = new Set(this.steps.filter((s) => s.status === 'pending' || s.status === 'running').map((s) => s.runId));
+    return this.runs.filter((r) => (r.status === 'queued' || r.status === 'running') && !active.has(r.id)).slice(0, limit);
+  }
+
   async sumRunStatSince(key: string, iso: string) {
     return this.runs.filter((r) => r.startedAt >= iso).reduce((sum, r) => sum + (r.stats[key] ?? 0), 0);
   }

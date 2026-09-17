@@ -141,6 +141,8 @@ export interface IngestionStore {
   updateRun(id: string, patch: { status?: RunStatus; statusReason?: string | null; finishedAt?: string | null; structureDivergence?: unknown }): Promise<void>;
   incrementRunStats(id: string, delta: Record<string, number>): Promise<void>;
   countRunsSince(iso: string): Promise<number>;
+  /** Runs `queued`/`running` sem nenhum passo `pending`/`running` (BER-59): ninguém mais os avançaria. */
+  listStalledRuns(limit: number): Promise<RunRow[]>;
   sumRunStatSince(key: string, iso: string): Promise<number>;
 
   enqueueSteps(steps: NewStep[]): Promise<void>;

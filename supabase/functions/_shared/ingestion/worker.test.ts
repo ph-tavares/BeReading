@@ -6,7 +6,7 @@ import { HttpStatusError } from './queue.ts';
 import { RECHECK_AFTER_MS } from './recheck.ts';
 import { DeferStepError, type StepContext } from './steps/context.ts';
 import { EXECUTORS } from './steps/index.ts';
-import { RECHECK_EDITIONS_PER_CYCLE, runWorker, scheduleRechecks } from './worker.ts';
+import { recoverStalledRuns, RECHECK_EDITIONS_PER_CYCLE, runWorker, scheduleRechecks } from './worker.ts';
 
 // Livro, fontes e textos sintéticos (repositório público). Vocabulário diferente entre as
 // duas fontes de propósito: precisam ficar em grupos de independência distintos (§5.6), senão
@@ -151,4 +151,53 @@ Deno.test('runWorker: passo adiado devolve a tentativa que a reivindicação con
   const report = await runWorker(fakeContext(store), { ...EXECUTORS, edition: () => Promise.reject(new DeferStepError(until)) });
   const edition = store.steps.find((s) => s.kind === 'edition')!;
   assertEquals([edition.status, edition.attempts, edition.nextAttemptAt, report.deferred], ['pending', 0, until, 1]);
+});
+
+Deno.test('runWorker: run parado com publish falho fecha como failed e avisa a operação (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seed(store);
+  await store.updateRun(run.id, { status: 'running' });
+  await store.enqueueSteps([{ runId: run.id, kind: 'publish', subject: '-' }]);
+  Object.assign(store.steps[0], { status: 'done' });
+  Object.assign(store.steps[1], { status: 'failed', error: 'worker_morreu' });
+
+  const ctx = fakeContext(store);
+  await runWorker(ctx);
+
+  const final = await store.getRun(run.id);
+  assertEquals([final.status, final.statusReason, final.finishedAt], ['failed', 'publish_falhou', new Date(NOW).toISOString()]);
+  assertEquals(ctx.notifications.length, 1);
+  assert(ctx.notifications[0].includes(run.id));
+});
+
+Deno.test('recoverStalledRuns: run parado só com coleta terminada ganha o passo structure; run com passo ativo fica (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seed(store);
+  await store.updateRun(run.id, { status: 'running' });
+  await store.enqueueSteps([{ runId: run.id, kind: 'discover', subject: 'q' }]);
+  for (const step of store.steps) step.status = 'done';
+  const ativo = await seed(store);
+
+  assertEquals((await store.listStalledRuns(10)).map((r) => r.id), [run.id]);
+  const ctx = fakeContext(store);
+  await recoverStalledRuns(ctx);
+
+  assertEquals(store.steps.filter((s) => s.runId === run.id && s.kind === 'structure').map((s) => s.status), ['pending']);
+  assertEquals(store.steps.filter((s) => s.runId === ativo.run.id).map((s) => s.kind), ['edition']);
+  assertEquals(ctx.notifications, []);
+});
+
+Deno.test('recoverStalledRuns: erro num run avisa e não impede os outros (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const a = await seed(store);
+  const b = await seed(store);
+  for (const step of store.steps) step.status = 'done';
+  const listSteps = store.listSteps.bind(store);
+  store.listSteps = (runId) => runId === a.run.id ? Promise.reject(new Error('boom')) : listSteps(runId);
+
+  const ctx = fakeContext(store);
+  await recoverStalledRuns(ctx);
+
+  assertEquals(ctx.notifications.length, 1);
+  assertEquals(store.steps.filter((s) => s.runId === b.run.id && s.kind === 'structure').length, 1);
 });

@@ -21,6 +21,7 @@ export const WORKER_TIME_BUDGET_MS = 70_000;
 /** Texto bruto de run abortado é apagado depois disto (spec §4). */
 export const SOURCE_TEXT_TTL_MS = 24 * 60 * 60 * 1000;
 export const RECHECK_EDITIONS_PER_CYCLE = 5;
+export const STALLED_RUNS_PER_CYCLE = 10;
 
 export interface WorkerReport {
   processed: number;
@@ -58,6 +59,29 @@ export async function scheduleRechecks(ctx: StepContext): Promise<number> {
     })));
   }
   return due.length;
+}
+
+/**
+ * Run aberto sem passo ativo não avança sozinho (BER-59): o replanejamento só acontece depois de
+ * executar um passo do run, e um passo que falhou como `worker_morreu`, ou um worker que morreu
+ * entre o passo e o replanejamento, deixava o run em `running` para sempre, sem alerta. Publish
+ * falho fecha o run como `failed`; qualquer outro caso é replanejado.
+ */
+export async function recoverStalledRuns(ctx: StepContext): Promise<void> {
+  for (const run of await ctx.store.listStalledRuns(STALLED_RUNS_PER_CYCLE)) {
+    try {
+      const steps = await ctx.store.listSteps(run.id);
+      if (steps.some((s) => s.kind === 'publish' && s.status === 'failed')) {
+        await ctx.store.updateRun(run.id, { status: 'failed', statusReason: 'publish_falhou', finishedAt: iso(ctx.now()) });
+        await ctx.notify('ingestion', `run ${run.id} terminou failed: publish_falhou`);
+      } else {
+        await advanceRun(run.id, ctx);
+      }
+    } catch (err) {
+      // Um run com problema não pode parar o worker nem os outros runs.
+      await ctx.notify('ingestion', `falha ao recuperar o run parado ${run.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 }
 
 async function executeStep(step: StepRow, ctx: StepContext, executors: Record<StepKind, StepExecutor>, report: WorkerReport) {
@@ -109,6 +133,7 @@ export async function runWorker(ctx: StepContext, executors: Record<StepKind, St
 
   await ctx.store.deleteSourceTextsBefore(iso(started - SOURCE_TEXT_TTL_MS));
   report.rechecks = await scheduleRechecks(ctx);
+  await recoverStalledRuns(ctx);
 
   while (ctx.now() - started < WORKER_TIME_BUDGET_MS) {
     const steps = await ctx.store.claimSteps(CLAIM_BATCH, iso(ctx.now() - STALE_LOCK_MS));
