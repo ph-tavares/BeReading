@@ -4,6 +4,7 @@
 // exercitado na execução de aceitação (Tarefa 19).
 import type { createServiceClient } from '../supabase-client.ts';
 import type { DomainPolicy } from './policy.ts';
+import { HttpStatusError } from './queue.ts';
 import { MAX_RECHECKS } from './recheck.ts';
 import type {
   ClaimRow,
@@ -23,15 +24,51 @@ import type { DeclaredChapter, EditionChapter } from './types.ts';
 type Client = ReturnType<typeof createServiceClient>;
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-function must<T>(result: { data: T | null; error: { message: string } | null }, context: string): T {
-  if (result.error) throw new Error(`${context}: ${result.error.message}`);
-  if (result.data === null) throw new Error(`${context}: sem dados`);
+type Result<T> = { data: T | null; error: { message: string } | null; status?: number };
+
+/**
+ * Erro do banco com o status HTTP da resposta: a spec §7 tenta de novo 429/5xx, e um
+ * `Error` sem status faria falha transitória do banco virar falha permanente do passo (BER-59).
+ * `status: 0` é o supabase-js dizendo que nem houve resposta (rede caiu); vira `TypeError`,
+ * que é o que o `fetch` lança nesse caso e `isTransientError` já trata como transitório.
+ */
+function storeError(status: number | undefined, message: string): Error {
+  if (status === 0) return new TypeError(message);
+  return typeof status === 'number' ? new HttpStatusError(status, message) : new Error(message);
+}
+
+function must<T>(result: Result<T>, context: string): T {
+  if (result.error) throw storeError(result.status, `${context}: ${result.error.message}`);
+  if (result.data === null) throw storeError(result.status, `${context}: sem dados`);
   return result.data;
 }
 
-function ok(result: { error: { message: string } | null }, context: string): void {
-  if (result.error) throw new Error(`${context}: ${result.error.message}`);
+function ok(result: { error: { message: string } | null; status?: number }, context: string): void {
+  if (result.error) throw storeError(result.status, `${context}: ${result.error.message}`);
 }
+
+/**
+ * O PostgREST corta toda leitura em `max_rows = 1000` (supabase/config.toml) sem avisar. Uma lista
+ * truncada esconderia passos ativos do planejador e perderia afirmações, então leitura que pode
+ * passar disso vai página a página, em ordem estável por `id` (BER-59).
+ */
+const PAGE = 1000;
+
+interface Pageable {
+  order(column: string): { range(from: number, to: number): PromiseLike<Result<Row[]>> };
+}
+
+async function selectAll(query: () => Pageable, context: string): Promise<Row[]> {
+  const rows: Row[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const page = must(await query().order('id').range(from, from + PAGE - 1), context);
+    rows.push(...page);
+    if (page.length < PAGE) return rows;
+  }
+}
+
+/** `.in('id', ids)` vai na URL; em lotes de 100 ela não passa do limite de tamanho (BER-59). */
+const ID_CHUNK = 100;
 
 const toEdition = (r: Row): EditionRow => ({
   id: r.id, isbn: r.isbn, title: r.title, authors: r.authors ?? [], publisher: r.publisher, language: r.language,
@@ -79,8 +116,8 @@ export class SupabaseIngestionStore implements IngestionStore {
   constructor(private readonly db: Client) {}
 
   async findEditionByIsbn(isbn: string) {
-    const { data, error } = await this.db.from('book_editions').select('*').eq('isbn', isbn).maybeSingle();
-    if (error) throw new Error(`findEditionByIsbn: ${error.message}`);
+    const { data, error, status } = await this.db.from('book_editions').select('*').eq('isbn', isbn).maybeSingle();
+    if (error) throw storeError(status, `findEditionByIsbn: ${error.message}`);
     return data ? toEdition(data) : null;
   }
 
@@ -129,21 +166,22 @@ export class SupabaseIngestionStore implements IngestionStore {
   }
 
   async countRunsSince(iso: string) {
-    const { count, error } = await this.db.from('ingestion_runs').select('id', { count: 'exact', head: true }).gte('started_at', iso);
-    if (error) throw new Error(`countRunsSince: ${error.message}`);
+    const { count, error, status } = await this.db.from('ingestion_runs').select('id', { count: 'exact', head: true }).gte('started_at', iso);
+    if (error) throw storeError(status, `countRunsSince: ${error.message}`);
     return count ?? 0;
   }
 
   async sumRunStatSince(key: string, iso: string) {
-    const rows = must(await this.db.from('ingestion_runs').select('stats').gte('started_at', iso), 'sumRunStatSince');
+    const rows = await selectAll(() => this.db.from('ingestion_runs').select('stats').gte('started_at', iso), 'sumRunStatSince');
     return rows.reduce((sum: number, r: Row) => sum + Number(r.stats?.[key] ?? 0), 0);
   }
 
   async enqueueSteps(steps: NewStep[]) {
     if (steps.length === 0) return;
     const rows = steps.map((s) => ({
+      // Em upsert de várias linhas, a que não traz a coluna vai como NULL e fere o `not null` (BER-59): sempre manda.
       run_id: s.runId, kind: s.kind, subject: s.subject, payload: s.payload ?? {},
-      ...(s.nextAttemptAt ? { next_attempt_at: s.nextAttemptAt } : {}),
+      next_attempt_at: s.nextAttemptAt ?? new Date().toISOString(),
     }));
     ok(await this.db.from('ingestion_steps').upsert(rows, { onConflict: 'run_id,kind,subject', ignoreDuplicates: true }), 'enqueueSteps');
   }
@@ -163,12 +201,12 @@ export class SupabaseIngestionStore implements IngestionStore {
   }
 
   async listSteps(runId: string) {
-    return must(await this.db.from('ingestion_steps').select('*').eq('run_id', runId), 'listSteps').map(toStep);
+    return (await selectAll(() => this.db.from('ingestion_steps').select('*').eq('run_id', runId), 'listSteps')).map(toStep);
   }
 
   async getDomainPolicy(domain: string): Promise<DomainPolicy | null> {
-    const { data, error } = await this.db.from('source_domain_policies').select('*').eq('domain', domain).maybeSingle();
-    if (error) throw new Error(`getDomainPolicy: ${error.message}`);
+    const { data, error, status } = await this.db.from('source_domain_policies').select('*').eq('domain', domain).maybeSingle();
+    if (error) throw storeError(status, `getDomainPolicy: ${error.message}`);
     return data
       ? { domain: data.domain, policy: data.policy, weight: data.weight, sourceType: data.source_type, authorizesFullText: data.authorizes_full_text, hostCountry: data.host_country }
       : null;
@@ -177,9 +215,9 @@ export class SupabaseIngestionStore implements IngestionStore {
   async insertSource(source: NewSource) {
     // Um passo `fetch` re-executado depois de uma falha transitória tem que reaproveitar a
     // fonte já registrada, não reescrever a decisão dela — mesma semântica do memory store (BER-59).
-    const { data, error } = await this.db.from('ingestion_sources')
+    const { data, error, status } = await this.db.from('ingestion_sources')
       .upsert(fromSource(source), { onConflict: 'run_id,url', ignoreDuplicates: true }).select('*');
-    if (error) throw new Error(`insertSource: ${error.message}`);
+    if (error) throw storeError(status, `insertSource: ${error.message}`);
     if (data && data.length > 0) return toSource(data[0]);
     return toSource(
       must(await this.db.from('ingestion_sources').select('*').eq('run_id', source.runId).eq('url', source.url).single(), 'insertSource(existing)'),
@@ -195,12 +233,15 @@ export class SupabaseIngestionStore implements IngestionStore {
   }
 
   async listSources(runId: string) {
-    return must(await this.db.from('ingestion_sources').select('*').eq('run_id', runId), 'listSources').map(toSource);
+    return (await selectAll(() => this.db.from('ingestion_sources').select('*').eq('run_id', runId), 'listSources')).map(toSource);
   }
 
   async getSourcesByIds(ids: string[]) {
-    if (ids.length === 0) return [];
-    return must(await this.db.from('ingestion_sources').select('*').in('id', ids), 'getSourcesByIds').map(toSource);
+    const rows: Row[] = [];
+    for (let i = 0; i < ids.length; i += ID_CHUNK) {
+      rows.push(...must(await this.db.from('ingestion_sources').select('*').in('id', ids.slice(i, i + ID_CHUNK)), 'getSourcesByIds'));
+    }
+    return rows.map(toSource);
   }
 
   async saveSourceText(sourceId: string, text: string) {
@@ -208,8 +249,8 @@ export class SupabaseIngestionStore implements IngestionStore {
   }
 
   async getSourceText(sourceId: string) {
-    const { data, error } = await this.db.from('ingestion_source_texts').select('text').eq('source_id', sourceId).maybeSingle();
-    if (error) throw new Error(`getSourceText: ${error.message}`);
+    const { data, error, status } = await this.db.from('ingestion_source_texts').select('text').eq('source_id', sourceId).maybeSingle();
+    if (error) throw storeError(status, `getSourceText: ${error.message}`);
     return data?.text ?? null;
   }
 
@@ -231,7 +272,7 @@ export class SupabaseIngestionStore implements IngestionStore {
   }
 
   async listClaimsForRun(runId: string) {
-    return must(await this.db.from('ingestion_claims').select('*').eq('run_id', runId), 'listClaimsForRun').map(toClaim);
+    return (await selectAll(() => this.db.from('ingestion_claims').select('*').eq('run_id', runId), 'listClaimsForRun')).map(toClaim);
   }
 
   async setClaimLocations(updates: { id: string; editionChapterId: string | null; located: boolean }[]) {
@@ -250,9 +291,11 @@ export class SupabaseIngestionStore implements IngestionStore {
   }
 
   async listLocatedClaims(editionChapterId: string) {
-    const result = await this.db.from('ingestion_claims').select('*')
-      .eq('edition_chapter_id', editionChapterId).eq('located', true).eq('forward_reference', false);
-    return must(result, 'listLocatedClaims').map(toClaim);
+    const rows = await selectAll(
+      () => this.db.from('ingestion_claims').select('*').eq('edition_chapter_id', editionChapterId).eq('located', true).eq('forward_reference', false),
+      'listLocatedClaims',
+    );
+    return rows.map(toClaim);
   }
 
   async listEditionChapters(editionId: string) {
@@ -261,12 +304,13 @@ export class SupabaseIngestionStore implements IngestionStore {
   }
 
   async replaceEditionChapters(editionId: string, chapters: DeclaredChapter[], confidence: number) {
-    ok(await this.db.from('edition_chapters').delete().eq('edition_id', editionId), 'replaceEditionChapters(delete)');
-    const rows = chapters.map((c) => ({
-      edition_id: editionId, number: c.number, part_label: c.part, number_in_part: c.numberInPart, title: c.title, confidence,
-    }));
-    ok(await this.db.from('edition_chapters').insert(rows), 'replaceEditionChapters(insert)');
-    return this.listEditionChapters(editionId);
+    // Numa função SQL (uma transação): reingerir mantém o conhecimento dos capítulos que não mudaram (BER-59).
+    const p_chapters = chapters.map((c) => ({ number: c.number, part_label: c.part, number_in_part: c.numberInPart, title: c.title }));
+    const rows = must(
+      await this.db.rpc('replace_edition_chapters', { p_edition_id: editionId, p_chapters, p_confidence: confidence }),
+      'replaceEditionChapters',
+    );
+    return (rows as Row[]).map(toChapter);
   }
 
   async publishChapterKnowledge(input: PublishChapterInput) {
