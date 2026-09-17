@@ -17,7 +17,11 @@ export type RejectionReason =
   | 'formato_nao_suportado'
   | 'sem_texto_util'
   | 'texto_integral_sem_autorizacao'
-  | 'endereco_nao_publico';
+  | 'endereco_nao_publico'
+  // Limites do download (BER-59, spec §5.9), antes registrados só como passo falho.
+  | 'arquivo_grande_demais'
+  | 'pdf_paginas_demais'
+  | 'redirecionamentos_demais';
 
 export interface DomainPolicy {
   domain: string;

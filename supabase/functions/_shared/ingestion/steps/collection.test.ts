@@ -3,7 +3,7 @@ import { fakeContext, NOW, page, seedRun, stepRow } from '../../test-support/ing
 import { MemoryIngestionStore } from '../../test-support/memoryIngestionStore.ts';
 import { LIMITS } from '../budget.ts';
 import { PermanentStepError } from '../queue.ts';
-import { DomainThrottle, type FetchDeps, fetchPage } from '../sources/fetch-page.ts';
+import { DomainThrottle, type FetchDeps, fetchPage, MAX_BYTES, MAX_REDIRECTS } from '../sources/fetch-page.ts';
 import { UnsafeUrlError } from '../ssrf.ts';
 import { DeferStepError } from './context.ts';
 import { runDiscoverStep } from './discover.ts';
@@ -145,6 +145,32 @@ Deno.test('fetch: redirecionamento para domínio bloqueado é recusado sem requi
   assertEquals([store.sources[0].rejectionReason, store.sources[0].url], ['dominio_bloqueado', 'https://blog.com/resumo']);
   assertEquals(outcome.stats?.rejeitadas_dominio_bloqueado, 1);
   assertEquals(rede.requested, ['https://blog.com/resumo']);
+});
+
+Deno.test('fetch: PDF acima do limite de tamanho vira fonte rejeitada e conta como PDF rejeitado (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seedRun(store);
+  const rede = redeFalsa({
+    'https://arquivos.example/livro.pdf': () => new Response('x'.repeat(MAX_BYTES + 1), { headers: { 'content-type': 'application/pdf' } }),
+  });
+  const outcome = await runFetchStep(stepRow(run, 'fetch', 'https://arquivos.example/livro.pdf'), run, fakeContext(store, { fetchPage: rede.fetchPage }));
+  assertEquals([store.sources[0].decision, store.sources[0].rejectionReason, store.sources[0].isBookFile], ['rejected', 'arquivo_grande_demais', true]);
+  assertEquals([outcome.stats?.rejeitadas_arquivo_grande_demais, outcome.stats?.pdfs_rejeitados], [1, 1]);
+  assertEquals(outcome.payload, { decisao: 'rejected', motivo: 'arquivo_grande_demais' });
+  assertEquals(store.texts.size, 0);
+});
+
+Deno.test('fetch: redirecionamentos demais viram fonte rejeitada com motivo (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seedRun(store);
+  const routes: Record<string, () => Response> = {};
+  for (let i = 0; i <= MAX_REDIRECTS + 1; i++) {
+    routes[`https://blog.com/${i}`] = () => new Response(null, { status: 302, headers: { location: `/${i + 1}` } });
+  }
+  const rede = redeFalsa(routes);
+  const outcome = await runFetchStep(stepRow(run, 'fetch', 'https://blog.com/0'), run, fakeContext(store, { fetchPage: rede.fetchPage }));
+  assertEquals([store.sources[0].rejectionReason, store.sources[0].isBookFile], ['redirecionamentos_demais', false]);
+  assertEquals([outcome.stats?.rejeitadas_redirecionamentos_demais, outcome.stats?.pdfs_rejeitados], [1, undefined]);
 });
 
 Deno.test('fetch: PDF de livro protegido sem autorização é rejeitado e contado', async () => {

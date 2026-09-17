@@ -20,10 +20,11 @@ export const DOMAIN_INTERVAL_MS = 2_000;
 
 /**
  * Fonte recusada por um motivo de auditoria, não por falha (BER-59): o passo `fetch` grava a
- * fonte rejeitada com `reason` em vez de falhar o passo sem deixar linha.
+ * fonte rejeitada com `reason` em vez de falhar o passo sem deixar linha. `isBookFile` marca o que
+ * já se sabe ser arquivo de livro (PDF/EPUB grande demais), para contar em `pdfs_rejeitados`.
  */
 export class SourceRejectedError extends PermanentStepError {
-  constructor(readonly reason: string, message: string) {
+  constructor(readonly reason: string, message: string, readonly isBookFile = false) {
     super(message);
   }
 }
@@ -93,7 +94,7 @@ export async function readLimited(res: Response, maxBytes: number): Promise<Uint
     total += value.length;
     if (total > maxBytes) {
       await reader.cancel();
-      throw new PermanentStepError(`corpo acima de ${maxBytes} bytes`);
+      throw new SourceRejectedError('arquivo_grande_demais', `corpo acima de ${maxBytes} bytes`);
     }
     chunks.push(value);
   }
@@ -140,7 +141,7 @@ async function request(
     }
     return { res, finalUrl: parsed.toString() };
   }
-  throw new PermanentStepError(`mais de ${MAX_REDIRECTS} redirecionamentos a partir de ${url}`);
+  throw new SourceRejectedError('redirecionamentos_demais', `mais de ${MAX_REDIRECTS} redirecionamentos a partir de ${url}`);
 }
 
 export async function fetchPage(url: string, deps: FetchDeps, throttle: DomainThrottle, beforeRequest?: BeforeRequest): Promise<FetchedPage> {
@@ -153,12 +154,30 @@ export async function fetchPage(url: string, deps: FetchDeps, throttle: DomainTh
     return { ...base, kind: 'other', text: '' };
   }
 
-  const bytes = await readLimited(res, MAX_BYTES);
+  let bytes: Uint8Array;
+  try {
+    bytes = await readLimited(res, MAX_BYTES);
+  } catch (err) {
+    // PDF/EPUB acima de 5 MB é, na prática, o arquivo do livro (BER-59): entra em `pdfs_rejeitados`.
+    const bookType = contentType.includes('application/pdf') || contentType.includes('application/epub');
+    if (err instanceof SourceRejectedError) throw new SourceRejectedError(err.reason, err.message, bookType);
+    throw err;
+  }
 
   if (contentType.includes('application/pdf') || /\.pdf($|\?)/i.test(finalUrl)) {
-    const pdf = await getDocumentProxy(bytes);
-    if (pdf.numPages > MAX_PDF_PAGES) throw new PermanentStepError(`PDF com ${pdf.numPages} páginas`);
-    const { text } = await extractText(pdf, { mergePages: true });
+    // unpdf lança em PDF corrompido ou cifrado: isso é formato que não sabemos ler, não falha de
+    // rede para repetir (BER-59), e fica registrado como fonte rejeitada.
+    const unreadable = (err: unknown) =>
+      new SourceRejectedError('formato_nao_suportado', `PDF ilegível: ${err instanceof Error ? err.message : String(err)}`);
+    const pdf = await getDocumentProxy(bytes).catch((err) => {
+      throw unreadable(err);
+    });
+    if (pdf.numPages > MAX_PDF_PAGES) {
+      throw new SourceRejectedError('pdf_paginas_demais', `PDF com ${pdf.numPages} páginas`, true);
+    }
+    const { text } = await extractText(pdf, { mergePages: true }).catch((err) => {
+      throw unreadable(err);
+    });
     return { ...base, kind: 'pdf', text: String(text), pdfPages: pdf.numPages };
   }
 

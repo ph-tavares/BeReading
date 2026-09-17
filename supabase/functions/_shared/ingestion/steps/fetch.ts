@@ -34,10 +34,10 @@ export const runFetchStep: StepExecutor = async (step, run, ctx) => {
     contentFingerprint: null, independenceGroup: null, declaredStructure: null,
   };
 
-  const reject = async (reason: RejectionReason) => {
+  const reject = async (reason: RejectionReason, isBookFile = false) => {
     const decision: PolicyDecision = { decision: 'rejected', reason, sourceType: null, weight: null, publicDomainBasis: null };
-    await ctx.store.insertSource({ ...base, rejectionReason: reason });
-    return { stats: sourceDelta(decision, false), payload: { decisao: 'rejected', motivo: reason } };
+    await ctx.store.insertSource({ ...base, rejectionReason: reason, isBookFile });
+    return { stats: sourceDelta(decision, isBookFile), payload: { decisao: 'rejected', motivo: reason } };
   };
 
   const initialPolicy = domain ? await ctx.store.getDomainPolicy(domain) : null;
@@ -60,7 +60,7 @@ export const runFetchStep: StepExecutor = async (step, run, ctx) => {
   } catch (err) {
     if (err instanceof UnsafeUrlError) return reject('endereco_nao_publico');
     // O motivo vem do gancho acima ou dos limites do download, todos `RejectionReason`.
-    if (err instanceof SourceRejectedError) return reject(err.reason as RejectionReason);
+    if (err instanceof SourceRejectedError) return reject(err.reason as RejectionReason, err.isBookFile);
     throw err;
   }
 

@@ -9,6 +9,7 @@ import {
   fetchRobots,
   htmlToText,
   MAX_REDIRECTS,
+  MAX_BYTES,
   readLimited,
   SourceRejectedError,
 } from './fetch-page.ts';
@@ -80,13 +81,33 @@ Deno.test('fetchPage: gancho antes de cada salto recusa o destino do redireciona
   assertEquals(d.requested, ['https://ex.com/a']);
 });
 
-Deno.test('fetchPage: redirecionamentos demais é erro permanente', async () => {
+Deno.test('fetchPage: redirecionamentos demais é recusa permanente com motivo (BER-59)', async () => {
   const routes: Record<string, () => Response> = {};
   for (let i = 0; i <= MAX_REDIRECTS + 1; i++) {
     routes[`https://ex.com/${i}`] = () => new Response(null, { status: 302, headers: { location: `/${i + 1}` } });
   }
   const d = deps(routes);
-  await assertRejects(() => fetchPage('https://ex.com/0', d, new DomainThrottle(d)), PermanentStepError);
+  const err = await assertRejects(() => fetchPage('https://ex.com/0', d, new DomainThrottle(d)), SourceRejectedError);
+  assert(err instanceof PermanentStepError);
+  assertEquals([err.reason, err.isBookFile], ['redirecionamentos_demais', false]);
+});
+
+Deno.test('fetchPage: corpo acima do limite é recusado com motivo; PDF grande conta como arquivo de livro (BER-59)', async () => {
+  const grande = () => 'x'.repeat(MAX_BYTES + 1);
+  const d = deps({
+    'https://ex.com/livro.pdf': () => new Response(grande(), { headers: { 'content-type': 'application/pdf' } }),
+    'https://ex.com/pagina': () => new Response(grande(), { headers: { 'content-type': 'text/html' } }),
+  });
+  const pdf = await assertRejects(() => fetchPage('https://ex.com/livro.pdf', d, new DomainThrottle(d)), SourceRejectedError);
+  assertEquals([pdf.reason, pdf.isBookFile], ['arquivo_grande_demais', true]);
+  const html = await assertRejects(() => fetchPage('https://ex.com/pagina', d, new DomainThrottle(d)), SourceRejectedError);
+  assertEquals([html.reason, html.isBookFile], ['arquivo_grande_demais', false]);
+});
+
+Deno.test('fetchPage: PDF ilegível é recusado como formato não suportado (BER-59)', async () => {
+  const d = deps({ 'https://ex.com/quebrado.pdf': () => new Response('isto não é um PDF', { headers: { 'content-type': 'application/pdf' } }) });
+  const err = await assertRejects(() => fetchPage('https://ex.com/quebrado.pdf', d, new DomainThrottle(d)), SourceRejectedError);
+  assertEquals(err.reason, 'formato_nao_suportado');
 });
 
 Deno.test('fetchPage: status de erro volta sem ler o corpo, para a política decidir', async () => {
@@ -97,6 +118,8 @@ Deno.test('fetchPage: status de erro volta sem ler o corpo, para a política dec
 
 Deno.test('readLimited: corpo acima do limite é erro permanente', async () => {
   await assertRejects(() => readLimited(new Response('x'.repeat(20)), 10), PermanentStepError);
+  const err = await assertRejects(() => readLimited(new Response('x'.repeat(20)), 10), SourceRejectedError);
+  assertEquals(err.reason, 'arquivo_grande_demais');
   assertEquals((await readLimited(new Response('abc'), 10)).length, 3);
 });
 
