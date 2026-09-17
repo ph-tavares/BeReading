@@ -84,3 +84,33 @@ Deno.test('updateRun e finishStep: campo undefined no patch não apaga o valor (
   const [after] = await store.listSteps(run.id);
   assertEquals([after.status, after.attempts, after.error], ['done', 1, 'falhou']);
 });
+
+Deno.test('claimSteps: incrementa attempts do passo reivindicado (BER-59)', async () => {
+  const now = Date.parse('2026-09-16T10:00:00.000Z');
+  const store = new MemoryIngestionStore(() => now);
+  const edition = await store.insertEdition('9788535910663', null);
+  const run = await store.createRun(edition.id, {});
+  await store.enqueueSteps([{ runId: run.id, kind: 'discover', subject: 'x' }]);
+  const [claimed] = await store.claimSteps(1, new Date(now - 5 * 60_000).toISOString());
+  assertEquals([claimed.status, claimed.attempts], ['running', 1]);
+  assertEquals(store.steps[0].attempts, 1);
+});
+
+Deno.test('claimSteps: passo com trava velha e 4 tentativas vira failed worker_morreu e não volta (BER-59)', async () => {
+  const now = Date.parse('2026-09-16T10:00:00.000Z');
+  const store = new MemoryIngestionStore(() => now);
+  const edition = await store.insertEdition('9788535910663', null);
+  const run = await store.createRun(edition.id, {});
+  await store.enqueueSteps([
+    { runId: run.id, kind: 'discover', subject: 'morto' },
+    { runId: run.id, kind: 'discover', subject: 'reaproveitado' },
+  ]);
+  const old = new Date(now - 10 * 60_000).toISOString();
+  Object.assign(store.steps[0], { status: 'running', lockedAt: old, attempts: 4 });
+  Object.assign(store.steps[1], { status: 'running', lockedAt: old, attempts: 2 });
+
+  const claimed = await store.claimSteps(10, new Date(now - 5 * 60_000).toISOString());
+
+  assertEquals(claimed.map((s) => [s.subject, s.attempts]), [['reaproveitado', 3]]);
+  assertEquals([store.steps[0].status, store.steps[0].error, store.steps[0].lockedAt], ['failed', 'worker_morreu', null]);
+});

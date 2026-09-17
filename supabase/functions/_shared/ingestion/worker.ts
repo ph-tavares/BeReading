@@ -1,8 +1,8 @@
 // supabase/functions/_shared/ingestion/worker.ts
 // Ciclo do worker (BER-59, spec §3 e §7), chamado pelo pg_cron a cada minuto: limpa texto
-// bruto esquecido, agenda rebuscas vencidas, reivindica passos em lotes pequenos, executa,
-// aplica retry e replaneja os runs tocados. Para antes de 100 s para caber no limite da
-// Edge Function; o que sobrar fica para o minuto seguinte.
+// bruto esquecido, agenda rebuscas vencidas, reivindica um passo por vez, executa, aplica
+// retry e replaneja o run tocado. Não reivindica passo novo depois de 70 s, para caber no
+// limite da Edge Function; o que sobrar fica para o minuto seguinte.
 import { buildChapterQuery } from './queries.ts';
 import { afterFailure, isTransientError, STALE_LOCK_MS } from './queue.ts';
 import { planNextSteps } from './planner.ts';
@@ -12,8 +12,12 @@ import { EXECUTORS } from './steps/index.ts';
 import type { StepRow } from './store.ts';
 import type { StepKind } from './types.ts';
 
-export const CLAIM_BATCH = 3;
-export const WORKER_TIME_BUDGET_MS = 100_000;
+// BER-59: o relógio da Edge Function no plano grátis é de 150 s, e o pior passo leva ~60 s de
+// IA (`AI_STEP_TIMEOUT_MS`) mais E/S. Por isso o worker só reivindica um passo por vez e não
+// reivindica outro depois de 70 s: um lote de 3 passos reivindicado aos 99 s estourava o relógio,
+// o worker morria com os passos em `running` e eles voltavam como trava velha para sempre.
+export const CLAIM_BATCH = 1;
+export const WORKER_TIME_BUDGET_MS = 70_000;
 /** Texto bruto de run abortado é apagado depois disto (spec §4). */
 export const SOURCE_TEXT_TTL_MS = 24 * 60 * 60 * 1000;
 export const RECHECK_EDITIONS_PER_CYCLE = 5;
@@ -64,7 +68,9 @@ async function executeStep(step: StepRow, ctx: StepContext, executors: Record<St
   }
   if (run.status === 'queued') await ctx.store.updateRun(run.id, { status: 'running' });
 
-  const attempts = step.attempts + 1;
+  // `claim_ingestion_steps` já contou esta execução (BER-59): um worker que morre no meio do
+  // passo não deixa `attempts` para trás, e a trava velha com 4 tentativas vira `failed`.
+  const attempts = step.attempts;
   try {
     const outcome = await executors[step.kind](step, run, ctx);
     // Ordem obrigatória (Tarefa 11): enqueue -> stats -> motivo -> finishStep(done). O
@@ -78,7 +84,9 @@ async function executeStep(step: StepRow, ctx: StepContext, executors: Record<St
     report.processed++;
   } catch (err) {
     if (err instanceof DeferStepError) {
-      await ctx.store.finishStep(step.id, { status: 'pending', nextAttemptAt: err.until });
+      // Adiar não é tentar (BER-59): devolve a tentativa que a reivindicação contou, senão uma
+      // cota diária esgotada várias vezes faria o passo falhar sem nunca ter falhado.
+      await ctx.store.finishStep(step.id, { status: 'pending', nextAttemptAt: err.until, attempts: step.attempts - 1 });
       report.deferred++;
       return;
     }

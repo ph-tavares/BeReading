@@ -6,7 +6,7 @@ import { aiUsageDelta, exceededLimit } from '../budget.ts';
 import { buildExtractionPrompt, EXTRACTION_MAX_TOKENS, parseExtraction, splitIntoChunks } from '../extraction.ts';
 import { mergeDeclared } from '../structure.ts';
 import type { ChapterRef } from '../types.ts';
-import type { StepExecutor } from './context.ts';
+import { AI_STEP_TIMEOUT_MS, type StepExecutor } from './context.ts';
 
 export const runExtractStep: StepExecutor = async (step, run, ctx) => {
   const [sourceId, indexText] = step.subject.split('#');
@@ -41,6 +41,7 @@ export const runExtractStep: StepExecutor = async (step, run, ctx) => {
     }, chunk),
     maxTokens: EXTRACTION_MAX_TOKENS,
     temperature: 0,
+    timeoutMs: AI_STEP_TIMEOUT_MS,
   });
   const parsed = parseExtraction(result.text);
 

@@ -3,6 +3,7 @@
 // que os passos usam: índice único dos passos, reivindicação com trava velha, soma de
 // estatística, cascata de conhecimento. Helper de teste — não é código de produção.
 import type { DomainPolicy } from '../ingestion/policy.ts';
+import { MAX_RETRIES } from '../ingestion/queue.ts';
 import { MAX_RECHECKS } from '../ingestion/recheck.ts';
 import type {
   ClaimRow,
@@ -132,14 +133,22 @@ export class MemoryIngestionStore implements IngestionStore {
   }
 
   async claimSteps(limit: number, staleBeforeIso: string) {
+    // Espelha `public.claim_ingestion_steps` (BER-59): trava velha que já teve todas as
+    // tentativas é de worker que morreu nelas; falha em vez de voltar à fila para sempre.
     const now = this.iso();
+    const maxAttempts = MAX_RETRIES + 1;
+    const stale = (s: StepRow) => s.status === 'running' && s.lockedAt !== null && s.lockedAt < staleBeforeIso;
+    for (const step of this.steps.filter((s) => stale(s) && s.attempts >= maxAttempts)) {
+      Object.assign(step, { status: 'failed', error: 'worker_morreu', lockedAt: null });
+    }
     const ready = this.steps
-      .filter((s) => (s.status === 'pending' && s.nextAttemptAt <= now) || (s.status === 'running' && s.lockedAt !== null && s.lockedAt < staleBeforeIso))
+      .filter((s) => (s.status === 'pending' && s.nextAttemptAt <= now) || stale(s))
       .sort((a, b) => a.nextAttemptAt.localeCompare(b.nextAttemptAt))
       .slice(0, limit);
     for (const step of ready) {
       step.status = 'running';
       step.lockedAt = now;
+      step.attempts += 1;
     }
     return ready.map((s) => ({ ...s, payload: { ...s.payload } }));
   }

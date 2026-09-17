@@ -10,6 +10,12 @@ import type { OpenLibraryEdition } from '../sources/openlibrary-edition.ts';
 import type { SearchResponse } from '../sources/tavily.ts';
 import type { IngestionStore, NewStep, RunRow, StepRow } from '../store.ts';
 
+/**
+ * Teto de uma chamada de IA num passo (BER-59). O worker só reivindica passo novo com menos de
+ * 70 s gastos; 70 s + 60 s de IA + E/S cabem nos 150 s de relógio da Edge Function no plano grátis.
+ */
+export const AI_STEP_TIMEOUT_MS = 60_000;
+
 export interface StepContext {
   store: IngestionStore;
   now: () => number;

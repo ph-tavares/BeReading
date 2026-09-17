@@ -9,7 +9,7 @@ import { locateChapter } from '../locate.ts';
 import { RECHECK_AFTER_MS } from '../recheck.ts';
 import type { EditionChapter } from '../types.ts';
 import { type SourceSupport, verifyChapter } from '../verify.ts';
-import type { StepExecutor } from './context.ts';
+import { AI_STEP_TIMEOUT_MS, type StepExecutor } from './context.ts';
 
 function sumStats(a: Stats, b: Stats): Stats {
   const out = { ...a };
@@ -51,7 +51,7 @@ export const runVerifyStep: StepExecutor = async (step, run, ctx) => {
   } else {
     for (const batch of batchClaims(usable)) {
       const inputs = batch.map((c) => ({ id: c.id, statement: c.statement }));
-      const result = await ctx.ai({ prompt: buildGroupingPrompt(chapterLabel(chapter), inputs), maxTokens: GROUPING_MAX_TOKENS, temperature: 0 });
+      const result = await ctx.ai({ prompt: buildGroupingPrompt(chapterLabel(chapter), inputs), maxTokens: GROUPING_MAX_TOKENS, temperature: 0, timeoutMs: AI_STEP_TIMEOUT_MS });
       stats = sumStats(stats, aiUsageDelta(result.model, result.usage));
       const parsed = parseGrouping(result.text, inputs);
       const offset = grouping.groups.length;

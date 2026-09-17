@@ -226,3 +226,31 @@ Deno.test('structureDivergence: ignora títulos genéricos "Capítulo N" e apont
     capitulos_no_app: 2, capitulos_confirmados: 2, titulos_diferentes: [1],
   });
 });
+
+Deno.test('extract e verify: chamam a IA com timeout de 60 s (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run, edition } = await seedRun(store);
+  const timeouts: (number | undefined)[] = [];
+  const ai = (req: AIRequest) => {
+    timeouts.push(req.timeoutMs);
+    const text = req.prompt.includes('"grupos"')
+      ? JSON.stringify({ grupos: [[1, 2]], contradicoes: [] })
+      : JSON.stringify({ estrutura: [], afirmacoes: [] });
+    return Promise.resolve({ text, model: 'claude-haiku-4-5', usage: { inputTokens: 1, outputTokens: 1 } });
+  };
+  const ctx = fakeContext(store, { ai });
+  const source = await addSource(store, run, 'blog.com', 'D');
+  await store.saveSourceText(source.id, 'texto');
+  await runExtractStep(stepRow(run, 'extract', `${source.id}#0`), run, ctx);
+
+  const [cap1] = await store.replaceEditionChapters(edition.id, DOIS_CAPITULOS, 1);
+  const outra = await addSource(store, run, 'outro.com', 'D');
+  await store.insertClaims([
+    { runId: run.id, sourceId: source.id, chapterRef: null, kind: 'event', statement: 'A.', isInterpretation: false, forwardReference: false, chunkIndex: 0 },
+    { runId: run.id, sourceId: outra.id, chapterRef: null, kind: 'event', statement: 'B.', isInterpretation: false, forwardReference: false, chunkIndex: 0 },
+  ]);
+  await store.setClaimLocations(store.claims.map((c) => ({ id: c.id, editionChapterId: cap1.id, located: true })));
+  await runVerifyStep(stepRow(run, 'verify', '1'), run, ctx);
+
+  assertEquals(timeouts, [60_000, 60_000]);
+});

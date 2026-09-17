@@ -4,7 +4,8 @@ import { fakeContext, NOW, page } from '../test-support/ingestionContext.ts';
 import { MemoryIngestionStore } from '../test-support/memoryIngestionStore.ts';
 import { HttpStatusError } from './queue.ts';
 import { RECHECK_AFTER_MS } from './recheck.ts';
-import type { StepContext } from './steps/context.ts';
+import { DeferStepError, type StepContext } from './steps/context.ts';
+import { EXECUTORS } from './steps/index.ts';
 import { RECHECK_EDITIONS_PER_CYCLE, runWorker, scheduleRechecks } from './worker.ts';
 
 // Livro, fontes e textos sintéticos (repositório público). Vocabulário diferente entre as
@@ -141,4 +142,13 @@ Deno.test('scheduleRechecks: run que falha ao criar só adia a rebusca em 7 dias
 
   const due = await store.dueRechecks(new Date(NOW + RECHECK_AFTER_MS + 1).toISOString(), RECHECK_EDITIONS_PER_CYCLE);
   assertEquals(due, [{ editionId: edition.id, chapterNumbers: [1] }]);
+});
+
+Deno.test('runWorker: passo adiado devolve a tentativa que a reivindicação contou (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  await seed(store);
+  const until = new Date(NOW + 3_600_000).toISOString();
+  const report = await runWorker(fakeContext(store), { ...EXECUTORS, edition: () => Promise.reject(new DeferStepError(until)) });
+  const edition = store.steps.find((s) => s.kind === 'edition')!;
+  assertEquals([edition.status, edition.attempts, edition.nextAttemptAt, report.deferred], ['pending', 0, until, 1]);
 });
