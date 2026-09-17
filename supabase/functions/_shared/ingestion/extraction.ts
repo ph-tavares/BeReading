@@ -65,7 +65,7 @@ export function buildExtractionPrompt(ctx: ExtractionContext, chunk: string): st
     ? `O bloco anterior terminou no ${describeChapter(ctx.previousChapter)}. Enquanto não aparecer um novo cabeçalho de capítulo, o texto continua nele.`
     : 'Não há capítulo em andamento vindo de bloco anterior.';
 
-  // Untrusted text cannot contain the delimiter, otherwise it could fake the end of the data block (BER-59, spec §5.8).
+  // Texto não confiável não pode conter o delimitador; senão simularia o fim do bloco de dados (BER-59, spec §5.8).
   const safeChunk = chunk.replaceAll(DELIMITER, '');
 
   return `Você extrai conhecimento sobre o livro "${ctx.bookTitle}" (${ctx.authors.join(', ') || 'autor desconhecido'}) a partir de uma fonte da internet.
@@ -151,7 +151,9 @@ export function parseExtraction(raw: string): ExtractionResult {
 
   for (const item of Array.isArray(json.afirmacoes) ? json.afirmacoes : []) {
     const v = (item ?? {}) as Record<string, unknown>;
-    const kind = typeof v.tipo === 'string' ? KIND_BY_TIPO[v.tipo.toLowerCase()] : undefined;
+    // `hasOwn`: sem ele, `tipo: "constructor"` acharia uma função no protótipo e passaria como tipo válido (BER-59).
+    const tipo = typeof v.tipo === 'string' ? v.tipo.toLowerCase() : null;
+    const kind = tipo !== null && Object.hasOwn(KIND_BY_TIPO, tipo) ? KIND_BY_TIPO[tipo] : undefined;
     const statement = text(v.texto);
     if (!kind) {
       result.rejected.push({ item, reason: 'tipo desconhecido' });

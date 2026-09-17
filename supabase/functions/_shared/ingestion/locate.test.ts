@@ -75,3 +75,7 @@ Deno.test('looksForwardReferencing: outras construções que antecipam o futuro'
     assertEquals(looksForwardReferencing(s), true, s);
   }
 });
+
+Deno.test('normalizePart: palavra com nome de chave do protótipo não devolve função', () => {
+  assertEquals(typeof normalizePart('Parte constructor'), 'string');
+});

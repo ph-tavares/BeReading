@@ -31,8 +31,9 @@ export function normalizePart(part: string | null): string {
   const words = stripAccents(part.toLowerCase()).match(/[a-z0-9]+/g) ?? [];
   for (const word of words) {
     if (/^\d+$/.test(word)) return String(Number(word));
-    if (ORDINALS[word]) return ORDINALS[word];
-    if (ROMAN[word]) return ROMAN[word];
+    // `hasOwn`: uma palavra como "constructor" não pode achar a função do protótipo (BER-59).
+    if (Object.hasOwn(ORDINALS, word)) return ORDINALS[word];
+    if (Object.hasOwn(ROMAN, word)) return ROMAN[word];
   }
   return words.filter((w) => w !== 'parte' && w !== 'part' && w !== 'livro' && w !== 'book').join(' ');
 }

@@ -31,7 +31,7 @@ export function batchClaims<T>(claims: T[]): T[][] {
 }
 
 export function buildGroupingPrompt(chapterLabel: string, claims: GroupingInput[]): string {
-  // Untrusted text cannot contain the delimiter, otherwise it could fake the end of the data block (BER-59, spec §5.8).
+  // Texto não confiável não pode conter o delimitador; senão simularia o fim do bloco de dados (BER-59, spec §5.8).
   const safeChapterLabel = chapterLabel.replaceAll(DELIMITER, '');
   const list = claims.map((c, i) => `[${i + 1}] ${c.statement.replaceAll(DELIMITER, '')}`).join('\n');
   return `Abaixo estão afirmações sobre o ${safeChapterLabel} de um livro, vindas de fontes diferentes.
