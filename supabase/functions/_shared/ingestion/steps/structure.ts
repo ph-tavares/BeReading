@@ -6,7 +6,7 @@ import { LIMITS } from '../budget.ts';
 import { startOfUtcDay } from '../queue.ts';
 import { assignIndependenceGroups } from '../independence.ts';
 import { locateChapter } from '../locate.ts';
-import { sourceNumbersWholeBook } from '../numbering.ts';
+import { reliableSources, sourceNumbersWholeBook } from '../numbering.ts';
 import { buildChapterQuery } from '../queries.ts';
 import { bestStructureGuess, confirmStructure } from '../structure.ts';
 import type { StepExecutor } from './context.ts';
@@ -67,8 +67,10 @@ export const runStructureStep: StepExecutor = async (step, run, ctx) => {
   // Cada fonte tem sua convenção de numeração; sem saber a dela, número solto em obra com partes
   // fica sem capítulo (BER-59).
   const numbersWholeBook = new Map(accepted.map((s) => [s.id, sourceNumbersWholeBook(s.declaredStructure, chapters)]));
+  // Resumo do livro inteiro que joga tudo num capítulo não sabe onde cada coisa acontece (BER-59).
+  const confiaveis = reliableSources(accepted, claims);
   const locations = claims.map((claim) => {
-    const chapter = claim.forwardReference
+    const chapter = claim.forwardReference || !confiaveis.has(claim.sourceId)
       ? null
       : locateChapter(claim.chapterRef, chapters, { sourceNumbersWholeBook: numbersWholeBook.get(claim.sourceId) === true });
     return { id: claim.id, editionChapterId: chapter?.id ?? null, located: chapter !== null };
