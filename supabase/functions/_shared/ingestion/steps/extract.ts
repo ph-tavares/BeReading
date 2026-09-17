@@ -44,7 +44,9 @@ export const runExtractStep: StepExecutor = async (step, run, ctx) => {
   });
   const parsed = parseExtraction(result.text);
 
-  await ctx.store.insertClaims(parsed.claims.map((claim) => ({ runId: run.id, sourceId, ...claim })));
+  // Retentativa do mesmo bloco (spec §7): substitui as afirmações que já tinha gravado, não duplica.
+  await ctx.store.deleteClaimsForChunk(sourceId, index);
+  await ctx.store.insertClaims(parsed.claims.map((claim) => ({ runId: run.id, sourceId, chunkIndex: index, ...claim })));
   if (parsed.structure.length > 0) {
     await ctx.store.updateSource(sourceId, { declaredStructure: mergeDeclared([source.declaredStructure ?? [], parsed.structure]) });
   }

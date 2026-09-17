@@ -202,6 +202,10 @@ export class MemoryIngestionStore implements IngestionStore {
     for (const claim of claims) this.claims.push({ id: crypto.randomUUID(), editionChapterId: null, located: false, ...claim });
   }
 
+  async deleteClaimsForChunk(sourceId: string, chunkIndex: number) {
+    this.claims = this.claims.filter((c) => !(c.sourceId === sourceId && c.chunkIndex === chunkIndex));
+  }
+
   async listClaimsForRun(runId: string) {
     return this.claims.filter((c) => c.runId === runId);
   }

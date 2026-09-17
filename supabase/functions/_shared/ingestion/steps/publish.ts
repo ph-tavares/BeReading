@@ -49,6 +49,9 @@ export const runPublishStep: StepExecutor = async (_step, run, ctx) => {
   if (chapters.length === 0) return finish('partial', run.statusReason ?? 'estrutura_nao_confirmada');
 
   const scope = recheck ?? chapters.map((c) => c.number);
+  // `recheckChapters: []` não é "todos os capítulos" (vazio faria `Math.max` virar `-Infinity`
+  // e o `every` de uma lista vazia confirmaria tudo por vacuidade): sem capítulo no escopo, não há o que confirmar.
+  if (scope.length === 0) return finish('partial', run.statusReason ?? 'capitulos_sem_confirmacao');
   const knowledge = (await ctx.store.listKnowledge(edition.id, Math.max(...scope))).filter((k) => scope.includes(k.chapterNumber));
   const allConfirmed = knowledge.length === scope.length && knowledge.every((k) => k.status === 'confirmed');
   const divergence = edition.bookId ? structureDivergence(await ctx.store.listBookChapters(edition.bookId), chapters) : null;

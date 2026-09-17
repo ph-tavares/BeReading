@@ -106,6 +106,7 @@ const fromSource = (s: Partial<NewSource>): Row => {
 const toClaim = (r: Row): ClaimRow => ({
   id: r.id, runId: r.run_id, sourceId: r.source_id, chapterRef: r.chapter_ref, editionChapterId: r.edition_chapter_id,
   kind: r.kind, statement: r.statement, isInterpretation: r.is_interpretation, forwardReference: r.forward_reference, located: r.located,
+  chunkIndex: r.chunk_index,
 });
 
 const toChapter = (r: Row): EditionChapter => ({
@@ -266,9 +267,13 @@ export class SupabaseIngestionStore implements IngestionStore {
     if (claims.length === 0) return;
     const rows = claims.map((c) => ({
       run_id: c.runId, source_id: c.sourceId, chapter_ref: c.chapterRef, kind: c.kind, statement: c.statement,
-      is_interpretation: c.isInterpretation, forward_reference: c.forwardReference,
+      is_interpretation: c.isInterpretation, forward_reference: c.forwardReference, chunk_index: c.chunkIndex,
     }));
     ok(await this.db.from('ingestion_claims').insert(rows), 'insertClaims');
+  }
+
+  async deleteClaimsForChunk(sourceId: string, chunkIndex: number) {
+    ok(await this.db.from('ingestion_claims').delete().eq('source_id', sourceId).eq('chunk_index', chunkIndex), 'deleteClaimsForChunk');
   }
 
   async listClaimsForRun(runId: string) {

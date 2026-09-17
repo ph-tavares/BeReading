@@ -95,6 +95,8 @@ export interface ClaimRow {
   isInterpretation: boolean;
   forwardReference: boolean;
   located: boolean;
+  /** Bloco de texto da fonte de onde veio (BER-59): permite ao passo `extract` reexecutado substituir, não duplicar. */
+  chunkIndex: number | null;
 }
 
 export type NewClaim = Omit<ClaimRow, 'id' | 'editionChapterId' | 'located'>;
@@ -159,6 +161,8 @@ export interface IngestionStore {
   deleteSourceTextsBefore(iso: string): Promise<void>;
 
   insertClaims(claims: NewClaim[]): Promise<void>;
+  /** Apaga as afirmações já gravadas de um bloco, para o passo `extract` reexecutado substituir em vez de duplicar. */
+  deleteClaimsForChunk(sourceId: string, chunkIndex: number): Promise<void>;
   listClaimsForRun(runId: string): Promise<ClaimRow[]>;
   setClaimLocations(updates: { id: string; editionChapterId: string | null; located: boolean }[]): Promise<void>;
   /** Afirmações localizadas no capítulo, de todos os runs, sem as que antecipam. */

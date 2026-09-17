@@ -24,7 +24,7 @@ async function setup() {
   }
   await store.insertClaims(chapters.map((c) => ({
     runId: run.id, sourceId: source.id, chapterRef: { number: c.number, part: null, numberInPart: null, title: null },
-    kind: 'event' as const, statement: `afirmação ${c.number}`, isInterpretation: false, forwardReference: false,
+    kind: 'event' as const, statement: `afirmação ${c.number}`, isInterpretation: false, forwardReference: false, chunkIndex: null,
   })));
   const claims = await store.listClaimsForRun(run.id);
   await store.setClaimLocations(claims.map((c, i) => ({ id: c.id, editionChapterId: chapters[i].id, located: true })));

@@ -71,16 +71,36 @@ Deno.test('extract: com o teto de custo atingido, descarta o texto sem chamar a 
   assertEquals([outcome.runStatusReason, await store.getSourceText(source.id)], ['limite', null]);
 });
 
+Deno.test('extract: reexecutar o mesmo bloco substitui as afirmações em vez de duplicar', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seedRun(store);
+  const source = await addSource(store, run, 'blog.com', 'D');
+  // Dois blocos: o texto não é apagado depois do bloco 0, então o passo pode ser reexecutado nele.
+  await store.saveSourceText(source.id, `${'a'.repeat(15000)}\n\n${'b'.repeat(15000)}`);
+  const { ai } = aiReturning({
+    estrutura: [],
+    afirmacoes: [{ capitulo: null, tipo: 'evento', texto: 'Ana chega à cidade.', interpretacao: false, antecipa: false }],
+  });
+  const ctx = fakeContext(store, { ai });
+
+  const step = stepRow(run, 'extract', `${source.id}#0`);
+  await runExtractStep(step, run, ctx);
+  await runExtractStep(step, run, ctx);
+
+  const doBloco = store.claims.filter((c) => c.sourceId === source.id && c.chunkIndex === 0);
+  assertEquals(doBloco.map((c) => c.statement), ['Ana chega à cidade.']);
+});
+
 Deno.test('structure: confirma por dois grupos independentes, localiza afirmações e busca capítulo com pouca cobertura', async () => {
   const store = new MemoryIngestionStore(() => NOW);
   const { run, edition } = await seedRun(store);
   const a = await addSource(store, run, 'a.com', 'C', { declaredStructure: DOIS_CAPITULOS });
   const b = await addSource(store, run, 'b.com', 'D', { declaredStructure: DOIS_CAPITULOS });
   await store.insertClaims([
-    { runId: run.id, sourceId: a.id, chapterRef: { number: 1, part: null, numberInPart: null, title: null }, kind: 'event', statement: 'Ana chega.', isInterpretation: false, forwardReference: false },
-    { runId: run.id, sourceId: b.id, chapterRef: { number: 1, part: null, numberInPart: null, title: null }, kind: 'event', statement: 'Ana chega à cidade.', isInterpretation: false, forwardReference: false },
-    { runId: run.id, sourceId: a.id, chapterRef: { number: 2, part: null, numberInPart: null, title: null }, kind: 'event', statement: 'Ana encontra o irmão.', isInterpretation: false, forwardReference: false },
-    { runId: run.id, sourceId: b.id, chapterRef: null, kind: 'theme', statement: 'Família.', isInterpretation: true, forwardReference: false },
+    { runId: run.id, sourceId: a.id, chapterRef: { number: 1, part: null, numberInPart: null, title: null }, kind: 'event', statement: 'Ana chega.', isInterpretation: false, forwardReference: false, chunkIndex: 0 },
+    { runId: run.id, sourceId: b.id, chapterRef: { number: 1, part: null, numberInPart: null, title: null }, kind: 'event', statement: 'Ana chega à cidade.', isInterpretation: false, forwardReference: false, chunkIndex: 0 },
+    { runId: run.id, sourceId: a.id, chapterRef: { number: 2, part: null, numberInPart: null, title: null }, kind: 'event', statement: 'Ana encontra o irmão.', isInterpretation: false, forwardReference: false, chunkIndex: 0 },
+    { runId: run.id, sourceId: b.id, chapterRef: null, kind: 'theme', statement: 'Família.', isInterpretation: true, forwardReference: false, chunkIndex: 0 },
   ]);
 
   const outcome = await runStructureStep(stepRow(run, 'structure', '-'), run, fakeContext(store));
@@ -108,9 +128,9 @@ Deno.test('verify: agrupa pela IA, publica fatos confirmados com as fontes e age
   const gut = await addSource(store, run, 'gutenberg.org', 'A');
   const blog = await addSource(store, run, 'blog.com', 'D');
   await store.insertClaims([
-    { runId: run.id, sourceId: gut.id, chapterRef: null, kind: 'event', statement: 'Ana chega à cidade de trem.', isInterpretation: false, forwardReference: false },
-    { runId: run.id, sourceId: blog.id, chapterRef: null, kind: 'event', statement: 'Ana chega de trem.', isInterpretation: false, forwardReference: false },
-    { runId: run.id, sourceId: blog.id, chapterRef: null, kind: 'event', statement: 'Ana encontra o irmão.', isInterpretation: false, forwardReference: false },
+    { runId: run.id, sourceId: gut.id, chapterRef: null, kind: 'event', statement: 'Ana chega à cidade de trem.', isInterpretation: false, forwardReference: false, chunkIndex: 0 },
+    { runId: run.id, sourceId: blog.id, chapterRef: null, kind: 'event', statement: 'Ana chega de trem.', isInterpretation: false, forwardReference: false, chunkIndex: 0 },
+    { runId: run.id, sourceId: blog.id, chapterRef: null, kind: 'event', statement: 'Ana encontra o irmão.', isInterpretation: false, forwardReference: false, chunkIndex: 0 },
   ]);
   await store.setClaimLocations([
     { id: store.claims[0].id, editionChapterId: cap1.id, located: true },
@@ -153,6 +173,33 @@ Deno.test('publish: sucesso só com todo capítulo confirmado; divergência com 
   assertEquals([done.status, done.statusReason, done.finishedAt !== null], ['succeeded', null, true]);
   assertEquals(store.runs[0].structureDivergence, { capitulos_no_app: 1, capitulos_confirmados: 2, titulos_diferentes: [] });
   assertEquals(ctx.notifications, []);
+});
+
+Deno.test('publish: teto de custo atingido fecha partial mesmo com todo capítulo confirmado', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run, edition } = await seedRun(store);
+  const [cap1, cap2] = await store.replaceEditionChapters(edition.id, DOIS_CAPITULOS, 1);
+  await addSource(store, run, 'gutenberg.org', 'A');
+  const fatos = [1, 2, 3, 4, 5].map((n) => ({ kind: 'event' as const, statement: `Fato ${n}.`, isInterpretation: false, confidence: 1, independentSupport: 1, sourceIds: [] }));
+  for (const chapter of [cap1, cap2]) {
+    await store.publishChapterKnowledge({ editionChapterId: chapter.id, runId: run.id, status: 'confirmed', confidence: 1, summary: '', facts: fatos, nextRecheckAt: null });
+  }
+  const limitado = { ...run, statusReason: 'limite' };
+  const ctx = fakeContext(store);
+
+  await runPublishStep(stepRow(run, 'publish', '-'), limitado, ctx);
+  assertEquals([(await store.getRun(run.id)).status, (await store.getRun(run.id)).statusReason], ['partial', 'limite']);
+});
+
+Deno.test('publish: recheckChapters vazio não confirma tudo por vacuidade', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run, edition } = await seedRun(store, {}, { recheckChapters: [] });
+  await store.replaceEditionChapters(edition.id, DOIS_CAPITULOS, 1);
+  await addSource(store, run, 'gutenberg.org', 'A');
+  const ctx = fakeContext(store);
+
+  await runPublishStep(stepRow(run, 'publish', '-'), run, ctx);
+  assertEquals([(await store.getRun(run.id)).status, (await store.getRun(run.id)).statusReason], ['partial', 'capitulos_sem_confirmacao']);
 });
 
 Deno.test('publish: sem fonte aceita falha; sem estrutura fica partial; ambos avisam a operação', async () => {
