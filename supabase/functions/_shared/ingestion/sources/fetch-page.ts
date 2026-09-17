@@ -56,8 +56,8 @@ export function countWords(text: string): number {
 }
 
 export function htmlToText(html: string): { title: string | null; text: string } {
-  // deno-lint-ignore no-explicit-any
-  const { document } = parseHTML(html) as any;
+  // linkedom's Window type não expõe `document` nos tipos ambiente do Deno (BER-59)
+  const { document } = parseHTML(html) as unknown as { document: { title?: string; body?: { textContent?: string } } };
   const title = document.title?.trim() || null;
   // deno-lint-ignore no-explicit-any
   const article = new Readability(document as any).parse();
@@ -157,7 +157,10 @@ const DISALLOW_ALL: RobotsRules = { isAllowed: () => false };
 export async function fetchRobots(origin: string, deps: FetchDeps, throttle: DomainThrottle): Promise<RobotsRules> {
   try {
     const { res } = await request(`${origin}/robots.txt`, deps, throttle);
-    if (res.status >= 500) return DISALLOW_ALL;
+    if (res.status >= 500) {
+      await res.body?.cancel();
+      return DISALLOW_ALL;
+    }
     if (res.status >= 400) {
       await res.body?.cancel();
       return ALLOW_ALL;
