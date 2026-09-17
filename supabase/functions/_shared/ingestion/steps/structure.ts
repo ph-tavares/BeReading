@@ -6,6 +6,7 @@ import { LIMITS } from '../budget.ts';
 import { startOfUtcDay } from '../queue.ts';
 import { assignIndependenceGroups } from '../independence.ts';
 import { locateChapter } from '../locate.ts';
+import { sourceNumbersWholeBook } from '../numbering.ts';
 import { buildChapterQuery } from '../queries.ts';
 import { bestStructureGuess, confirmStructure } from '../structure.ts';
 import type { StepExecutor } from './context.ts';
@@ -63,8 +64,13 @@ export const runStructureStep: StepExecutor = async (step, run, ctx) => {
 
   const chapters = await ctx.store.replaceEditionChapters(edition.id, confirmed.chapters, confirmed.confidence);
   const claims = await ctx.store.listClaimsForRun(run.id);
+  // Cada fonte tem sua convenção de numeração; sem saber a dela, número solto em obra com partes
+  // fica sem capítulo (BER-59).
+  const numbersWholeBook = new Map(accepted.map((s) => [s.id, sourceNumbersWholeBook(s.declaredStructure, chapters)]));
   const locations = claims.map((claim) => {
-    const chapter = claim.forwardReference ? null : locateChapter(claim.chapterRef, chapters);
+    const chapter = claim.forwardReference
+      ? null
+      : locateChapter(claim.chapterRef, chapters, { sourceNumbersWholeBook: numbersWholeBook.get(claim.sourceId) === true });
     return { id: claim.id, editionChapterId: chapter?.id ?? null, located: chapter !== null };
   });
   await ctx.store.setClaimLocations(locations);

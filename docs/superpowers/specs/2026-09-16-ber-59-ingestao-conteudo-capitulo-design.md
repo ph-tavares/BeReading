@@ -488,3 +488,18 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
     e os 29 créditos Tavily entram no mesmo teto (US$ 0,008 cada): o run chegaria ao limite no
     meio da verificação dos capítulos, depois de já ter gasto. Medições dos três testes:
     35 mil tokens de entrada no primeiro (coleta rasa), 672 mil no segundo e 912 mil no terceiro.
+35. **Numeração por parte (spoiler encontrado em produção).** No quarto teste do 1984 a estrutura
+    confirmou 24 capítulos, mas 247 afirmações diziam apenas "capítulo 1": páginas sobre a Parte 2
+    e a Parte 3 numeram seus capítulos a partir de 1, e a guarda da spec §6.4 só desconfiava de
+    número solto quando a estrutura tinha rótulo de parte. O capítulo 1 publicado trazia o bilhete
+    de Julia (Parte 2), Parsons denunciado pela filha e a Sala 101 (Parte 3) — spoiler eliminatório
+    pelo critério de aceitação. Correção:
+    - as partes da edição passam a ser deduzidas também do reinício de number_in_part;
+    - número solto em obra com partes só localiza quando a própria fonte numera o livro inteiro,
+      provado por ela declarar um capítulo maior que a maior parte da edição;
+    - afirmação com parte e número na parte é mapeada para a posição no livro, por rótulo ou pela
+      ordem das partes;
+    - o prompt de extração passa a exigir a parte quando a fonte divide o livro, inclusive quando
+      isso só aparece no título ou na URL da página.
+    Custo aceito: fonte que numera por parte sem dizer a parte perde as afirmações, em vez de
+    colocá-las no capítulo errado.

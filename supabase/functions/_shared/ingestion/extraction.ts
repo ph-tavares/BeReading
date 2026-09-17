@@ -92,6 +92,7 @@ Regras:
 - "estrutura_completa": true só quando o bloco traz a lista de TODOS os capítulos do livro (um sumário ou índice inteiro). Página sobre um capítulo, resumo de parte do livro ou lista cortada: false.
 - "afirmacoes": fatos e leituras sobre o livro, cada um em uma frase sua, com no máximo ${MAX_STATEMENT_CHARS} caracteres. Nunca copie frases da fonte.
 - "capitulo": preencha só quando a fonte indica em que capítulo aquilo acontece (cabeçalho, resumo capítulo a capítulo, ou o capítulo em andamento). Se a fonte fala do livro inteiro ou você não tem certeza, use null.
+- **Parte é obrigatória quando a fonte divide o livro em partes** ("Parte 2", "Segunda Parte", "Book Two", "Livro III"), inclusive quando isso só aparece no título da página ou na URL (ex.: "book-2-chapter-1"). Nesse caso preencha "parte" e "numero_na_parte" com o que a fonte diz, e deixe "numero" null, a menos que a fonte dê também a posição no livro inteiro. Numerar dentro da parte como se fosse o livro inteiro põe o meio do livro no primeiro capítulo.
 - "tipo": "evento", "personagem", "relacao", "argumento" (não-ficção) ou "tema".
 - "interpretacao": true para leitura crítica, opinião, tema ou simbolismo; false para o que acontece ou é dito no capítulo.
 - "antecipa": true se a frase revela algo que só acontece ou só se sabe em capítulo posterior. Nesse caso, prefira reescrever a frase só com o que o capítulo mostra.
