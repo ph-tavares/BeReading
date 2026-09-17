@@ -141,3 +141,20 @@ Deno.test('confirmStructure: texto integral parcial e índice com numeração de
 
   assertEquals([r?.basis, r?.chapters.length], ['independent', 24]);
 });
+
+Deno.test('confirmStructure: lista completa refutada por capítulo descrito em lista parcial sai da disputa', () => {
+  const vinte4b = Array.from({ length: 24 }, (_, i) => ch(i + 1));
+  const r = confirmStructure([
+    cand({ sourceId: 'a', independenceGroup: 'a.com', chapters: vinte4b }),
+    // Diz que o livro tem 23 capítulos, mas outra fonte descreve o 24: lista lida pela metade.
+    cand({ sourceId: 'b', independenceGroup: 'b.com', chapters: vinte4b.slice(0, 23) }),
+    cand({ sourceId: 'c', independenceGroup: 'c.com', complete: false, chapters: vinte4b.slice(2) }),
+  ]);
+  assertEquals(r?.chapters.length, 24);
+
+  // Sem a parcial que alcança o 24, as duas listas completas continuam sendo conflito de edição.
+  assertEquals(confirmStructure([
+    cand({ sourceId: 'a', independenceGroup: 'a.com', chapters: vinte4b }),
+    cand({ sourceId: 'b', independenceGroup: 'b.com', chapters: vinte4b.slice(0, 23) }),
+  ]), null);
+});
