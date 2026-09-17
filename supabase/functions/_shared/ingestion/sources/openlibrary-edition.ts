@@ -143,6 +143,18 @@ export function originalLanguageFromEditions(entries: { publish_date?: string; l
   return dated[0]?.language ?? null;
 }
 
+export function oldestYearFromEditions(entries: { publish_date?: string }[]): number | null {
+  const years = entries.map((e) => parseYear(e.publish_date)).filter((y): y is number => y !== null);
+  return years.length > 0 ? Math.min(...years) : null;
+}
+
+function keysOf(list: unknown): string[] {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((a) => (typeof a === 'object' && a !== null ? (a as { key?: unknown }).key : null))
+    .filter((key): key is string => typeof key === 'string');
+}
+
 async function getJson(url: string, fetchFn: typeof fetch): Promise<Record<string, any> | null> { // eslint-disable-line @typescript-eslint/no-explicit-any
   const res = await fetchFn(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) });
   if (res.status === 404) return null;
@@ -154,9 +166,16 @@ export async function fetchOpenLibraryEdition(isbn: string, fetchFn: typeof fetc
   const edition = await getJson(`${BASE}/isbn/${isbn}.json`, fetchFn);
   if (!edition) return null;
 
-  const authorKeys: string[] = (edition.authors ?? [])
-    .map((a: { key?: string }) => a.key)
-    .filter((key: unknown): key is string => typeof key === 'string')
+  const workKey: string | null = edition.works?.[0]?.key ?? null;
+  const work = workKey ? await getJson(`${BASE}${workKey}.json`, fetchFn) : null;
+  const editions = workKey ? await getJson(`${BASE}${workKey}/editions.json?limit=100`, fetchFn) : null;
+  const entries = editions?.entries ?? [];
+
+  // Registro de edição moderno na Open Library costuma não trazer `authors` (só tradutor em
+  // `contributors`); o autor fica na obra. Sem o fallback, o 1984 da Companhia das Letras
+  // (9788535914849) saía sem autor nem ano de morte, e o domínio público não era avaliado (BER-59).
+  const authorKeys = [...keysOf(edition.authors), ...keysOf((work?.authors ?? []).map((a: { author?: unknown }) => a.author))]
+    .filter((key, i, all) => all.indexOf(key) === i)
     .slice(0, 3);
   const authors: string[] = [];
   let authorDeathYear: number | null = null;
@@ -166,15 +185,9 @@ export async function fetchOpenLibraryEdition(isbn: string, fetchFn: typeof fetc
     if (i === 0) authorDeathYear = parseYear(author?.death_date);
   }
 
-  const workKey: string | null = edition.works?.[0]?.key ?? null;
-  let firstPublishYear: number | null = null;
-  let originalLanguage: string | null = null;
-  if (workKey) {
-    const work = await getJson(`${BASE}${workKey}.json`, fetchFn);
-    firstPublishYear = parseYear(work?.first_publish_date);
-    const editions = await getJson(`${BASE}${workKey}/editions.json?limit=100`, fetchFn);
-    originalLanguage = originalLanguageFromEditions(editions?.entries ?? []);
-  }
+  // A obra também pode vir sem `first_publish_date` (caso do mesmo 1984): usa a edição mais antiga.
+  const firstPublishYear = parseYear(work?.first_publish_date) ?? oldestYearFromEditions(entries);
+  const originalLanguage = originalLanguageFromEditions(entries);
 
   return {
     title: typeof edition.title === 'string' ? edition.title : null,
