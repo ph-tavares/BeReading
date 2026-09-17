@@ -1,5 +1,5 @@
-import { assertEquals, assertRejects } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import { assertPublicUrl, isPrivateAddress, UnsafeUrlError } from './ssrf.ts';
+import { assertEquals, assertRejects, assertStrictEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assertPublicUrl, isPrivateAddress, makeResolve, UnsafeUrlError } from './ssrf.ts';
 
 const resolvesTo = (...ips: string[]) => () => Promise.resolve(ips);
 
@@ -54,4 +54,28 @@ Deno.test('assertPublicUrl: recusa IPv4 privado escrito como IPv6', async () => 
   for (const raw of ['http://[::ffff:127.0.0.1]/', 'http://[::ffff:169.254.169.254]/', 'http://[::127.0.0.1]/', 'http://[64:ff9b::a9fe:a9fe]/']) {
     await assertRejects(() => assertPublicUrl(raw, pub), UnsafeUrlError, undefined, raw);
   }
+});
+
+Deno.test('makeResolve: sem resolvedor, devolve null (sem DNS no runtime)', async () => {
+  assertEquals(await makeResolve(undefined)('example.com'), null);
+});
+
+Deno.test('makeResolve: NotFound em um tipo não impede o outro', async () => {
+  const resolve = makeResolve((_host, type) => {
+    if (type === 'AAAA') return Promise.reject(new Deno.errors.NotFound('x'));
+    return Promise.resolve(['8.8.8.8']);
+  });
+  assertEquals(await resolve('example.com'), ['8.8.8.8']);
+});
+
+Deno.test('makeResolve: NotFound nos dois tipos devolve lista vazia', async () => {
+  const resolve = makeResolve(() => Promise.reject(new Deno.errors.NotFound('x')));
+  assertEquals(await resolve('example.com'), []);
+});
+
+Deno.test('makeResolve: erro que não é NotFound é repassado (falha transitória, não recusa)', async () => {
+  const timeout = new Error('timeout');
+  const resolve = makeResolve((_host, type) => (type === 'A' ? Promise.reject(timeout) : Promise.resolve([])));
+  const err = await assertRejects(() => resolve('example.com'));
+  assertStrictEquals(err, timeout);
 });

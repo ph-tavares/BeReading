@@ -3,7 +3,7 @@
 // Mesmo domínio registrável é uma fonte só, e conteúdo quase idêntico em domínios
 // diferentes também: blogs de resumo escolar copiam uns dos outros e confirmariam um erro
 // por repetição. A impressão (simhash) é calculada antes de o texto bruto ser apagado.
-import { getDomain } from 'npm:tldts@6';
+import { getDomain } from 'npm:tldts@6.1.86';
 
 /**
  * Distância de Hamming máxima entre impressões de 64 bits para considerar cópia. Acima do
