@@ -315,7 +315,7 @@ curl -X POST "https://asfdkzejtuqcgqdcsnac.supabase.co/functions/v1/ingest-book"
 ```
 
 `$SUPABASE_SECRET_KEY` é a secret key (`sb_secret_…`, Project Settings → API Keys). Não use a
-publishable. Tetos: 10 runs novos por dia, 30 buscas, 60 fontes e US$ 2,00 por run, e 120 créditos
+publishable. Tetos: 10 runs novos por dia, 30 buscas, 60 fontes e US$ 3,00 por run, e 120 créditos
 Tavily por dia (um livro usa até 30). O limite do plano gratuito do Tavily é 1.000 créditos por
 mês, ou seja ~33 livros: acompanhe em tavily.com antes de disparar muitos livros seguidos.
 
