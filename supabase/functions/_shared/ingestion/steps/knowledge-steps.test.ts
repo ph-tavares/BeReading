@@ -69,7 +69,7 @@ Deno.test('extract: com o teto de custo atingido, descarta o texto sem chamar a 
   const { run } = await seedRun(store);
   const source = await addSource(store, run, 'blog.com', 'D');
   await store.saveSourceText(source.id, 'texto');
-  const caro = { ...run, stats: { custo_ia_microusd: 2_000_000 } };
+  const caro = { ...run, stats: { custo_ia_microusd: LIMITS.maxCostUsdPerRun * 1_000_000 } };
   const outcome = await runExtractStep(stepRow(run, 'extract', `${source.id}#0`), caro, fakeContext(store));
   assertEquals([outcome.runStatusReason, await store.getSourceText(source.id)], ['limite', null]);
 });
@@ -318,7 +318,7 @@ Deno.test('verify: com o teto de custo atingido, pula sem chamar a IA nem public
   const store = new MemoryIngestionStore(() => NOW);
   const { run, edition } = await seedRun(store);
   await store.replaceEditionChapters(edition.id, DOIS_CAPITULOS, 1);
-  const caro = { ...run, stats: { custo_ia_microusd: 2_000_000 } };
+  const caro = { ...run, stats: { custo_ia_microusd: LIMITS.maxCostUsdPerRun * 1_000_000 } };
 
   const outcome = await runVerifyStep(stepRow(run, 'verify', '1'), caro, fakeContext(store));
 
