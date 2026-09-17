@@ -278,7 +278,7 @@ A estrutura declarada pelas fontes passa pelas mesmas regras de independência:
 |---|---|---|
 | Buscas por run | 30 | run `partial`, motivo `limite` |
 | Fontes lidas por run | 60 | idem |
-| Custo estimado por run | US$ 2,00 | idem |
+| Custo estimado por run | US$ 3,00 (era US$ 2,00) | idem |
 | Créditos Tavily por dia | 120 (era 30) | runs aguardam o dia seguinte |
 | Runs novos por dia | 10 | idem |
 | `INGESTION_ENABLED` | `true` | `false` para tudo sem deploy |
@@ -484,3 +484,7 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
     conflito de edição e nenhuma confirma. No terceiro teste de 1984, uma lista de 23 capítulos
     rivalizava com a de 24 e derrubava as duas. Custo aceito: uma fonte que invente um capítulo
     além do fim descarta as listas corretas, e aí nada confirma — o run fecha `partial`.
+34. **Teto de custo por run passa de US$ 2,00 para US$ 3,00.** A extração de 1984 custou US$ 1,55
+    e os 29 créditos Tavily entram no mesmo teto (US$ 0,008 cada): o run chegaria ao limite no
+    meio da verificação dos capítulos, depois de já ter gasto. Medições dos três testes:
+    35 mil tokens de entrada no primeiro (coleta rasa), 672 mil no segundo e 912 mil no terceiro.

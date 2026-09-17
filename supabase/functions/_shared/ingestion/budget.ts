@@ -7,7 +7,12 @@ import type { PolicyDecision } from './policy.ts';
 export const LIMITS = {
   maxSearchesPerRun: 30,
   maxSourcesPerRun: 60,
-  maxCostUsdPerRun: 2,
+  /**
+   * Um livro de 24 capítulos custou US$ 1,55 só na extração (1984, 17/09/2026), e o teto conta
+   * também os créditos Tavily (US$ 0,008 cada, mais US$ 0,23): com US$ 2,00 o run batia no teto no
+   * meio da verificação. US$ 3,00 deixa folga para verificar os capítulos (BER-59).
+   */
+  maxCostUsdPerRun: 3,
   /**
    * Um livro sozinho chega ao teto de buscas do run (30): 5 sobre o livro e uma por capítulo. Com
    * a cota diária em 30, o primeiro teste do 1984 não coube num dia (BER-59). 120 dá 4 livros por

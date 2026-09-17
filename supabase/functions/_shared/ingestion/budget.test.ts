@@ -31,5 +31,5 @@ Deno.test('exceededLimit: avisa antes de passar do teto', () => {
   assertEquals(exceededLimit({}), null);
   assertEquals(exceededLimit({ buscas: LIMITS.maxSearchesPerRun }), 'buscas');
   assertEquals(exceededLimit({ fontes_consideradas: LIMITS.maxSourcesPerRun }), 'fontes');
-  assertEquals(exceededLimit({ custo_ia_microusd: 2_000_000 }), 'custo');
+  assertEquals(exceededLimit({ custo_ia_microusd: LIMITS.maxCostUsdPerRun * 1_000_000 }), 'custo');
 });
