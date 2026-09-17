@@ -364,12 +364,12 @@ export class SupabaseIngestionStore implements IngestionStore {
     return [...byEdition.entries()].slice(0, limit).map(([editionId, chapterNumbers]) => ({ editionId, chapterNumbers: chapterNumbers.sort((a, b) => a - b) }));
   }
 
-  async markRechecksScheduled(editionId: string, chapterNumbers: number[]) {
+  async markRechecksScheduled(editionId: string, chapterNumbers: number[], nextRecheckAtIso: string) {
     const chapters = await this.listEditionChapters(editionId);
     for (const chapter of chapters.filter((c) => chapterNumbers.includes(c.number))) {
       const current = must<Row>(await this.db.from('chapter_knowledge').select('recheck_count').eq('edition_chapter_id', chapter.id).single(), 'markRechecksScheduled(select)');
       ok(
-        await this.db.from('chapter_knowledge').update({ recheck_count: current.recheck_count + 1, next_recheck_at: null }).eq('edition_chapter_id', chapter.id),
+        await this.db.from('chapter_knowledge').update({ recheck_count: current.recheck_count + 1, next_recheck_at: nextRecheckAtIso }).eq('edition_chapter_id', chapter.id),
         'markRechecksScheduled(update)',
       );
     }

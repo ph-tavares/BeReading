@@ -306,10 +306,10 @@ export class MemoryIngestionStore implements IngestionStore {
     return [...byEdition.entries()].slice(0, limit).map(([editionId, chapterNumbers]) => ({ editionId, chapterNumbers: chapterNumbers.sort((a, b) => a - b) }));
   }
 
-  async markRechecksScheduled(editionId: string, chapterNumbers: number[]) {
+  async markRechecksScheduled(editionId: string, chapterNumbers: number[], nextRecheckAtIso: string) {
     for (const chapter of this.chapters.filter((c) => c.editionId === editionId && chapterNumbers.includes(c.number))) {
       const k = this.knowledge.find((x) => x.editionChapterId === chapter.id);
-      if (k) Object.assign(k, { recheckCount: k.recheckCount + 1, nextRecheckAt: null });
+      if (k) Object.assign(k, { recheckCount: k.recheckCount + 1, nextRecheckAt: nextRecheckAtIso });
     }
   }
 

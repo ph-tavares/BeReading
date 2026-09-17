@@ -174,6 +174,7 @@ export interface IngestionStore {
   /** Conhecimento dos capítulos com número ≤ `maxChapterNumber`, em ordem. */
   listKnowledge(editionId: string, maxChapterNumber: number): Promise<KnowledgeRow[]>;
   dueRechecks(nowIso: string, limit: number): Promise<{ editionId: string; chapterNumbers: number[] }[]>;
-  markRechecksScheduled(editionId: string, chapterNumbers: number[]): Promise<void>;
+  /** Incrementa `recheck_count` e adia `next_recheck_at` para `nextRecheckAtIso` (BER-59: nunca `null`, senão um run que falhar depois desta chamada perde o capítulo para sempre). */
+  markRechecksScheduled(editionId: string, chapterNumbers: number[], nextRecheckAtIso: string): Promise<void>;
   listBookChapters(bookId: string): Promise<{ number: number; title: string | null }[]>;
 }

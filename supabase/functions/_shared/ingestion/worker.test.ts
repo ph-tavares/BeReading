@@ -1,11 +1,11 @@
-import { assert, assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals, assertRejects } from 'https://deno.land/std@0.208.0/assert/mod.ts';
 import type { AIRequest } from '../ai.ts';
 import { fakeContext, NOW, page } from '../test-support/ingestionContext.ts';
 import { MemoryIngestionStore } from '../test-support/memoryIngestionStore.ts';
 import { HttpStatusError } from './queue.ts';
 import { RECHECK_AFTER_MS } from './recheck.ts';
 import type { StepContext } from './steps/context.ts';
-import { runWorker } from './worker.ts';
+import { RECHECK_EDITIONS_PER_CYCLE, runWorker, scheduleRechecks } from './worker.ts';
 
 // Livro, fontes e textos sintéticos (repositório público). Vocabulário diferente entre as
 // duas fontes de propósito: precisam ficar em grupos de independência distintos (§5.6), senão
@@ -118,4 +118,27 @@ Deno.test('runWorker: capítulo insuficiente vencido vira run de rebusca só com
   assertEquals(recheck.payload.recheckChapters, [1]);
   assertEquals(store.knowledge[0].recheckCount, 1);
   assertEquals(store.steps.filter((s) => s.runId === recheck.id).map((s) => s.kind).sort(), ['discover', 'publish', 'verify']);
+});
+
+Deno.test('scheduleRechecks: run que falha ao criar só adia a rebusca em 7 dias, não perde o capítulo', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { edition, run } = await seed(store);
+  const [cap1] = await store.replaceEditionChapters(edition.id, [{ number: 1, part: null, numberInPart: null, title: 'A chegada' }], 1);
+  await store.publishChapterKnowledge({
+    editionChapterId: cap1.id, runId: run.id, status: 'insufficient', confidence: 0, summary: '', facts: [],
+    nextRecheckAt: new Date(NOW - RECHECK_AFTER_MS).toISOString(),
+  });
+
+  const boom = new Error('run creation boom');
+  store.createRun = () => Promise.reject(boom);
+
+  const ctx = fakeContext(store);
+  await assertRejects(() => scheduleRechecks(ctx), Error, 'run creation boom');
+
+  // markRechecksScheduled já rodou antes do createRun falhar: o capítulo não fica perdido.
+  assertEquals(store.knowledge[0].recheckCount, 1);
+  assertEquals(store.knowledge[0].nextRecheckAt, new Date(NOW + RECHECK_AFTER_MS).toISOString());
+
+  const due = await store.dueRechecks(new Date(NOW + RECHECK_AFTER_MS + 1).toISOString(), RECHECK_EDITIONS_PER_CYCLE);
+  assertEquals(due, [{ editionId: edition.id, chapterNumbers: [1] }]);
 });

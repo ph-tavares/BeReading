@@ -6,6 +6,7 @@
 import { buildChapterQuery } from './queries.ts';
 import { afterFailure, isTransientError, STALE_LOCK_MS } from './queue.ts';
 import { planNextSteps } from './planner.ts';
+import { RECHECK_AFTER_MS } from './recheck.ts';
 import { DeferStepError, type StepContext, type StepExecutor } from './steps/context.ts';
 import { EXECUTORS } from './steps/index.ts';
 import type { StepRow } from './store.ts';
@@ -39,7 +40,10 @@ export async function scheduleRechecks(ctx: StepContext): Promise<number> {
   for (const { editionId, chapterNumbers } of due) {
     const edition = await ctx.store.getEdition(editionId);
     const chapters = (await ctx.store.listEditionChapters(editionId)).filter((c) => chapterNumbers.includes(c.number));
-    await ctx.store.markRechecksScheduled(editionId, chapterNumbers);
+    // Adia `next_recheck_at` em vez de zerá-lo, e faz isso ANTES de criar o run (BER-59): se
+    // `createRun`/`enqueueSteps` falhar depois, o pior caso é a rebusca atrasar 7 dias — nunca
+    // o capítulo sumir de `dueRechecks` para sempre.
+    await ctx.store.markRechecksScheduled(editionId, chapterNumbers, iso(ctx.now() + RECHECK_AFTER_MS));
     const run = await ctx.store.createRun(editionId, { recheckChapters: chapterNumbers });
     const forQueries = {
       title: edition.title ?? '', authors: edition.authors, publisher: edition.publisher,
