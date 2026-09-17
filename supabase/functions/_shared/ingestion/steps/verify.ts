@@ -6,6 +6,7 @@ import { aiUsageDelta, exceededLimit } from '../budget.ts';
 import { batchClaims, buildGroupingPrompt, type Grouping, GROUPING_MAX_TOKENS, parseGrouping } from '../grouping.ts';
 import { assignIndependenceGroups } from '../independence.ts';
 import { locateChapter } from '../locate.ts';
+import { sourceNumbersWholeBook } from '../numbering.ts';
 import { RECHECK_AFTER_MS } from '../recheck.ts';
 import type { EditionChapter } from '../types.ts';
 import { type SourceSupport, verifyChapter } from '../verify.ts';
@@ -27,8 +28,13 @@ export const runVerifyStep: StepExecutor = async (step, run, ctx) => {
 
   // Afirmações de fontes achadas depois da estrutura (busca por capítulo) ainda não têm capítulo.
   const unlocated = (await ctx.store.listClaimsForRun(run.id)).filter((c) => c.editionChapterId === null && !c.located && !c.forwardReference);
+  const fontes = await ctx.store.getSourcesByIds([...new Set(unlocated.map((c) => c.sourceId))]);
+  const numbersWholeBook = new Map(fontes.map((s) => [s.id, sourceNumbersWholeBook(s.declaredStructure, chapters)]));
   const newlyLocated = unlocated
-    .map((c) => ({ id: c.id, chapter: locateChapter(c.chapterRef, chapters) }))
+    .map((c) => ({
+      id: c.id,
+      chapter: locateChapter(c.chapterRef, chapters, { sourceNumbersWholeBook: numbersWholeBook.get(c.sourceId) === true }),
+    }))
     .filter((x) => x.chapter !== null)
     .map((x) => ({ id: x.id, editionChapterId: x.chapter!.id, located: true }));
   if (newlyLocated.length > 0) await ctx.store.setClaimLocations(newlyLocated);

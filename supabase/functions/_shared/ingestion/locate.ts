@@ -38,18 +38,58 @@ export function normalizePart(part: string | null): string {
   return words.filter((w) => w !== 'parte' && w !== 'part' && w !== 'livro' && w !== 'book').join(' ');
 }
 
-export function locateChapter(ref: ChapterRef | null, chapters: EditionChapter[]): EditionChapter | null {
+/**
+ * Partes da edição, na ordem. Quando a estrutura confirmada não traz rótulo de parte, a parte nova
+ * aparece no reinício de `number_in_part` (em 1984: 1..8, 1..10, 1..6). Saber disso é o que impede
+ * de tratar o "capítulo 1" de uma fonte sobre a Parte 2 como o capítulo 1 do livro (BER-59).
+ */
+export function partsOf(chapters: EditionChapter[]): EditionChapter[][] {
+  const parts: EditionChapter[][] = [];
+  for (const chapter of [...chapters].sort((a, b) => a.number - b.number)) {
+    const current = parts[parts.length - 1];
+    const startsPart = current === undefined ||
+      (chapter.partLabel !== null && normalizePart(chapter.partLabel) !== normalizePart(current[0].partLabel)) ||
+      (chapter.numberInPart === 1 && current[current.length - 1].numberInPart !== null && current[current.length - 1].numberInPart !== 0);
+    if (startsPart || current === undefined) parts.push([chapter]);
+    else current.push(chapter);
+  }
+  return parts;
+}
+
+export interface LocateOptions {
+  /**
+   * A fonte numera os capítulos pelo livro inteiro (o sumário dela passa da primeira parte). Sem
+   * essa evidência, um número solto numa obra dividida em partes é ambíguo — "capítulo 1" tanto
+   * pode ser o primeiro do livro quanto o primeiro da Parte 2 — e a afirmação fica sem capítulo.
+   */
+  sourceNumbersWholeBook?: boolean;
+}
+
+export function locateChapter(
+  ref: ChapterRef | null,
+  chapters: EditionChapter[],
+  options: LocateOptions = {},
+): EditionChapter | null {
   if (!ref) return null;
-  const hasParts = chapters.some((c) => c.partLabel !== null);
+  const parts = partsOf(chapters);
+  const hasParts = parts.length > 1;
   const matches: EditionChapter[][] = [];
 
   if (ref.part && ref.numberInPart !== null) {
-    const part = normalizePart(ref.part);
-    matches.push(chapters.filter((c) => normalizePart(c.partLabel) === part && c.numberInPart === ref.numberInPart));
+    const wanted = normalizePart(ref.part);
+    const byLabel = chapters.filter((c) =>
+      c.partLabel !== null && normalizePart(c.partLabel) === wanted && c.numberInPart === ref.numberInPart
+    );
+    // Sem rótulo na estrutura confirmada, "Parte 2" é a segunda parte na ordem do livro.
+    const index = Number(wanted);
+    const byIndex = Number.isInteger(index) && index >= 1 && index <= parts.length
+      ? parts[index - 1].filter((c) => (c.numberInPart ?? c.number) === ref.numberInPart)
+      : [];
+    matches.push(byLabel.length > 0 ? byLabel : byIndex);
   }
   const title = normalizeTitle(ref.title);
   if (title) matches.push(chapters.filter((c) => normalizeTitle(c.title) === title));
-  if (ref.number !== null && !ref.part && !hasParts) {
+  if (ref.number !== null && !ref.part && (!hasParts || options.sourceNumbersWholeBook === true)) {
     matches.push(chapters.filter((c) => c.number === ref.number));
   }
 

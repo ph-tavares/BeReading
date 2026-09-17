@@ -1,5 +1,6 @@
 import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import { locateChapter, looksForwardReferencing, normalizePart, normalizeTitle } from './locate.ts';
+import { locateChapter, looksForwardReferencing, normalizePart, normalizeTitle, partsOf } from './locate.ts';
+import { sourceNumbersWholeBook } from './numbering.ts';
 import type { ChapterRef, EditionChapter } from './types.ts';
 
 const ref = (over: Partial<ChapterRef>): ChapterRef => ({ number: null, part: null, numberInPart: null, title: null, ...over });
@@ -78,4 +79,43 @@ Deno.test('looksForwardReferencing: outras construções que antecipam o futuro'
 
 Deno.test('normalizePart: palavra com nome de chave do protótipo não devolve função', () => {
   assertEquals(typeof normalizePart('Parte constructor'), 'string');
+});
+
+// Caso do quarto teste de 1984 (BER-59): a estrutura confirmada veio sem rótulo de parte, só com
+// a numeração reiniciando (1..8, 1..10, 1..6). Um número solto de uma página sobre a Parte 2
+// caía no capítulo 1 do livro e levava spoiler do meio do livro para o começo.
+const MIL984: EditionChapter[] = Array.from({ length: 24 }, (_, i) => ({
+  id: 'c' + (i + 1),
+  number: i + 1,
+  partLabel: null,
+  numberInPart: i < 8 ? i + 1 : i < 18 ? i - 7 : i - 17,
+  title: null,
+}));
+
+Deno.test('partsOf: sem rótulo, a parte nova aparece no reinício da numeração', () => {
+  assertEquals(partsOf(MIL984).map((p) => p.length), [8, 10, 6]);
+  assertEquals(partsOf(COM_PARTES).map((p) => p.length), [2, 2]);
+  assertEquals(partsOf(COM_TITULOS).length, 1, 'sem partes, o livro inteiro é uma parte só');
+});
+
+Deno.test('locateChapter: número solto em livro com partes só vale se a fonte numerar o livro inteiro', () => {
+  assertEquals(locateChapter(ref({ number: 1 }), MIL984), null);
+  assertEquals(locateChapter(ref({ number: 1 }), MIL984, { sourceNumbersWholeBook: true })?.number, 1);
+  assertEquals(locateChapter(ref({ number: 11 }), MIL984, { sourceNumbersWholeBook: true })?.number, 11);
+});
+
+Deno.test('locateChapter: capítulo da Parte 2 vai para a posição certa no livro', () => {
+  assertEquals(locateChapter(ref({ part: 'Parte 2', numberInPart: 1 }), MIL984)?.number, 9);
+  assertEquals(locateChapter(ref({ part: 'Book Two', numberInPart: 10 }), MIL984)?.number, 18);
+  assertEquals(locateChapter(ref({ part: 'Terceira Parte', numberInPart: 1 }), MIL984)?.number, 19);
+  assertEquals(locateChapter(ref({ part: 'Parte 4', numberInPart: 1 }), MIL984), null, 'parte que não existe não localiza');
+});
+
+Deno.test('sourceNumbersWholeBook: só com número maior que a maior parte', () => {
+  const lista = (n: number, de = 1) => Array.from({ length: n }, (_, i) => ({ number: de + i, part: null, numberInPart: null, title: null }));
+  assertEquals(sourceNumbersWholeBook(lista(24), MIL984), true);
+  assertEquals(sourceNumbersWholeBook(lista(22, 3), MIL984), true);
+  assertEquals(sourceNumbersWholeBook(lista(10), MIL984), false, '10 cabe na maior parte: pode ser numeração por parte');
+  assertEquals(sourceNumbersWholeBook(null, MIL984), false);
+  assertEquals(sourceNumbersWholeBook(null, COM_TITULOS), true, 'sem partes não há ambiguidade');
 });
