@@ -274,7 +274,12 @@ capítulo é spoiler, e só as functions com chave de servidor acessam.
 - `ingest-book` (interna) recebe `{ "isbn": "...", "book_id": "<uuid, opcional>" }`, cria o run e
   enfileira o primeiro passo. Devolve `202` com `run_id`.
 - O `pg_cron` chama `process-ingestion` a cada minuto (job `process-ingestion`). Cada chamada
-  executa passos curtos da fila por até 100 s.
+  reivindica um passo por vez e para de reivindicar outro depois de até 70 s, para caber no
+  relógio da Edge Function; o que sobrar fica para a chamada seguinte.
+- Como o `pg_cron` dispara a cada minuto sem esperar a chamada anterior terminar, invocações do
+  worker podem se sobrepor. Isso é aceito: `claim_ingestion_steps` reivindica cada passo com
+  trava exclusiva (`for update skip locked`), então duas invocações nunca executam o mesmo passo;
+  o limite por domínio (`fetchPage`/`fetchRobots`), porém, é por invocação, não global.
 - Um livro leva alguns minutos, conforme o número de fontes e de blocos de texto.
 - `ingestion_claims.chunk_index` identifica o bloco de texto que gerou cada afirmação, para a
   extração ser idempotente numa retentativa (migration `20260918120000`).

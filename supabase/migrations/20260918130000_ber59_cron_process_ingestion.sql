@@ -1,10 +1,14 @@
 -- BER-59: agenda o worker da ingestão de conteúdo a cada minuto.
 --
 -- Mesmo desenho do retry-pending-quizzes (BER-33, BER-84): URL e CRON_SECRET lidos do
--- Vault na hora, nunca escritos em migration. O worker para sozinho antes de 100 s; o
--- timeout de 150 s do pg_net cobre o pior caso sem acumular chamadas. Com a fila vazia a
--- chamada termina em milissegundos. Para desligar sem deploy: secret INGESTION_ENABLED=false
--- nas functions (docs/deploy.md, "Ingestão de conteúdo").
+-- Vault na hora, nunca escritos em migration. O worker para sozinho antes de 70 s
+-- (WORKER_TIME_BUDGET_MS); o timeout de 150 s do pg_net cobre o pior caso sem matar a chamada
+-- no meio de um passo. `net.http_post` é assíncrono (só agenda a chamada HTTP e devolve; não
+-- espera a resposta), e o cron dispara a cada minuto independente da chamada anterior ter
+-- terminado, então invocações do worker podem se sobrepor — aceito, porque `claim_ingestion_steps`
+-- usa `for update skip locked` e cada passo é reivindicado por uma única invocação (spec §11).
+-- Com a fila vazia a chamada termina em milissegundos. Para desligar sem deploy: secret
+-- INGESTION_ENABLED=false nas functions (docs/deploy.md, "Ingestão de conteúdo").
 
 do $do$
 declare

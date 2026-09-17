@@ -415,3 +415,9 @@ Decididos ao executar o plano (PR 1 e PR 2):
     não permite fixar o IP resolvido. O impacto é limitado: o worker só faz `GET` sem credencial e
     nenhuma resposta bruta é devolvida a ninguém (o texto só alimenta a extração e é descartado),
     então na prática é uma requisição cega.
+22. Overlap de invocações do worker é aceito: `net.http_post` é assíncrono e o `pg_cron` dispara a
+    cada minuto sem esperar a chamada anterior terminar, então duas invocações podem rodar ao
+    mesmo tempo. `claim_ingestion_steps` reivindica com `for update skip locked`, então cada passo
+    ainda vai para uma única invocação; o efeito aceito é que o limite por domínio de
+    `fetchPage`/`fetchRobots` (spec §5) é por invocação, não compartilhado entre invocações
+    simultâneas.
