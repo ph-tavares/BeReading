@@ -175,8 +175,15 @@ export class SupabaseIngestionStore implements IngestionStore {
   }
 
   async insertSource(source: NewSource) {
-    const result = await this.db.from('ingestion_sources').upsert(fromSource(source), { onConflict: 'run_id,url' }).select('*').single();
-    return toSource(must(result, 'insertSource'));
+    // Um passo `fetch` re-executado depois de uma falha transitória tem que reaproveitar a
+    // fonte já registrada, não reescrever a decisão dela — mesma semântica do memory store (BER-59).
+    const { data, error } = await this.db.from('ingestion_sources')
+      .upsert(fromSource(source), { onConflict: 'run_id,url', ignoreDuplicates: true }).select('*');
+    if (error) throw new Error(`insertSource: ${error.message}`);
+    if (data && data.length > 0) return toSource(data[0]);
+    return toSource(
+      must(await this.db.from('ingestion_sources').select('*').eq('run_id', source.runId).eq('url', source.url).single(), 'insertSource(existing)'),
+    );
   }
 
   async updateSource(id: string, patch: Partial<Omit<SourceRow, 'id' | 'runId'>>) {

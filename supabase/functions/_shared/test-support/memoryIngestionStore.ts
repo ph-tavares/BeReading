@@ -145,6 +145,7 @@ export class MemoryIngestionStore implements IngestionStore {
   }
 
   async insertSource(source: NewSource) {
+    // Insert-or-return-existing por (runId, url): SupabaseIngestionStore espelha esta semântica.
     const existing = this.sources.find((s) => s.runId === source.runId && s.url === source.url);
     if (existing) return existing;
     const row: SourceRow = { id: crypto.randomUUID(), ...source };
