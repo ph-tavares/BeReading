@@ -1,6 +1,6 @@
 // supabase/functions/process-ingestion/index.ts
 // BER-59: worker da ingestão, chamado pelo pg_cron a cada minuto
-// (migration 20260917130000_ber59_cron_process_ingestion.sql). Aceita a chave de servidor
+// (migration 20260918130000_ber59_cron_process_ingestion.sql). Aceita a chave de servidor
 // (operação manual) e o CRON_SECRET, que o cron lê do Vault — o mesmo desenho do
 // retry-pending-quizzes (BER-33, BER-84).
 import { assertInternalCaller, authErrorResponse } from '../_shared/auth.ts';
