@@ -470,4 +470,11 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
     livro: o segundo teste do *1984* parou na 28ª busca. 120 dá quatro livros por dia. O teto que
     importa de verdade é o do plano do Tavily (1.000 créditos por mês no gratuito, ~33 livros);
     a cota diária é só a trava contra gastar o mês inteiro de uma vez.
-
+31. **Só a extração diz se a lista de capítulos é completa.** Peso A (texto integral) não conta
+    mais como lista completa: no segundo teste do 1984, a página do Gutenberg AU tinha parte do
+    livro, declarou 9 capítulos e virou uma segunda estrutura completa que rivalizava com a de 24
+    — as duas caíam. Custo aceito: sem nenhuma fonte com sumário completo, a estrutura não
+    confirma nem com o texto integral na mão.
+32. **Lista parcial é comparada só por número e título.** Parte e número dentro da parte ficam de
+    fora: quem lista um trecho costuma renumerar a parte (no mesmo teste, o índice que começava no
+    capítulo 3 chamava-o de primeiro da parte), e isso sozinho bloqueava a confirmação.

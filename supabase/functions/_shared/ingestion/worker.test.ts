@@ -15,6 +15,7 @@ const TEXTO_GUTENBERG = 'Ana chega à cidade e procura o irmão perdido há anos
 const TEXTO_BLOG = 'Marcos atravessa a floresta escura em busca do tesouro escondido pelo avô antes da guerra. '.repeat(25);
 
 const EXTRACAO = {
+  estrutura_completa: true,
   estrutura: [
     { numero: 1, parte: null, numero_na_parte: null, titulo: 'A chegada' },
     { numero: 2, parte: null, numero_na_parte: null, titulo: 'O irmão' },
