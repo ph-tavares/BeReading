@@ -54,7 +54,11 @@ export const runExtractStep: StepExecutor = async (step, run, ctx) => {
   await ctx.store.deleteClaimsForChunk(sourceId, index);
   await ctx.store.insertClaims(parsed.claims.map((claim) => ({ runId: run.id, sourceId, chunkIndex: index, ...claim })));
   if (parsed.structure.length > 0) {
-    await ctx.store.updateSource(sourceId, { declaredStructure: mergeDeclared([source.declaredStructure ?? [], parsed.structure]) });
+    await ctx.store.updateSource(sourceId, {
+      declaredStructure: mergeDeclared([source.declaredStructure ?? [], parsed.structure]),
+      // Um bloco com o sumário inteiro basta para a fonte contar como lista completa (spec §11, item 24).
+      declaredStructureComplete: (source.declaredStructureComplete ?? false) || (parsed.structureComplete && parsed.structure.length > 0),
+    });
   }
 
   const lastChapter = [...parsed.claims].reverse().find((c) => c.chapterRef && !c.isInterpretation)?.chapterRef ?? previousChapter;

@@ -9,6 +9,7 @@ export interface StepView {
   kind: StepKind;
   subject: string;
   status: StepStatus;
+  payload?: Record<string, unknown>;
 }
 
 export interface RunView {
@@ -39,7 +40,13 @@ export function planNextSteps(run: RunView, steps: StepView[], editionChapterNum
     if (!has('structure')) {
       return terminal('edition') && !active(COLLECTION) ? [{ kind: 'structure', subject: '-' }] : [];
     }
-    if (!terminal('structure')) return [];
+    if (active(['structure'])) return [];
+    // Primeira tentativa sem confirmação que buscou capítulo a capítulo: tenta de novo quando a
+    // coleta dessas buscas terminar (spec §11, item 25). Só uma segunda tentativa.
+    const retry = steps.some((s) => s.kind === 'structure' && s.status === 'done' && s.payload?.nova_tentativa === true);
+    if (retry && !steps.some((s) => s.kind === 'structure' && s.subject === '2')) {
+      return active(COLLECTION) ? [] : [{ kind: 'structure', subject: '2' }];
+    }
   }
 
   if (!has('verify')) {

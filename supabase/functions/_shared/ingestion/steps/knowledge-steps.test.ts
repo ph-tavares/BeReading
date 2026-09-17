@@ -106,8 +106,8 @@ Deno.test('extract: reexecutar o mesmo bloco substitui as afirmações em vez de
 Deno.test('structure: confirma por dois grupos independentes, localiza afirmações e busca capítulo com pouca cobertura', async () => {
   const store = new MemoryIngestionStore(() => NOW);
   const { run, edition } = await seedRun(store);
-  const a = await addSource(store, run, 'a.com', 'C', { declaredStructure: DOIS_CAPITULOS });
-  const b = await addSource(store, run, 'b.com', 'D', { declaredStructure: DOIS_CAPITULOS });
+  const a = await addSource(store, run, 'a.com', 'C', { declaredStructure: DOIS_CAPITULOS, declaredStructureComplete: true });
+  const b = await addSource(store, run, 'b.com', 'D', { declaredStructure: DOIS_CAPITULOS, declaredStructureComplete: true });
   await store.insertClaims([
     { runId: run.id, sourceId: a.id, chapterRef: { number: 1, part: null, numberInPart: null, title: null }, kind: 'event', statement: 'Ana chega.', isInterpretation: false, forwardReference: false, chunkIndex: 0 },
     { runId: run.id, sourceId: b.id, chapterRef: { number: 1, part: null, numberInPart: null, title: null }, kind: 'event', statement: 'Ana chega à cidade.', isInterpretation: false, forwardReference: false, chunkIndex: 0 },
@@ -124,12 +124,31 @@ Deno.test('structure: confirma por dois grupos independentes, localiza afirmaç�
   assertEquals(outcome.enqueue, [{ kind: 'discover', subject: '"Livro Sintético" Autora Exemplo capítulo 2 "O irmão" resumo' }]);
 });
 
-Deno.test('structure: sem confirmação, marca o motivo e não cria capítulos', async () => {
+Deno.test('structure: sem confirmação na primeira tentativa, busca os capítulos do melhor palpite sem marcar motivo (spec §11, item 25)', async () => {
   const store = new MemoryIngestionStore(() => NOW);
   const { run, edition } = await seedRun(store);
-  await addSource(store, run, 'a.com', 'D', { declaredStructure: DOIS_CAPITULOS });
+  await addSource(store, run, 'a.com', 'D', { declaredStructure: DOIS_CAPITULOS, declaredStructureComplete: true });
   const outcome = await runStructureStep(stepRow(run, 'structure', '-'), run, fakeContext(store));
-  assertEquals(outcome.runStatusReason, 'estrutura_nao_confirmada');
+  assertEquals(outcome.runStatusReason, undefined);
+  assertEquals(outcome.payload?.nova_tentativa, true);
+  assertEquals(outcome.enqueue?.map((s) => s.subject), [
+    '"Livro Sintético" Autora Exemplo capítulo 1 "A chegada" resumo',
+    '"Livro Sintético" Autora Exemplo capítulo 2 "O irmão" resumo',
+  ]);
+  assertEquals((await store.listEditionChapters(edition.id)).length, 0);
+});
+
+Deno.test('structure: sem confirmação na segunda tentativa, ou sem palpite, marca o motivo e não cria capítulos', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run, edition } = await seedRun(store);
+  await addSource(store, run, 'a.com', 'D', { declaredStructure: DOIS_CAPITULOS, declaredStructureComplete: true });
+  const segunda = await runStructureStep(stepRow(run, 'structure', '2'), run, fakeContext(store));
+  assertEquals([segunda.runStatusReason, segunda.enqueue], ['estrutura_nao_confirmada', undefined]);
+
+  const outro = await seedRun(store);
+  await addSource(store, outro.run, 'b.com', 'D', { declaredStructure: [DOIS_CAPITULOS[1]] });
+  const semPalpite = await runStructureStep(stepRow(outro.run, 'structure', '-'), outro.run, fakeContext(store));
+  assertEquals(semPalpite.runStatusReason, 'estrutura_nao_confirmada');
   assertEquals((await store.listEditionChapters(edition.id)).length, 0);
 });
 

@@ -91,6 +91,7 @@ const toSource = (r: Row): SourceRow => ({
   sourceType: r.source_type, weight: r.weight, decision: r.decision, rejectionReason: r.rejection_reason,
   publicDomainBasis: r.public_domain_basis, isBookFile: r.is_book_file, tiedToIsbn: r.tied_to_isbn,
   contentFingerprint: r.content_fingerprint, independenceGroup: r.independence_group, declaredStructure: r.declared_structure,
+  declaredStructureComplete: r.declared_structure_complete ?? false,
 });
 
 const fromSource = (s: Partial<NewSource>): Row => {
@@ -99,6 +100,7 @@ const fromSource = (s: Partial<NewSource>): Row => {
     sourceType: 'source_type', weight: 'weight', decision: 'decision', rejectionReason: 'rejection_reason',
     publicDomainBasis: 'public_domain_basis', isBookFile: 'is_book_file', tiedToIsbn: 'tied_to_isbn',
     contentFingerprint: 'content_fingerprint', independenceGroup: 'independence_group', declaredStructure: 'declared_structure',
+    declaredStructureComplete: 'declared_structure_complete',
   };
   return Object.fromEntries(Object.entries(s).filter(([k]) => k in map).map(([k, v]) => [map[k], v]));
 };

@@ -6,13 +6,16 @@ import { LIMITS } from '../budget.ts';
 import { assignIndependenceGroups } from '../independence.ts';
 import { locateChapter } from '../locate.ts';
 import { buildChapterQuery } from '../queries.ts';
-import { confirmStructure } from '../structure.ts';
+import { bestStructureGuess, confirmStructure } from '../structure.ts';
 import type { StepExecutor } from './context.ts';
 
 /** Capítulo com menos grupos independentes que isto ganha uma busca própria. */
 export const MIN_GROUPS_PER_CHAPTER = 2;
 
-export const runStructureStep: StepExecutor = async (_step, run, ctx) => {
+/** Assunto do passo `structure` da segunda tentativa, depois das buscas por capítulo (spec §11, item 25). */
+export const SECOND_STRUCTURE_ROUND = '2';
+
+export const runStructureStep: StepExecutor = async (step, run, ctx) => {
   const edition = await ctx.store.getEdition(run.editionId);
   const accepted = (await ctx.store.listSources(run.id)).filter((s) => s.decision === 'accepted' && s.weight);
 
@@ -21,10 +24,30 @@ export const runStructureStep: StepExecutor = async (_step, run, ctx) => {
 
   const candidates = accepted
     .filter((s) => (s.declaredStructure?.length ?? 0) > 0)
-    .map((s) => ({ sourceId: s.id, independenceGroup: groups.get(s.id)!, weight: s.weight!, tiedToIsbn: s.tiedToIsbn, chapters: s.declaredStructure! }));
+    .map((s) => ({
+      sourceId: s.id, independenceGroup: groups.get(s.id)!, weight: s.weight!, tiedToIsbn: s.tiedToIsbn, chapters: s.declaredStructure!,
+      // Texto integral (peso A) traz os cabeçalhos do livro todo: a lista dele é completa por natureza.
+      complete: (s.declaredStructureComplete ?? false) || s.weight === 'A',
+    }));
+  const forQueries = {
+    title: edition.title ?? '', authors: edition.authors, publisher: edition.publisher,
+    authorDeathYear: edition.authorDeathYear, firstPublishYear: edition.firstPublishYear,
+  };
+  const searchesLeft = Math.max(0, LIMITS.maxSearchesPerRun - (run.stats.buscas ?? 0));
 
   const confirmed = confirmStructure(candidates);
   if (!confirmed) {
+    // Ovo e galinha do primeiro teste com 1984 (BER-59): as buscas por capítulo só saíam depois da
+    // estrutura confirmada, e a estrutura não confirmava sem elas. Na primeira tentativa, busca os
+    // capítulos do melhor palpite e tenta de novo quando a coleta terminar (spec §11, item 25).
+    const guess = step.subject === SECOND_STRUCTURE_ROUND ? null : bestStructureGuess(candidates);
+    if (guess && searchesLeft > 0) {
+      const chapters = guess.slice(0, searchesLeft);
+      return {
+        enqueue: chapters.map((c) => ({ kind: 'discover' as const, subject: buildChapterQuery(forQueries, { number: c.number, title: c.title }) })),
+        payload: { capitulos: 0, candidatos: candidates.length, nova_tentativa: true, buscas_por_capitulo: chapters.length },
+      };
+    }
     return { payload: { capitulos: 0, candidatos: candidates.length }, runStatusReason: 'estrutura_nao_confirmada' };
   }
 
@@ -44,12 +67,7 @@ export const runStructureStep: StepExecutor = async (_step, run, ctx) => {
     groupsByChapter.set(location.editionChapterId, set);
   });
 
-  const searchesLeft = Math.max(0, LIMITS.maxSearchesPerRun - (run.stats.buscas ?? 0));
   const thin = chapters.filter((c) => (groupsByChapter.get(c.id)?.size ?? 0) < MIN_GROUPS_PER_CHAPTER).slice(0, searchesLeft);
-  const forQueries = {
-    title: edition.title ?? '', authors: edition.authors, publisher: edition.publisher,
-    authorDeathYear: edition.authorDeathYear, firstPublishYear: edition.firstPublishYear,
-  };
 
   return {
     enqueue: thin.map((c) => ({ kind: 'discover' as const, subject: buildChapterQuery(forQueries, { number: c.number, title: c.title }) })),

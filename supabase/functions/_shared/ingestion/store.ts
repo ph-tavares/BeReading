@@ -82,6 +82,8 @@ export interface SourceRow {
   contentFingerprint: string | null;
   independenceGroup: string | null;
   declaredStructure: DeclaredChapter[] | null;
+  /** A fonte listou todos os capítulos em algum bloco (spec §11, item 24). Ausente conta como false. */
+  declaredStructureComplete?: boolean;
 }
 
 export type NewSource = Omit<SourceRow, 'id'>;

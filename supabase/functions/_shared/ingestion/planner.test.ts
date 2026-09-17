@@ -47,3 +47,11 @@ Deno.test('rebusca: verifica só os capítulos pedidos, sem edição nem estrutu
 Deno.test('run encerrado não planeja nada', () => {
   assertEquals(planNextSteps({ status: 'partial', payload: {} }, [st('edition', 'done')], []), []);
 });
+
+Deno.test('estrutura sem confirmação que buscou por capítulo tenta de novo, uma vez, depois da coleta (spec §11, item 25)', () => {
+  const primeira = { ...st('structure', 'done'), payload: { nova_tentativa: true } };
+  assertEquals(planNextSteps(run, [st('edition', 'done'), primeira, st('fetch', 'pending', 'https://a')], []), []);
+  assertEquals(planNextSteps(run, [st('edition', 'done'), primeira, st('fetch', 'done', 'https://a')], []), [{ kind: 'structure', subject: '2' }]);
+  assertEquals(planNextSteps(run, [st('edition', 'done'), primeira, st('structure', 'running', '2')], []), []);
+  assertEquals(planNextSteps(run, [st('edition', 'done'), primeira, st('structure', 'done', '2')], []), [{ kind: 'publish', subject: '-' }]);
+});
