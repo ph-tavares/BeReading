@@ -171,7 +171,7 @@ Tudo em código, aplicado **antes** de o texto chegar à IA. Toda decisão vai p
    - repositório de acesso aberto na lista `allowed`.
 
    **Sem sinal:** rejeitado com `texto_integral_sem_autorizacao` até 17/09/2026; desde então,
-   aceito como `web`, peso A (decisão de produto, §11 item 23).
+   aceito como `PDF_content`, peso B (decisão de produto, §11 item 23).
    Resumo, resenha, análise, guia de estudo e trecho não são texto integral e seguem as regras
    normais em qualquer domínio.
 5. **Domínio público:** regra do país aplicável (Brasil: 70 anos contados de 1º de janeiro do ano
@@ -428,9 +428,10 @@ Decididos depois do primeiro teste em produção (*1984*, Companhia das Letras, 
 23. **Texto integral sem sinal de autorização é aceito** (decisão de produto do time, tomada sem
     parecer jurídico; o risco foi apontado na conversa e está na BER-59). PDF de livro inteiro ou
     página com volume de corpo de livro sem domínio público, licença aberta, repositório autorizado
-    nem editora entra como `source_type = 'web'`, peso A, sem `public_domain_basis`. Efeitos: peso A
-    confirma fato com uma única fonte (§6.2); na auditoria, esses textos são os de
-    `is_book_file = true` aceitos sem `public_domain_basis`. Domínios bloqueados continuam
+    nem editora entra como `source_type = 'PDF_content'`, **peso B**, sem `public_domain_basis`
+    (migration `20260918160000` solta o `check` das duas tabelas para o tipo novo). Efeitos: peso B
+    não confirma fato sozinho — precisa de outro grupo independente concordando (§6.2) —, e o tipo
+    próprio permite medir depois quanto do conhecimento veio daí. Domínios bloqueados continuam
     rejeitados antes desta regra.
 24. **Lista de capítulos parcial não é edição rival.** A extração devolve `estrutura_completa`
     (gravado em `ingestion_sources.declared_structure_complete`); texto integral (peso A) conta como

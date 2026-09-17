@@ -390,9 +390,9 @@ Mudança de lista vai por migration quando for permanente, para não divergir do
 
 ### Regras que não mudam sem decisão do time
 
-- Texto integral sem sinal de autorização: decisão de 17/09/2026 de aceitar como `web`, peso A
-  (spec §11, item 23). Até então era rejeitado com `texto_integral_sem_autorizacao`. Para listar
-  esses textos: `is_book_file and decision = 'accepted' and public_domain_basis is null`.
+- Texto integral sem sinal de autorização: decisão de 17/09/2026 de aceitar como `PDF_content`,
+  peso B (spec §11, item 23). Até então era rejeitado com `texto_integral_sem_autorizacao`. Para
+  listar esses textos: `source_type = 'PDF_content'`.
 - Texto bruto de fonte só existe em `ingestion_source_texts`, apagado ao fim da extração e fora do
   backup (`-x public.ingestion_source_texts` no `backup.yml`).
 

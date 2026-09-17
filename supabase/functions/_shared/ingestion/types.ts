@@ -14,7 +14,8 @@ export type SourceType =
   | 'publisher'
   | 'encyclopedia'
   | 'editorial'
-  | 'web';
+  | 'web'
+  | 'PDF_content';
 
 export type ClaimKind = 'event' | 'character' | 'relationship' | 'argument' | 'theme';
 

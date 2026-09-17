@@ -180,9 +180,8 @@ Deno.test('fetch: PDF de livro protegido sem autorização é rejeitado e contad
     fetchPage: (url) => Promise.resolve(page(url, RESUMO.repeat(10), { kind: 'pdf', html: null, pdfPages: 300 })),
   });
   const outcome = await runFetchStep(stepRow(run, 'fetch', 'https://arquivos.example/livro.pdf'), run, ctx);
-  assertEquals(store.sources[0].rejectionReason, 'texto_integral_sem_autorizacao');
-  assertEquals(outcome.stats?.pdfs_rejeitados, 1);
-  assertEquals(store.texts.size, 0);
+  assertEquals([store.sources[0].decision, store.sources[0].sourceType, store.sources[0].weight], ['accepted', 'PDF_content', 'B']);
+  assertEquals(await store.getSourceText(store.sources[0].id), RESUMO.repeat(10));
 });
 
 Deno.test('publisherDomainMatches: domínio com o nome da editora', () => {
