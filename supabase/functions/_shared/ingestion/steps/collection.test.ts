@@ -360,3 +360,23 @@ Deno.test('fetch: reaproveita entre edições da mesma obra, menos o que está p
   );
   assertEquals(naoReaproveitada.stats?.fontes_reaproveitadas, undefined, 'fonte presa ao ISBN é de outra edição');
 });
+
+Deno.test('fetch: extração incompleta não é reaproveitada', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run, edition } = await seedRun(store);
+  const anterior = await fonteExtraida(store, run.id, 'https://guia.example/parcial');
+  // Bloco que ficou pendente quando o saldo de IA acabou: a fonte tem parte do que diz, não tudo.
+  await store.enqueueSteps([{ runId: run.id, kind: 'extract', subject: `${anterior.id}#1` }]);
+  const novo = await store.createRun(edition.id, {});
+  await store.updateRun(novo.id, { status: 'running' });
+  const atual = await store.getRun(novo.id);
+
+  const outcome = await runFetchStep(
+    stepRow(atual, 'fetch', 'https://guia.example/parcial'),
+    atual,
+    fakeContext(store, { fetchPage: (url) => Promise.resolve(page(url, RESUMO)) }),
+  );
+
+  assertEquals(outcome.stats?.fontes_reaproveitadas, undefined, 'baixa e extrai de novo');
+  assertEquals(outcome.enqueue?.[0].kind, 'extract');
+});

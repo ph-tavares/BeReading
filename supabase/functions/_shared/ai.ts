@@ -37,6 +37,25 @@ export class AIHttpError extends Error {
   }
 }
 
+/**
+ * Saldo acabou na conta do provedor (BER-59). Não é erro do passo nem defeito do conteúdo: é uma
+ * pausa administrativa. A Anthropic devolve 400 com "credit balance is too low" e a OpenAI, 429
+ * com "insufficient_quota" — tratados como falha, derrubariam o run inteiro e obrigariam a refazer
+ * tudo depois da recarga. Aconteceu no quinto teste do 1984.
+ */
+export class AIOutOfCreditsError extends Error {
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+const OUT_OF_CREDITS = /credit balance is too low|insufficient_quota|billing_hard_limit|exceeded your current quota/i;
+
+/** Erro de saldo, olhando status e corpo da resposta do provedor. */
+export function outOfCredits(status: number, body: string): boolean {
+  return (status === 400 || status === 402 || status === 429) && OUT_OF_CREDITS.test(body);
+}
+
 function toNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
@@ -68,7 +87,9 @@ export async function callAI(req: AIRequest): Promise<AIResult> {
     });
 
     if (!res.ok) {
-      throw new AIHttpError(res.status, `Anthropic API error ${res.status}: ${await res.text()}`);
+      const body = await res.text();
+      if (outOfCredits(res.status, body)) throw new AIOutOfCreditsError(`Anthropic: saldo insuficiente`);
+      throw new AIHttpError(res.status, `Anthropic API error ${res.status}: ${body}`);
     }
 
     const data = await res.json();
@@ -96,7 +117,9 @@ export async function callAI(req: AIRequest): Promise<AIResult> {
   });
 
   if (!res.ok) {
-    throw new AIHttpError(res.status, `OpenAI API error ${res.status}: ${await res.text()}`);
+    const body = await res.text();
+    if (outOfCredits(res.status, body)) throw new AIOutOfCreditsError(`OpenAI: saldo insuficiente`);
+    throw new AIHttpError(res.status, `OpenAI API error ${res.status}: ${body}`);
   }
 
   const data = await res.json();

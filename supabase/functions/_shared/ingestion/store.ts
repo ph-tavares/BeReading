@@ -180,6 +180,12 @@ export interface IngestionStore {
    */
   findExtractedSource(input: { editionId: string; workKey: string | null; url: string; sinceIso: string }): Promise<SourceRow | null>;
   countClaimsForSource(sourceId: string): Promise<number>;
+  /**
+   * A extração daquela fonte ficou pela metade (bloco pendente, rodando ou falho). Reaproveitar
+   * uma extração incompleta copiaria só parte do que a fonte diz, em silêncio — foi o risco criado
+   * quando o saldo de IA acabou no meio de um run (BER-59).
+   */
+  hasUnfinishedExtraction(sourceId: string): Promise<boolean>;
   /** Copia as afirmações de uma fonte já extraída para o run novo, sem capítulo (ele é re-localizado). */
   copyClaims(fromSourceId: string, to: { runId: string; sourceId: string }): Promise<number>;
 

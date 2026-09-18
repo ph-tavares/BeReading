@@ -1,12 +1,12 @@
 import { assert, assertEquals, assertRejects } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import type { AIRequest } from '../ai.ts';
+import { AIOutOfCreditsError, type AIRequest } from '../ai.ts';
 import { fakeContext, NOW, page } from '../test-support/ingestionContext.ts';
 import { MemoryIngestionStore } from '../test-support/memoryIngestionStore.ts';
 import { HttpStatusError } from './queue.ts';
 import { RECHECK_AFTER_MS } from './recheck.ts';
 import { DeferStepError, type StepContext } from './steps/context.ts';
 import { EXECUTORS } from './steps/index.ts';
-import { recoverStalledRuns, RECHECK_EDITIONS_PER_CYCLE, runWorker, scheduleRechecks } from './worker.ts';
+import { OUT_OF_CREDITS_RETRY_MS, recoverStalledRuns, RECHECK_EDITIONS_PER_CYCLE, runWorker, scheduleRechecks } from './worker.ts';
 
 // Livro, fontes e textos sintéticos (repositório público). Vocabulário diferente entre as
 // duas fontes de propósito: precisam ficar em grupos de independência distintos (§5.6), senão
@@ -279,4 +279,20 @@ Deno.test('runWorker: para de reivindicar passo depois de 1 s de CPU na chamada 
   assertEquals(executados, [a.run.id]);
   assertEquals(report.cpuMs, 1_200);
   assertEquals(store.steps.filter((s) => s.kind === 'edition').map((s) => s.status), ['done', 'pending']);
+});
+
+// Spec §11, item 41: quando o saldo do provedor acaba, o run pausa e retoma depois da recarga.
+Deno.test('runWorker: saldo de IA esgotado devolve o passo à fila sem gastar tentativa e avisa', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  await seed(store);
+  const ctx = fakeContext(store);
+  const report = await runWorker(ctx, {
+    ...EXECUTORS,
+    edition: () => Promise.reject(new AIOutOfCreditsError('Anthropic: saldo insuficiente')),
+  });
+
+  const passo = store.steps.find((s) => s.kind === 'edition')!;
+  assertEquals([passo.status, passo.attempts, report.deferred], ['pending', 0, 1]);
+  assertEquals(passo.nextAttemptAt, new Date(NOW + OUT_OF_CREDITS_RETRY_MS).toISOString());
+  assert(ctx.notifications.some((n) => n.includes('saldo insuficiente')));
 });

@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import { callAI } from './ai.ts';
+import { AIOutOfCreditsError, callAI, outOfCredits } from './ai.ts';
 
 function urlOf(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
@@ -87,4 +87,27 @@ Deno.test('callAI: timeoutMs passa um AbortSignal ao fetch; sem ele, nenhum (BER
   }
   assertEquals(signals[0] instanceof AbortSignal, true);
   assertEquals(signals[1], undefined);
+});
+
+// Spec §11, item 41: saldo acabado é pausa, não falha.
+Deno.test('outOfCredits: reconhece saldo esgotado nos dois provedores', () => {
+  assertEquals(outOfCredits(400, '{"error":{"message":"Your credit balance is too low to access the Anthropic API."}}'), true);
+  assertEquals(outOfCredits(429, '{"error":{"code":"insufficient_quota","message":"You exceeded your current quota"}}'), true);
+  assertEquals(outOfCredits(400, '{"error":{"message":"max_tokens is too large"}}'), false, 'outro 400 continua sendo erro do pedido');
+  assertEquals(outOfCredits(500, 'erro interno'), false);
+});
+
+Deno.test('callAI: saldo esgotado vira AIOutOfCreditsError, não AIHttpError', async () => {
+  const original = globalThis.fetch;
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+  Deno.env.set('ANTHROPIC_API_KEY', 'chave-de-teste');
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response('{"error":{"message":"Your credit balance is too low to access the Anthropic API."}}', { status: 400 }),
+    )) as typeof fetch;
+  try {
+    await assertRejects(() => callAI({ prompt: 'oi', maxTokens: 10 }), AIOutOfCreditsError);
+  } finally {
+    globalThis.fetch = original;
+  }
 });

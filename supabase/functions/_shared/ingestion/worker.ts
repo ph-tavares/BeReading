@@ -7,6 +7,7 @@ import { buildChapterQuery } from './queries.ts';
 import { afterFailure, isTransientError, STALE_LOCK_MS } from './queue.ts';
 import { planNextSteps } from './planner.ts';
 import { RECHECK_AFTER_MS } from './recheck.ts';
+import { AIOutOfCreditsError } from '../ai.ts';
 import { DeferStepError, type StepContext, type StepExecutor } from './steps/context.ts';
 import { EXECUTORS } from './steps/index.ts';
 import type { StepRow } from './store.ts';
@@ -23,6 +24,8 @@ export const WORKER_TIME_BUDGET_MS = 70_000;
  * de reivindicar passo novo depois de 1 s, deixando folga para o passo em andamento.
  */
 export const WORKER_CPU_BUDGET_MS = 1_000;
+/** Espera antes de tentar de novo depois de o saldo do provedor de IA acabar (BER-59). */
+export const OUT_OF_CREDITS_RETRY_MS = 30 * 60 * 1000;
 /** Texto bruto de run abortado é apagado depois disto (spec §4). */
 export const SOURCE_TEXT_TTL_MS = 24 * 60 * 60 * 1000;
 export const RECHECK_EDITIONS_PER_CYCLE = 5;
@@ -125,6 +128,19 @@ async function executeStep(step: StepRow, ctx: StepContext, executors: Record<St
     await ctx.store.finishStep(step.id, { status: 'done', attempts, error: null, payload: { ...step.payload, ...outcome.payload } });
     report.processed++;
   } catch (err) {
+    // Saldo do provedor de IA acabou (BER-59): o passo não falhou, e marcar falha faria o run
+    // inteiro se perder e ter de ser refeito depois da recarga. Volta para a fila sem gastar
+    // tentativa, e a operação é avisada.
+    if (err instanceof AIOutOfCreditsError) {
+      await ctx.store.finishStep(step.id, {
+        status: 'pending',
+        nextAttemptAt: iso(ctx.now() + OUT_OF_CREDITS_RETRY_MS),
+        attempts: step.attempts - 1,
+      });
+      await ctx.notify('ingestion', `run ${run.id}: ${err.message}; passos aguardando recarga`);
+      report.deferred++;
+      return;
+    }
     if (err instanceof DeferStepError) {
       // Adiar não é tentar (BER-59): devolve a tentativa que a reivindicação contou, senão uma
       // cota diária esgotada várias vezes faria o passo falhar sem nunca ter falhado.

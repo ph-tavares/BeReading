@@ -72,7 +72,8 @@ export const runFetchStep: StepExecutor = async (step, run, ctx) => {
     url: step.subject,
     sinceIso: new Date(ctx.now() - REUSE_MAX_AGE_MS).toISOString(),
   });
-  if (jaExtraida && await ctx.store.countClaimsForSource(jaExtraida.id) > 0) {
+  const extracaoCompleta = jaExtraida !== null && !(await ctx.store.hasUnfinishedExtraction(jaExtraida.id));
+  if (jaExtraida && extracaoCompleta && await ctx.store.countClaimsForSource(jaExtraida.id) > 0) {
     const copia = await ctx.store.insertSource({
       ...base,
       finalUrl: jaExtraida.finalUrl,

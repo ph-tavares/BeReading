@@ -555,3 +555,13 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
     O que **não** se reaproveita entre edições é a localização do capítulo: cada edição tem a sua
     estrutura, e é justamente aí que mora o risco de spoiler. Por isso a cópia guarda a referência
     que a fonte deu (parte, número, título) e deixa o capítulo em branco.
+41. **Saldo de IA esgotado é pausa, não falha.** No quinto teste do 1984 a conta da Anthropic ficou
+    sem crédito no meio do run: a resposta vem como HTTP 400 ("credit balance is too low"), que a
+    fila tratava como erro permanente, e 25 passos morreram de uma vez. O run fechou `partial` e o
+    trabalho restante teria de ser refeito do zero depois da recarga. Agora:
+    - o erro de saldo (400/402/429 com a mensagem do provedor) vira `AIOutOfCreditsError`;
+    - o worker devolve o passo à fila com espera de 30 min, **sem gastar tentativa**, e avisa a
+      operação. O run retoma sozinho quando o crédito volta;
+    - a extração que ficou pela metade não é reaproveitada por outro run (§11 item 40): a cópia
+      traria só parte do que a fonte diz, em silêncio. O passo `fetch` confere se sobrou bloco de
+      extração pendente, rodando ou falho naquela fonte antes de reaproveitar.
