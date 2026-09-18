@@ -544,3 +544,14 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
       adaptada. A comparação usa o mesmo trecho inicial das duas (primeiro lote de páginas), então
       pega truncamento grosseiro, não diferença fina.
     Efeito no custo: a extração deixa de pagar quatro leituras do mesmo livro por run.
+40. **Extração reaproveitada entre runs, e entre edições da mesma obra.** O que uma fonte diz sobre
+    o livro não muda de um run para o outro, e a extração é a parte cara: antes de baixar, o passo
+    `fetch` procura a mesma URL já extraída e aceita nos últimos 30 dias e copia as afirmações dela.
+    A cópia vem **sem capítulo**: a localização é refeita neste run, com a estrutura desta edição.
+    - **Mesma edição:** qualquer fonte serve.
+    - **Outra edição da mesma obra** (`work_key` igual): só fonte que não esteja presa ao ISBN. A
+      maioria das fontes da web fala da obra, não de uma edição — resenha, guia e enciclopédia valem
+      para qualquer edição. Ficha de editora e sumário ligado ao ISBN, não.
+    O que **não** se reaproveita entre edições é a localização do capítulo: cada edição tem a sua
+    estrutura, e é justamente aí que mora o risco de spoiler. Por isso a cópia guarda a referência
+    que a fonte deu (parte, número, título) e deixa o capítulo em branco.
