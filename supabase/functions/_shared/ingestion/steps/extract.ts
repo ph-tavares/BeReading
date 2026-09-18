@@ -4,6 +4,7 @@
 // texto bruto é apagado assim que o último bloco termina — ou se o teto de custo chegar.
 import { aiUsageDelta, exceededLimit } from '../budget.ts';
 import { buildExtractionPrompt, EXTRACTION_MAX_TOKENS, parseExtraction, splitIntoChunks } from '../extraction.ts';
+import { chunkPart, partFromSource } from '../parts.ts';
 import { mergeDeclared } from '../structure.ts';
 import type { ChapterRef } from '../types.ts';
 import { AI_STEP_TIMEOUT_MS, type StepExecutor } from './context.ts';
@@ -50,9 +51,22 @@ export const runExtractStep: StepExecutor = async (step, run, ctx) => {
   await ctx.store.incrementRunStats(run.id, aiUsageDelta(result.model, result.usage));
   const parsed = parseExtraction(result.text);
 
+  // A parte do livro é achada pelo nosso código, não pedida ao modelo (spec §11, item 37): a URL da
+  // página ("book-2-chapter-1") ou o cabeçalho no texto ("SEGUNDA PARTE") dizem onde o bloco está.
+  // Sem isso, "capítulo 1" da Parte 2 vira o capítulo 1 do livro e leva spoiler para o começo.
+  const parteDaFonte = partFromSource(source.finalUrl ?? source.url, source.title);
+  const parteDoBloco = chunkPart(chunk, (step.payload.previousPart as string | undefined) ?? parteDaFonte ?? null);
+  const parte = parteDaFonte ?? (parteDoBloco.changes ? null : parteDoBloco.start);
+  const comParte = parsed.claims.map((claim) => {
+    if (!parte || !claim.chapterRef || claim.chapterRef.part) return claim;
+    // Numa obra com partes, o "capítulo 3" que a fonte cita é o terceiro daquela parte.
+    const { number, numberInPart } = claim.chapterRef;
+    return { ...claim, chapterRef: { ...claim.chapterRef, part: parte, numberInPart: numberInPart ?? number, number: numberInPart === null ? null : number } };
+  });
+
   // Retentativa do mesmo bloco (spec §7): substitui as afirmações que já tinha gravado, não duplica.
   await ctx.store.deleteClaimsForChunk(sourceId, index);
-  await ctx.store.insertClaims(parsed.claims.map((claim) => ({ runId: run.id, sourceId, chunkIndex: index, ...claim })));
+  await ctx.store.insertClaims(comParte.map((claim) => ({ runId: run.id, sourceId, chunkIndex: index, ...claim })));
   if (parsed.structure.length > 0) {
     await ctx.store.updateSource(sourceId, {
       declaredStructure: mergeDeclared([source.declaredStructure ?? [], parsed.structure]),
@@ -61,12 +75,14 @@ export const runExtractStep: StepExecutor = async (step, run, ctx) => {
     });
   }
 
-  const lastChapter = [...parsed.claims].reverse().find((c) => c.chapterRef && !c.isInterpretation)?.chapterRef ?? previousChapter;
+  const lastChapter = [...comParte].reverse().find((c) => c.chapterRef && !c.isInterpretation)?.chapterRef ?? previousChapter;
   const isLast = index + 1 >= chunks.length;
   if (isLast) await ctx.store.deleteSourceText(sourceId);
 
   return {
-    enqueue: isLast ? [] : [{ kind: 'extract', subject: `${sourceId}#${index + 1}`, payload: { previousChapter: lastChapter } }],
-    payload: { afirmacoes: parsed.claims.length, descartadas: parsed.rejected.length },
+    enqueue: isLast
+      ? []
+      : [{ kind: 'extract', subject: `${sourceId}#${index + 1}`, payload: { previousChapter: lastChapter, previousPart: parteDoBloco.end } }],
+    payload: { afirmacoes: parsed.claims.length, descartadas: parsed.rejected.length, ...(parte ? { parte } : {}) },
   };
 };
