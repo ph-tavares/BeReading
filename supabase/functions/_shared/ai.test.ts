@@ -154,3 +154,26 @@ Deno.test('callAI: sem credencial de reserva, o saldo esgotado continua pausando
     globalThis.fetch = original;
   }
 });
+
+Deno.test('callAI: cabeçalho de autenticação vem da secret, com Bearer quando for Authorization', async () => {
+  const original = globalThis.fetch;
+  const cabecalhos: Headers[] = [];
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+  Deno.env.set('ANTHROPIC_API_KEY', 'credencial-do-gateway');
+  Deno.env.set('ANTHROPIC_AUTH_HEADER', 'Authorization');
+  Deno.env.set('ANTHROPIC_BASE_URL', 'https://gateway.example');
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    cabecalhos.push(new Headers(init?.headers));
+    return Promise.resolve(Response.json({ content: [{ text: 'ok' }], usage: { input_tokens: 1, output_tokens: 1 } }));
+  }) as typeof fetch;
+
+  try {
+    await callAI({ prompt: 'oi', maxTokens: 10 });
+    assertEquals(cabecalhos[0].get('authorization'), 'Bearer credencial-do-gateway');
+    assertEquals(cabecalhos[0].get('x-api-key'), null);
+  } finally {
+    globalThis.fetch = original;
+    Deno.env.delete('ANTHROPIC_AUTH_HEADER');
+    Deno.env.delete('ANTHROPIC_BASE_URL');
+  }
+});

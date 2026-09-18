@@ -69,6 +69,18 @@ export interface AICredential {
   baseUrl: string;
   model: string;
   label: string;
+  /**
+   * Cabeçalho que leva a credencial. Padrão `x-api-key` (chave de API da Anthropic); `Authorization`
+   * com prefixo `Bearer ` atende gateway corporativo, proxy e nuvem. Configurável por secret para o
+   * time apontar a reserva para onde decidir, sem mudar código (BER-59, spec §11 item 42).
+   */
+  authHeader: string;
+}
+
+function authHeaderFor(cred: Pick<AICredential, 'apiKey' | 'authHeader'>): Record<string, string> {
+  const nome = cred.authHeader;
+  const valor = /^authorization$/i.test(nome) && !/^bearer /i.test(cred.apiKey) ? `Bearer ${cred.apiKey}` : cred.apiKey;
+  return { [nome]: valor };
 }
 
 function credential(provider: string, reserva: boolean): AICredential | null {
@@ -82,6 +94,7 @@ function credential(provider: string, reserva: boolean): AICredential | null {
       baseUrl: Deno.env.get(`ANTHROPIC${sufixo}_BASE_URL`) ?? 'https://api.anthropic.com',
       model: Deno.env.get(`ANTHROPIC${sufixo}_MODEL`) ?? Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5',
       label,
+      authHeader: Deno.env.get(`ANTHROPIC${sufixo}_AUTH_HEADER`) ?? 'x-api-key',
     };
   }
   const apiKey = Deno.env.get(`AI${sufixo}_API_KEY`);
@@ -91,6 +104,7 @@ function credential(provider: string, reserva: boolean): AICredential | null {
     baseUrl: Deno.env.get(`AI${sufixo}_BASE_URL`) ?? 'https://api.openai.com',
     model: Deno.env.get(`AI${sufixo}_MODEL`) ?? Deno.env.get('AI_MODEL') ?? 'gpt-4o-mini',
     label,
+    authHeader: Deno.env.get(`AI${sufixo}_AUTH_HEADER`) ?? 'Authorization',
   };
 }
 
@@ -114,13 +128,13 @@ async function callWith(provider: string, cred: AICredential, req: AIRequest): P
   const abort = req.timeoutMs === undefined ? {} : { signal: AbortSignal.timeout(req.timeoutMs) };
 
   if (provider === 'anthropic') {
-    const { apiKey, model } = cred;
+    const { model } = cred;
 
     const res = await fetch(`${cred.baseUrl}/v1/messages`, {
       ...abort,
       method: 'POST',
       headers: {
-        'x-api-key': apiKey,
+        ...authHeaderFor(cred),
         'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json',
       },
@@ -146,12 +160,12 @@ async function callWith(provider: string, cred: AICredential, req: AIRequest): P
     };
   }
 
-  const { apiKey, model } = cred;
+  const { model } = cred;
 
   const res = await fetch(`${cred.baseUrl}/v1/chat/completions`, {
     ...abort,
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    headers: { ...authHeaderFor(cred), 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model,
       max_tokens: req.maxTokens,
