@@ -2,7 +2,8 @@
 // Passo `fetch` (BER-59, spec §5): baixa, aplica a política e registra a decisão com o
 // motivo. Só fonte aceita tem o texto guardado, e só até a extração terminar.
 import { exceededLimit, sourceDelta } from '../budget.ts';
-import { registrableDomain, simhash } from '../independence.ts';
+import { countChapterHeadings } from '../full-text.ts';
+import { looksFullText, registrableDomain, simhash } from '../independence.ts';
 import { detectLanguage } from '../language.ts';
 import { decideSource, detectLicense, looksLikeLoginOrPaywall, type PolicyDecision, type RejectionReason } from '../policy.ts';
 import { hasNoAiSignal } from '../robots.ts';
@@ -111,6 +112,34 @@ export const runFetchStep: StepExecutor = async (step, run, ctx) => {
   });
 
   if (!accepted) return { stats: sourceDelta(decision, isBookFile), payload: { decisao: 'rejected', motivo: decision.reason } };
+
+  // Uma leitura do corpo da obra por run (BER-59, spec §11 item 39). A segunda cópia não vai para a
+  // IA: serve de conferência, contando os cabeçalhos de capítulo para dizer se a principal veio
+  // truncada. Assim o run não paga quatro vezes para ler o mesmo romance.
+  if (looksFullText({ isBookFile, sourceType: decision.sourceType })) {
+    const outrosIntegrais = (await ctx.store.listSources(run.id))
+      .filter((s) => s.id !== source.id && s.decision === 'accepted' && looksFullText(s));
+    if (outrosIntegrais.length > 0) {
+      const capitulos = countChapterHeadings(fetched.text);
+      return {
+        stats: { ...sourceDelta(decision, isBookFile), textos_integrais_conferidos: 1 },
+        payload: { decisao: 'accepted', fonte: source.id, conferencia: true, capitulos_no_texto: capitulos },
+      };
+    }
+    await ctx.store.saveSourceText(source.id, fetched.text);
+    const next = fetched.kind === 'pdf' ? fetched.pdfNextPage : null;
+    return {
+      enqueue: [next ? pdfContinuation(step.subject, source.id, next) : { kind: 'extract', subject: `${source.id}#0` }],
+      stats: { ...sourceDelta(decision, isBookFile), textos_integrais_lidos: 1 },
+      payload: {
+        decisao: 'accepted',
+        fonte: source.id,
+        principal: true,
+        capitulos_no_texto: countChapterHeadings(fetched.text),
+        ...(next ? { paginas_lidas: next - 1, paginas: fetched.pdfPages } : {}),
+      },
+    };
+  }
 
   await ctx.store.saveSourceText(source.id, fetched.text);
   // PDF longo segue em lotes de páginas, um passo por lote, e só vai para a extração no fim. A

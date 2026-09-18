@@ -4,7 +4,7 @@
 // que as regras confirmam. Nada confirmado agenda nova busca em 7 dias.
 import { aiUsageDelta, exceededLimit } from '../budget.ts';
 import { batchClaims, buildGroupingPrompt, type Grouping, GROUPING_MAX_TOKENS, parseGrouping } from '../grouping.ts';
-import { assignIndependenceGroups } from '../independence.ts';
+import { assignIndependenceGroups, looksFullText } from '../independence.ts';
 import { locateChapter } from '../locate.ts';
 import { reliableSources, sourceNumbersWholeBook } from '../numbering.ts';
 import { RECHECK_AFTER_MS } from '../recheck.ts';
@@ -46,7 +46,7 @@ export const runVerifyStep: StepExecutor = async (step, run, ctx) => {
   const claims = await ctx.store.listLocatedClaims(chapter.id);
   const sources = (await ctx.store.getSourcesByIds([...new Set(claims.map((c) => c.sourceId))]))
     .filter((s) => s.decision === 'accepted' && s.weight);
-  const groups = assignIndependenceGroups(sources.map((s) => ({ id: s.id, domain: s.registrableDomain, fingerprint: s.contentFingerprint })));
+  const groups = assignIndependenceGroups(sources.map((s) => ({ id: s.id, domain: s.registrableDomain, fingerprint: s.contentFingerprint, fullText: looksFullText(s) })));
   const supports = new Map<string, SourceSupport>(
     sources.map((s) => [s.id, { sourceId: s.id, independenceGroup: groups.get(s.id)!, weight: s.weight! }]),
   );

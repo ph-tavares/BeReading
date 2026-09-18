@@ -3,6 +3,7 @@
 // confirmado e sem limite atingido; `partial` e `failed` avisam a operação. A diferença entre
 // a estrutura confirmada e a que o app usa vai para o run: é o insumo da reconciliação do
 // piloto no próximo ciclo (spec §9).
+import { principalLooksTruncated } from '../full-text.ts';
 import { normalizeTitle } from '../locate.ts';
 import type { EditionChapter, RunStatus } from '../types.ts';
 import type { StepExecutor } from './context.ts';
@@ -38,6 +39,21 @@ export const runPublishStep: StepExecutor = async (_step, run, ctx) => {
     }
     return { payload: { status, motivo: reason } };
   };
+
+  // Conferência das cópias do texto integral (BER-59, spec §11 item 39): a segunda cópia não é
+  // extraída, só conta capítulos. Se ela mostra bem mais capítulos que a principal nas mesmas
+  // primeiras páginas, a principal provavelmente veio truncada — vale um aviso, não um bloqueio.
+  const fetches = (await ctx.store.listSteps(run.id)).filter((s) => s.kind === 'fetch');
+  const capitulos = (marca: string) =>
+    fetches.filter((s) => s.payload[marca] === true).map((s) => Number(s.payload.capitulos_no_texto ?? 0));
+  const [principal] = capitulos('principal');
+  const conferencias = capitulos('conferencia');
+  if (principal !== undefined && conferencias.some((n) => principalLooksTruncated(principal, n))) {
+    await ctx.notify(
+      'ingestion',
+      `run ${run.id}: o texto integral lido mostra ${principal} capítulos e uma cópia de conferência mostra ${Math.max(...conferencias)}`,
+    );
+  }
 
   if (!edition.title) return finish('failed', 'edicao_nao_encontrada');
 

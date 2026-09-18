@@ -69,9 +69,19 @@ export interface GroupableSource {
   id: string;
   domain: string | null;
   fingerprint: string | null;
+  /**
+   * A fonte é o texto integral da obra. Quatro PDFs do mesmo romance, em domínios e idiomas
+   * diferentes, não são quatro testemunhos: são o livro lido quatro vezes, e a impressão (simhash)
+   * não os junta porque as traduções diferem. Contados como grupos distintos, confirmariam
+   * qualquer fato sozinhos, sem nenhuma fonte externa concordando (BER-59, spec §11 item 39).
+   */
+  fullText?: boolean;
 }
 
-/** Agrupa por domínio e por cópia, de forma transitiva. O rótulo é o menor domínio do grupo. */
+/** Rótulo do grupo único dos textos integrais da obra. */
+export const WORK_GROUP = 'obra';
+
+/** Agrupa por domínio, por cópia e por obra, de forma transitiva. O rótulo é o menor domínio. */
 export function assignIndependenceGroups(sources: GroupableSource[]): Map<string, string> {
   const parent = new Map<string, string>(sources.map((s) => [s.id, s.id]));
   const find = (id: string): string => {
@@ -86,18 +96,29 @@ export function assignIndependenceGroups(sources: GroupableSource[]): Map<string
       const a = sources[i];
       const b = sources[j];
       const sameDomain = a.domain !== null && a.domain === b.domain;
+      const sameWork = a.fullText === true && b.fullText === true;
       const copy = a.fingerprint !== null && b.fingerprint !== null &&
         hammingDistance(a.fingerprint, b.fingerprint) <= NEAR_DUPLICATE_MAX_DISTANCE;
-      if (sameDomain || copy) parent.set(find(a.id), find(b.id));
+      if (sameDomain || copy || sameWork) parent.set(find(a.id), find(b.id));
     }
   }
 
   const labels = new Map<string, string>();
   for (const source of sources) {
     const root = find(source.id);
-    const candidate = source.domain ?? source.id;
+    const candidate = source.fullText === true ? WORK_GROUP : source.domain ?? source.id;
     const current = labels.get(root);
     if (current === undefined || candidate < current) labels.set(root, candidate);
   }
   return new Map(sources.map((s) => [s.id, labels.get(find(s.id))!]));
 }
+
+/**
+ * A fonte é o corpo da obra? PDF/EPUB do livro (is_book_file) ou página aceita como texto integral
+ * pela política (§5.4). Resenha, guia e enciclopédia ficam de fora: essas são vozes de verdade
+ * diferentes da do livro.
+ */
+export function looksFullText(source: { isBookFile: boolean; sourceType: string | null }): boolean {
+  return source.isBookFile || ['public_domain_text', 'open_license_text', 'PDF_content'].includes(source.sourceType ?? '');
+}
+

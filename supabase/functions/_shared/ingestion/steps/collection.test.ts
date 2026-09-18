@@ -273,3 +273,23 @@ Deno.test('fetch: continuação sem texto guardado não baixa; recusada no meio 
   );
   assertEquals([recusado.enqueue, recusado.payload?.lote_interrompido], [[{ kind: 'extract', subject: 'fonte-2#0' }], 'robots']);
 });
+
+// Spec §11, item 39: uma leitura do corpo da obra por run; a segunda cópia vira conferência.
+Deno.test('fetch: segunda cópia do texto integral não vai para a IA, só confere os capítulos', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seedRun(store);
+  store.policies.push({ domain: 'repo-a.example', policy: 'allowed', weight: 'A', sourceType: 'public_domain_text', authorizesFullText: true, hostCountry: 'BR' });
+  store.policies.push({ domain: 'repo-b.example', policy: 'allowed', weight: 'A', sourceType: 'public_domain_text', authorizesFullText: true, hostCountry: 'BR' });
+  const livro = ['Capítulo 1', RESUMO, 'Capítulo 2', RESUMO, 'Capítulo 3', RESUMO].join(String.fromCharCode(10));
+  const ctx = fakeContext(store, { fetchPage: (url) => Promise.resolve(page(url, livro, { kind: 'pdf', html: null, pdfPages: 300 })) });
+
+  const primeiro = await runFetchStep(stepRow(run, 'fetch', 'https://repo-a.example/livro.pdf'), run, ctx);
+  const segundo = await runFetchStep(stepRow(run, 'fetch', 'https://repo-b.example/livro.pdf'), run, ctx);
+
+  assertEquals([primeiro.payload?.principal, primeiro.payload?.capitulos_no_texto], [true, 3]);
+  assertEquals(primeiro.enqueue?.[0].kind, 'extract');
+  assertEquals([segundo.payload?.conferencia, segundo.payload?.capitulos_no_texto], [true, 3]);
+  assertEquals(segundo.enqueue, undefined, 'a conferência não gera extração');
+  assertEquals(store.texts.size, 1, 'só o texto principal é guardado');
+  assertEquals(segundo.stats?.textos_integrais_conferidos, 1);
+});
