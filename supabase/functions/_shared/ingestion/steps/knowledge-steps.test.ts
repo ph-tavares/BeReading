@@ -52,7 +52,7 @@ Deno.test('extract: grava afirmações e estrutura, passa o capítulo corrente a
   assertEquals((await store.getSource(source.id)).declaredStructure?.length, 1);
   assertEquals(primeiro.enqueue, [{
     kind: 'extract', subject: `${source.id}#1`,
-    payload: { previousChapter: { number: 1, part: null, numberInPart: null, title: 'A chegada' } },
+    payload: { previousChapter: { number: 1, part: null, numberInPart: null, title: 'A chegada' }, previousPart: null },
   }]);
   // BER-59: o gasto de IA vai ao run assim que a IA responde, não no resultado do passo.
   assertEquals(primeiro.stats, undefined);
@@ -324,4 +324,44 @@ Deno.test('verify: com o teto de custo atingido, pula sem chamar a IA nem public
 
   assertEquals(outcome, { payload: { skipped: 'limite' }, runStatusReason: 'limite' });
   assertEquals(store.knowledge, []);
+});
+
+// Spec §11, item 37: a parte vem do nosso código, não do modelo — no teste do 1984 nenhuma das
+// 803 afirmações voltou com parte, nem das fontes cujo texto tem cabeçalho de parte.
+Deno.test('extract: parte vem da URL da página e o capítulo vira o da parte', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seedRun(store);
+  const source = await addSource(store, run, 'litcharts.com', 'D');
+  await store.updateSource(source.id, { url: 'https://www.litcharts.com/lit/1984/book-2-chapter-1', finalUrl: 'https://www.litcharts.com/lit/1984/book-2-chapter-1' });
+  await store.saveSourceText(source.id, 'Winston encontra Julia no campo.');
+  const ai = () => Promise.resolve({
+    text: JSON.stringify({
+      estrutura: [],
+      afirmacoes: [{ capitulo: { numero: 1 }, tipo: 'evento', texto: 'Winston encontra Julia no campo.', interpretacao: false, antecipa: false }],
+    }),
+    model: 'claude-haiku-4-5', usage: { inputTokens: 100, outputTokens: 10 },
+  });
+
+  await runExtractStep(stepRow(run, 'extract', source.id + '#0'), run, fakeContext(store, { ai }));
+
+  assertEquals(store.claims[0].chapterRef, { number: null, part: 'Parte 2', numberInPart: 1, title: null });
+});
+
+Deno.test('extract: cabeçalho de parte no texto vale para o bloco e passa ao bloco seguinte', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seedRun(store);
+  const source = await addSource(store, run, 'gutenberg.net.au', 'A');
+  await store.saveSourceText(source.id, 'SEGUNDA PARTE' + String.fromCharCode(10) + 'Era meio da manhã quando Winston deixou o cubículo.');
+  const ai = () => Promise.resolve({
+    text: JSON.stringify({
+      estrutura: [],
+      afirmacoes: [{ capitulo: { numero: 1 }, tipo: 'evento', texto: 'Winston deixa o cubículo de manhã.', interpretacao: false, antecipa: false }],
+    }),
+    model: 'claude-haiku-4-5', usage: { inputTokens: 100, outputTokens: 10 },
+  });
+
+  const outcome = await runExtractStep(stepRow(run, 'extract', source.id + '#0'), run, fakeContext(store, { ai }));
+
+  assertEquals(store.claims[0].chapterRef?.part, 'Parte 2');
+  assertEquals(outcome.payload?.parte, 'Parte 2');
 });

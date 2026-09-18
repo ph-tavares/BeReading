@@ -512,3 +512,14 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
     medido: no 1984, isso descarta as 20 afirmações da fonte errada, mas também deixa o livro sem
     cobertura, porque as fontes ricas (texto integral e guias por capítulo) numeram por parte sem
     dizer a parte — resolver isso é o passo seguinte, não este.
+37. **A parte do livro é achada pelo nosso código, não pedida ao modelo.** O item 35 mandou o
+    prompt exigir a parte; medido no quinto teste do 1984, **nenhuma das 803 afirmações voltou com
+    parte** — nem das fontes cujo texto traz SEGUNDA PARTE, nem das páginas cuja URL diz
+    book-2-chapter-1. Agora a parte vem de duas fontes determinísticas:
+    - URL e título da página (book-2-chapter-1, parte-3, Part 3, Chapter 1), válidos para todas as
+      afirmações daquela página;
+    - cabeçalho de parte no próprio texto, carregado de um bloco para o outro como já era feito
+      com o capítulo em andamento.
+    Bloco que troca de parte no meio não atribui parte a nenhuma afirmação dele: metade ficaria com
+    a parte errada, e marcar conteúdo do meio do livro como início é o que gera spoiler. Quando a
+    parte é conhecida, o número que a fonte cita passa a ser o número dentro da parte.
