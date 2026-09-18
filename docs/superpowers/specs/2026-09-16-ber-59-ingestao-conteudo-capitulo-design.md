@@ -529,3 +529,18 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
     transforma "não sei" em "Parte 1". Agora, se o menor capítulo citado num bloco for menor que o
     maior já visto naquela fonte, e nenhum cabeçalho novo disser a parte, o bloco fica sem parte —
     e as afirmações dele, sem capítulo.
+39. **Uma leitura do corpo da obra por run, e as demais cópias viram conferência.** No sétimo
+    teste do 1984, quatro PDFs do mesmo romance (archive.org, liceobelen.cl, philosophia.cl,
+    dhnet.org.br) entraram como quatro grupos independentes e geraram 758 afirmações. Isso é o
+    livro lido quatro vezes, não quatro testemunhos: um fato apoiado só por elas aparecia com
+    apoio 4 sem nenhuma fonte externa concordando, e um erro de leitura do romance se confirmava
+    sozinho. Duas mudanças:
+    - todo texto integral da obra entra num único grupo de independência (rótulo obra), de modo
+      que confirmar um fato continua exigindo uma voz de natureza diferente (guia, enciclopédia,
+      análise);
+    - só o primeiro texto integral aceito no run é extraído pela IA. Os seguintes não vão para a
+      IA: o nosso código conta os cabeçalhos de capítulo deles e o passo publish avisa quando a
+      cópia lida mostra bem menos capítulos que a de conferência, sinal de cópia truncada ou
+      adaptada. A comparação usa o mesmo trecho inicial das duas (primeiro lote de páginas), então
+      pega truncamento grosseiro, não diferença fina.
+    Efeito no custo: a extração deixa de pagar quatro leituras do mesmo livro por run.

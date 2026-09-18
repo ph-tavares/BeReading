@@ -4,7 +4,7 @@
 // capítulos com menos de 2 grupos independentes falando deles.
 import { LIMITS } from '../budget.ts';
 import { startOfUtcDay } from '../queue.ts';
-import { assignIndependenceGroups } from '../independence.ts';
+import { assignIndependenceGroups, looksFullText } from '../independence.ts';
 import { locateChapter } from '../locate.ts';
 import { reliableSources, sourceNumbersWholeBook } from '../numbering.ts';
 import { buildChapterQuery } from '../queries.ts';
@@ -21,7 +21,7 @@ export const runStructureStep: StepExecutor = async (step, run, ctx) => {
   const edition = await ctx.store.getEdition(run.editionId);
   const accepted = (await ctx.store.listSources(run.id)).filter((s) => s.decision === 'accepted' && s.weight);
 
-  const groups = assignIndependenceGroups(accepted.map((s) => ({ id: s.id, domain: s.registrableDomain, fingerprint: s.contentFingerprint })));
+  const groups = assignIndependenceGroups(accepted.map((s) => ({ id: s.id, domain: s.registrableDomain, fingerprint: s.contentFingerprint, fullText: looksFullText(s) })));
   for (const source of accepted) await ctx.store.updateSource(source.id, { independenceGroup: groups.get(source.id)! });
 
   const candidates = accepted

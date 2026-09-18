@@ -3,6 +3,7 @@ import {
   assignIndependenceGroups,
   hammingDistance,
   NEAR_DUPLICATE_MAX_DISTANCE,
+  looksFullText,
   registrableDomain,
   simhash,
 } from './independence.ts';
@@ -62,4 +63,27 @@ Deno.test('assignIndependenceGroups: cópia liga grupos em cadeia', () => {
     { id: 's3', domain: 'b.com', fingerprint: null },
   ]);
   assertEquals(groups.get('s3'), 'a.com');
+});
+
+// Spec §11, item 39: quatro PDFs do mesmo romance, em domínios e idiomas diferentes, não são
+// quatro testemunhos — são o livro lido quatro vezes, e confirmariam qualquer fato sozinhos.
+Deno.test('assignIndependenceGroups: textos integrais da obra ficam num grupo só', () => {
+  const grupos = assignIndependenceGroups([
+    { id: 'gut', domain: 'gutenberg.net.au', fingerprint: null, fullText: true },
+    { id: 'pdf-es', domain: 'philosophia.cl', fingerprint: null, fullText: true },
+    { id: 'pdf-pt', domain: 'dhnet.org.br', fingerprint: null, fullText: true },
+    { id: 'guia', domain: 'litcharts.com', fingerprint: null },
+    { id: 'enciclopedia', domain: 'wikipedia.org', fingerprint: null },
+  ]);
+  assertEquals(grupos.get('gut'), 'obra');
+  assertEquals(grupos.get('pdf-es'), 'obra');
+  assertEquals(grupos.get('pdf-pt'), 'obra');
+  assertEquals(new Set(grupos.values()).size, 3, 'obra, guia e enciclopédia');
+});
+
+Deno.test('looksFullText: corpo da obra sim, resenha e enciclopédia não', () => {
+  assertEquals(looksFullText({ isBookFile: true, sourceType: 'PDF_content' }), true);
+  assertEquals(looksFullText({ isBookFile: false, sourceType: 'public_domain_text' }), true);
+  assertEquals(looksFullText({ isBookFile: false, sourceType: 'encyclopedia' }), false);
+  assertEquals(looksFullText({ isBookFile: false, sourceType: 'web' }), false);
 });
