@@ -60,21 +60,81 @@ function toNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+/**
+ * Credencial de um provedor. A de reserva (BER-59, spec §11 item 42) entra só quando a principal
+ * acusa saldo esgotado: `baseUrl` permite apontar para outra conta, um gateway ou uma nuvem.
+ */
+export interface AICredential {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  label: string;
+  /**
+   * Cabeçalho que leva a credencial. Padrão `x-api-key` (chave de API da Anthropic); `Authorization`
+   * com prefixo `Bearer ` atende gateway corporativo, proxy e nuvem. Configurável por secret para o
+   * time apontar a reserva para onde decidir, sem mudar código (BER-59, spec §11 item 42).
+   */
+  authHeader: string;
+}
+
+function authHeaderFor(cred: Pick<AICredential, 'apiKey' | 'authHeader'>): Record<string, string> {
+  const nome = cred.authHeader;
+  const valor = /^authorization$/i.test(nome) && !/^bearer /i.test(cred.apiKey) ? `Bearer ${cred.apiKey}` : cred.apiKey;
+  return { [nome]: valor };
+}
+
+function credential(provider: string, reserva: boolean): AICredential | null {
+  const sufixo = reserva ? '_FALLBACK' : '';
+  const label = reserva ? 'reserva' : 'principal';
+  if (provider === 'anthropic') {
+    const apiKey = Deno.env.get(`ANTHROPIC${sufixo}_API_KEY`);
+    if (!apiKey) return null;
+    return {
+      apiKey,
+      baseUrl: Deno.env.get(`ANTHROPIC${sufixo}_BASE_URL`) ?? 'https://api.anthropic.com',
+      model: Deno.env.get(`ANTHROPIC${sufixo}_MODEL`) ?? Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5',
+      label,
+      authHeader: Deno.env.get(`ANTHROPIC${sufixo}_AUTH_HEADER`) ?? 'x-api-key',
+    };
+  }
+  const apiKey = Deno.env.get(`AI${sufixo}_API_KEY`);
+  if (!apiKey) return null;
+  return {
+    apiKey,
+    baseUrl: Deno.env.get(`AI${sufixo}_BASE_URL`) ?? 'https://api.openai.com',
+    model: Deno.env.get(`AI${sufixo}_MODEL`) ?? Deno.env.get('AI_MODEL') ?? 'gpt-4o-mini',
+    label,
+    authHeader: Deno.env.get(`AI${sufixo}_AUTH_HEADER`) ?? 'Authorization',
+  };
+}
+
 export async function callAI(req: AIRequest): Promise<AIResult> {
   const provider = Deno.env.get('AI_PROVIDER') ?? 'openai';
+  const principal = credential(provider, false);
+  if (!principal) throw new Error(provider === 'anthropic' ? 'ANTHROPIC_API_KEY env var not set' : 'AI_API_KEY env var not set');
+
+  try {
+    return await callWith(provider, principal, req);
+  } catch (err) {
+    // Saldo esgotado na principal: tenta a de reserva antes de pausar o run (spec §11, item 42).
+    const reserva = err instanceof AIOutOfCreditsError ? credential(provider, true) : null;
+    if (!reserva) throw err;
+    return await callWith(provider, reserva, req);
+  }
+}
+
+async function callWith(provider: string, cred: AICredential, req: AIRequest): Promise<AIResult> {
   const sampling = req.temperature === undefined ? {} : { temperature: req.temperature };
   const abort = req.timeoutMs === undefined ? {} : { signal: AbortSignal.timeout(req.timeoutMs) };
 
   if (provider === 'anthropic') {
-    const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-    const model = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5';
-    if (!apiKey) throw new Error('ANTHROPIC_API_KEY env var not set');
+    const { model } = cred;
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(`${cred.baseUrl}/v1/messages`, {
       ...abort,
       method: 'POST',
       headers: {
-        'x-api-key': apiKey,
+        ...authHeaderFor(cred),
         'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json',
       },
@@ -88,7 +148,7 @@ export async function callAI(req: AIRequest): Promise<AIResult> {
 
     if (!res.ok) {
       const body = await res.text();
-      if (outOfCredits(res.status, body)) throw new AIOutOfCreditsError(`Anthropic: saldo insuficiente`);
+      if (outOfCredits(res.status, body)) throw new AIOutOfCreditsError(`Anthropic (${cred.label}): saldo insuficiente`);
       throw new AIHttpError(res.status, `Anthropic API error ${res.status}: ${body}`);
     }
 
@@ -100,14 +160,12 @@ export async function callAI(req: AIRequest): Promise<AIResult> {
     };
   }
 
-  const apiKey = Deno.env.get('AI_API_KEY');
-  const model = Deno.env.get('AI_MODEL') ?? 'gpt-4o-mini';
-  if (!apiKey) throw new Error('AI_API_KEY env var not set');
+  const { model } = cred;
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  const res = await fetch(`${cred.baseUrl}/v1/chat/completions`, {
     ...abort,
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    headers: { ...authHeaderFor(cred), 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model,
       max_tokens: req.maxTokens,
@@ -118,7 +176,7 @@ export async function callAI(req: AIRequest): Promise<AIResult> {
 
   if (!res.ok) {
     const body = await res.text();
-    if (outOfCredits(res.status, body)) throw new AIOutOfCreditsError(`OpenAI: saldo insuficiente`);
+    if (outOfCredits(res.status, body)) throw new AIOutOfCreditsError(`OpenAI (${cred.label}): saldo insuficiente`);
     throw new AIHttpError(res.status, `OpenAI API error ${res.status}: ${body}`);
   }
 

@@ -111,3 +111,69 @@ Deno.test('callAI: saldo esgotado vira AIOutOfCreditsError, não AIHttpError', a
     globalThis.fetch = original;
   }
 });
+
+// Spec §11, item 42: credencial de reserva entra só quando a principal acusa saldo esgotado.
+Deno.test('callAI: saldo esgotado na principal cai para a credencial de reserva', async () => {
+  const original = globalThis.fetch;
+  const chamadas: { url: string; chave: string | null }[] = [];
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+  Deno.env.set('ANTHROPIC_API_KEY', 'chave-principal');
+  Deno.env.set('ANTHROPIC_FALLBACK_API_KEY', 'chave-reserva');
+  Deno.env.set('ANTHROPIC_FALLBACK_BASE_URL', 'https://gateway.example');
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    const chave = new Headers(init?.headers).get('x-api-key');
+    chamadas.push({ url: urlOf(input), chave });
+    if (chave === 'chave-principal') {
+      return Promise.resolve(new Response('{"error":{"message":"Your credit balance is too low"}}', { status: 400 }));
+    }
+    return Promise.resolve(Response.json({ content: [{ text: 'ok' }], usage: { input_tokens: 5, output_tokens: 2 } }));
+  }) as typeof fetch;
+
+  try {
+    const resultado = await callAI({ prompt: 'oi', maxTokens: 10 });
+    assertEquals(resultado.text, 'ok');
+    assertEquals(chamadas.map((c) => c.chave), ['chave-principal', 'chave-reserva']);
+    assertEquals(chamadas[1].url, 'https://gateway.example/v1/messages');
+  } finally {
+    globalThis.fetch = original;
+    Deno.env.delete('ANTHROPIC_FALLBACK_API_KEY');
+    Deno.env.delete('ANTHROPIC_FALLBACK_BASE_URL');
+  }
+});
+
+Deno.test('callAI: sem credencial de reserva, o saldo esgotado continua pausando o run', async () => {
+  const original = globalThis.fetch;
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+  Deno.env.set('ANTHROPIC_API_KEY', 'chave-principal');
+  Deno.env.delete('ANTHROPIC_FALLBACK_API_KEY');
+  globalThis.fetch = (() =>
+    Promise.resolve(new Response('{"error":{"message":"Your credit balance is too low"}}', { status: 400 }))) as typeof fetch;
+  try {
+    await assertRejects(() => callAI({ prompt: 'oi', maxTokens: 10 }), AIOutOfCreditsError);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test('callAI: cabeçalho de autenticação vem da secret, com Bearer quando for Authorization', async () => {
+  const original = globalThis.fetch;
+  const cabecalhos: Headers[] = [];
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+  Deno.env.set('ANTHROPIC_API_KEY', 'credencial-do-gateway');
+  Deno.env.set('ANTHROPIC_AUTH_HEADER', 'Authorization');
+  Deno.env.set('ANTHROPIC_BASE_URL', 'https://gateway.example');
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    cabecalhos.push(new Headers(init?.headers));
+    return Promise.resolve(Response.json({ content: [{ text: 'ok' }], usage: { input_tokens: 1, output_tokens: 1 } }));
+  }) as typeof fetch;
+
+  try {
+    await callAI({ prompt: 'oi', maxTokens: 10 });
+    assertEquals(cabecalhos[0].get('authorization'), 'Bearer credencial-do-gateway');
+    assertEquals(cabecalhos[0].get('x-api-key'), null);
+  } finally {
+    globalThis.fetch = original;
+    Deno.env.delete('ANTHROPIC_AUTH_HEADER');
+    Deno.env.delete('ANTHROPIC_BASE_URL');
+  }
+});
