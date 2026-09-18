@@ -221,6 +221,39 @@ export class MemoryIngestionStore implements IngestionStore {
     for (const [id, value] of this.texts) if (value.createdAt < iso) this.texts.delete(id);
   }
 
+  async findExtractedSource(input: { editionId: string; workKey: string | null; url: string; sinceIso: string }) {
+    // Espelha o SupabaseIngestionStore (BER-59, spec §11 item 40).
+    const runsDaEdicao = new Set(this.runs.filter((r) => r.editionId === input.editionId).map((r) => r.id));
+    const edicoesDaObra = new Set(
+      input.workKey === null ? [] : this.editions.filter((e) => e.workKey === input.workKey).map((e) => e.id),
+    );
+    const runsDaObra = new Set(this.runs.filter((r) => edicoesDaObra.has(r.editionId)).map((r) => r.id));
+    const candidatas = this.sources
+      .filter((s) => s.url === input.url && s.decision === 'accepted')
+      .filter((s) => runsDaEdicao.has(s.runId) || (runsDaObra.has(s.runId) && !s.tiedToIsbn));
+    const daEdicao = candidatas.find((s) => runsDaEdicao.has(s.runId));
+    return daEdicao ?? candidatas[0] ?? null;
+  }
+
+  async countClaimsForSource(sourceId: string) {
+    return this.claims.filter((c) => c.sourceId === sourceId).length;
+  }
+
+  async copyClaims(fromSourceId: string, to: { runId: string; sourceId: string }) {
+    const origem = this.claims.filter((c) => c.sourceId === fromSourceId);
+    for (const claim of origem) {
+      this.claims.push({
+        ...claim,
+        id: crypto.randomUUID(),
+        runId: to.runId,
+        sourceId: to.sourceId,
+        editionChapterId: null,
+        located: false,
+      });
+    }
+    return origem.length;
+  }
+
   async insertClaims(claims: NewClaim[]) {
     for (const claim of claims) this.claims.push({ id: crypto.randomUUID(), editionChapterId: null, located: false, ...claim });
   }

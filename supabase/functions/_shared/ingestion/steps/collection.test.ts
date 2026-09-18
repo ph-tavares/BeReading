@@ -293,3 +293,70 @@ Deno.test('fetch: segunda cópia do texto integral não vai para a IA, só confe
   assertEquals(store.texts.size, 1, 'só o texto principal é guardado');
   assertEquals(segundo.stats?.textos_integrais_conferidos, 1);
 });
+
+/** Fonte aceita de um run anterior, com afirmações já extraídas. */
+async function fonteExtraida(
+  store: MemoryIngestionStore,
+  runId: string,
+  url: string,
+  over: Partial<Parameters<MemoryIngestionStore['insertSource']>[0]> = {},
+) {
+  const fonte = await store.insertSource({
+    runId, url, finalUrl: url, registrableDomain: new URL(url).hostname, title: null,
+    sourceType: 'web', weight: 'D', decision: 'accepted', rejectionReason: null, publicDomainBasis: null,
+    isBookFile: false, tiedToIsbn: false, contentFingerprint: null, independenceGroup: null, declaredStructure: null,
+    ...over,
+  });
+  await store.insertClaims([{
+    runId, sourceId: fonte.id, chapterRef: { number: 1, part: null, numberInPart: null, title: null },
+    kind: 'event', statement: 'Ana chega à cidade.', isInterpretation: false, forwardReference: false, chunkIndex: 0,
+  }]);
+  return fonte;
+}
+
+// Spec §11, item 40: a extração é a parte cara e não muda de um run para o outro.
+Deno.test('fetch: URL já extraída em run anterior da edição é reaproveitada sem baixar nem chamar a IA', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run, edition } = await seedRun(store);
+  await fonteExtraida(store, run.id, 'https://guia.example/cap-1', {
+    declaredStructure: [{ number: 1, part: null, numberInPart: null, title: null }, { number: 2, part: null, numberInPart: null, title: null }],
+  });
+  const novo = await store.createRun(edition.id, {});
+  await store.updateRun(novo.id, { status: 'running' });
+
+  const outcome = await runFetchStep(
+    stepRow(await store.getRun(novo.id), 'fetch', 'https://guia.example/cap-1'),
+    await store.getRun(novo.id),
+    fakeContext(store),
+  );
+
+  assertEquals([outcome.stats?.fontes_reaproveitadas, outcome.stats?.afirmacoes_reaproveitadas], [1, 1]);
+  assertEquals(outcome.enqueue, undefined, 'não enfileira extração');
+  const copiadas = store.claims.filter((c) => c.runId === novo.id);
+  assertEquals(copiadas.map((c) => [c.statement, c.located, c.editionChapterId]), [['Ana chega à cidade.', false, null]]);
+  const fonte = store.sources.find((s) => s.runId === novo.id)!;
+  assertEquals([fonte.decision, fonte.weight, fonte.declaredStructure?.length], ['accepted', 'D', 2]);
+});
+
+Deno.test('fetch: reaproveita entre edições da mesma obra, menos o que está preso ao ISBN', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const primeira = await seedRun(store, { workKey: '/works/OL1W' });
+  await fonteExtraida(store, primeira.run.id, 'https://editora.example/ficha', { tiedToIsbn: true, weight: 'B' });
+  await fonteExtraida(store, primeira.run.id, 'https://guia.example/resumo');
+
+  const outra = await store.insertEdition('9780000000077', null);
+  await store.updateEdition(outra.id, { title: 'Livro Sintético', workKey: '/works/OL1W' });
+  const run = await store.createRun(outra.id, {});
+  await store.updateRun(run.id, { status: 'running' });
+  const atual = await store.getRun(run.id);
+
+  const reaproveitada = await runFetchStep(stepRow(atual, 'fetch', 'https://guia.example/resumo'), atual, fakeContext(store));
+  assertEquals(reaproveitada.stats?.fontes_reaproveitadas, 1);
+
+  const naoReaproveitada = await runFetchStep(
+    stepRow(atual, 'fetch', 'https://editora.example/ficha'),
+    atual,
+    fakeContext(store, { fetchPage: (url) => Promise.resolve(page(url, RESUMO)) }),
+  );
+  assertEquals(naoReaproveitada.stats?.fontes_reaproveitadas, undefined, 'fonte presa ao ISBN é de outra edição');
+});

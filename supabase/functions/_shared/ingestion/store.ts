@@ -173,6 +173,16 @@ export interface IngestionStore {
   deleteSourceText(sourceId: string): Promise<void>;
   deleteSourceTextsBefore(iso: string): Promise<void>;
 
+  /**
+   * Fonte igual já extraída antes e ainda válida: mesma URL, da mesma edição ou de outra edição da
+   * mesma obra (BER-59). A extração não depende da edição — o que depende é a localização do
+   * capítulo, refeita a cada run.
+   */
+  findExtractedSource(input: { editionId: string; workKey: string | null; url: string; sinceIso: string }): Promise<SourceRow | null>;
+  countClaimsForSource(sourceId: string): Promise<number>;
+  /** Copia as afirmações de uma fonte já extraída para o run novo, sem capítulo (ele é re-localizado). */
+  copyClaims(fromSourceId: string, to: { runId: string; sourceId: string }): Promise<number>;
+
   insertClaims(claims: NewClaim[]): Promise<void>;
   /** Apaga as afirmações já gravadas de um bloco, para o passo `extract` reexecutado substituir em vez de duplicar. */
   deleteClaimsForChunk(sourceId: string, chunkIndex: number): Promise<void>;

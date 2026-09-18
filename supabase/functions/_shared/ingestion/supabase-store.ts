@@ -301,6 +301,56 @@ export class SupabaseIngestionStore implements IngestionStore {
     ok(await this.db.from('ingestion_source_texts').delete().lt('created_at', iso), 'deleteSourceTextsBefore');
   }
 
+  async findExtractedSource(input: { editionId: string; workKey: string | null; url: string; sinceIso: string }) {
+    // Mesma edição: qualquer fonte serve. Outra edição da mesma obra: só fonte que não esteja
+    // presa ao ISBN, porque essa fala de uma edição específica (BER-59, spec §11 item 40).
+    const daEdicao = await this.db.from('ingestion_sources')
+      .select('*, ingestion_runs!inner(edition_id)')
+      .eq('url', input.url).eq('decision', 'accepted').gte('fetched_at', input.sinceIso)
+      .eq('ingestion_runs.edition_id', input.editionId)
+      .order('fetched_at', { ascending: false }).limit(1);
+    if (daEdicao.error) throw storeError(daEdicao.status, `findExtractedSource: ${daEdicao.error.message}`);
+    if (daEdicao.data && daEdicao.data.length > 0) return toSource(daEdicao.data[0]);
+    if (!input.workKey) return null;
+
+    const daObra = await this.db.from('ingestion_sources')
+      .select('*, ingestion_runs!inner(book_editions!inner(work_key))')
+      .eq('url', input.url).eq('decision', 'accepted').eq('tied_to_isbn', false).gte('fetched_at', input.sinceIso)
+      .eq('ingestion_runs.book_editions.work_key', input.workKey)
+      .order('fetched_at', { ascending: false }).limit(1);
+    if (daObra.error) throw storeError(daObra.status, `findExtractedSource(obra): ${daObra.error.message}`);
+    return daObra.data && daObra.data.length > 0 ? toSource(daObra.data[0]) : null;
+  }
+
+  async countClaimsForSource(sourceId: string) {
+    const { count, error, status } = await this.db.from('ingestion_claims')
+      .select('id', { count: 'exact', head: true }).eq('source_id', sourceId);
+    if (error) throw storeError(status, `countClaimsForSource: ${error.message}`);
+    return count ?? 0;
+  }
+
+  async copyClaims(fromSourceId: string, to: { runId: string; sourceId: string }) {
+    const origem = await selectAll(
+      () => this.db.from('ingestion_claims').select('*').eq('source_id', fromSourceId),
+      'copyClaims',
+    );
+    if (origem.length === 0) return 0;
+    const copias = origem.map((r: Row) => ({
+      run_id: to.runId,
+      source_id: to.sourceId,
+      chapter_ref: r.chapter_ref,
+      kind: r.kind,
+      statement: r.statement,
+      is_interpretation: r.is_interpretation,
+      forward_reference: r.forward_reference,
+      chunk_index: r.chunk_index,
+    }));
+    for (let i = 0; i < copias.length; i += ID_CHUNK) {
+      ok(await this.db.from('ingestion_claims').insert(copias.slice(i, i + ID_CHUNK)), 'copyClaims(insert)');
+    }
+    return copias.length;
+  }
+
   async insertClaims(claims: NewClaim[]) {
     if (claims.length === 0) return;
     const rows = claims.map((c) => ({

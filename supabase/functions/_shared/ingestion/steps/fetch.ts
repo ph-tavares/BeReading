@@ -12,6 +12,12 @@ import { UnsafeUrlError } from '../ssrf.ts';
 import type { NewSource } from '../store.ts';
 import type { StepContext, StepExecutor, StepOutcome } from './context.ts';
 
+/**
+ * Idade máxima da extração reaproveitada (BER-59). Trinta dias: o que uma resenha ou um guia diz
+ * sobre o livro não muda nesse prazo, e a rebusca semanal já cobre atualização de conteúdo.
+ */
+export const REUSE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 const GENERIC_PUBLISHER_WORDS = /\b(editora|editorial|livros|grupo|publishing|publishers|books|ltda)\b/g;
 
 /** Domínio parece o site oficial da editora? (ex.: Companhia das Letras → companhiadasletras.com.br) */
@@ -56,6 +62,38 @@ export const runFetchStep: StepExecutor = async (step, run, ctx) => {
   };
 
   if (typeof step.payload.continuacao === 'string') return continuePdf(step.payload, beforeRequest, ctx);
+
+  // Extração já feita antes para esta URL é reaproveitada (BER-59, spec §11 item 40): o que a fonte
+  // diz não muda de um run para o outro, e a IA é a parte cara. A localização do capítulo não vem
+  // junto — ela é refeita neste run, com a estrutura desta edição.
+  const jaExtraida = await ctx.store.findExtractedSource({
+    editionId: run.editionId,
+    workKey: edition.workKey,
+    url: step.subject,
+    sinceIso: new Date(ctx.now() - REUSE_MAX_AGE_MS).toISOString(),
+  });
+  if (jaExtraida && await ctx.store.countClaimsForSource(jaExtraida.id) > 0) {
+    const copia = await ctx.store.insertSource({
+      ...base,
+      finalUrl: jaExtraida.finalUrl,
+      registrableDomain: jaExtraida.registrableDomain,
+      title: jaExtraida.title ?? base.title,
+      sourceType: jaExtraida.sourceType,
+      weight: jaExtraida.weight,
+      decision: 'accepted',
+      isBookFile: jaExtraida.isBookFile,
+      tiedToIsbn: jaExtraida.tiedToIsbn,
+      publicDomainBasis: jaExtraida.publicDomainBasis,
+      contentFingerprint: jaExtraida.contentFingerprint,
+      declaredStructure: jaExtraida.declaredStructure,
+      declaredStructureComplete: jaExtraida.declaredStructureComplete,
+    });
+    const afirmacoes = await ctx.store.copyClaims(jaExtraida.id, { runId: run.id, sourceId: copia.id });
+    return {
+      stats: { fontes_consideradas: 1, fontes_aceitas: 1, fontes_reaproveitadas: 1, afirmacoes_reaproveitadas: afirmacoes },
+      payload: { decisao: 'accepted', fonte: copia.id, reaproveitada_de: jaExtraida.id, afirmacoes },
+    };
+  }
 
   let fetched: FetchedPage;
   try {
