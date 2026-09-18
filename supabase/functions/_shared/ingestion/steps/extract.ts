@@ -4,7 +4,7 @@
 // texto bruto é apagado assim que o último bloco termina — ou se o teto de custo chegar.
 import { aiUsageDelta, exceededLimit } from '../budget.ts';
 import { buildExtractionPrompt, EXTRACTION_MAX_TOKENS, parseExtraction, splitIntoChunks } from '../extraction.ts';
-import { chunkPart, partFromSource } from '../parts.ts';
+import { chunkPart, partFromSource, partStillValid } from '../parts.ts';
 import { mergeDeclared } from '../structure.ts';
 import type { ChapterRef } from '../types.ts';
 import { AI_STEP_TIMEOUT_MS, type StepExecutor } from './context.ts';
@@ -56,7 +56,13 @@ export const runExtractStep: StepExecutor = async (step, run, ctx) => {
   // Sem isso, "capítulo 1" da Parte 2 vira o capítulo 1 do livro e leva spoiler para o começo.
   const parteDaFonte = partFromSource(source.finalUrl ?? source.url, source.title);
   const parteDoBloco = chunkPart(chunk, (step.payload.previousPart as string | undefined) ?? parteDaFonte ?? null);
-  const parte = parteDaFonte ?? (parteDoBloco.changes ? null : parteDoBloco.start);
+  // Maior capítulo já visto nesta fonte: se a numeração recuar sem cabeçalho novo, a parte herdada
+  // não vale mais (spec §11, item 38).
+  const maiorCapituloVisto = (step.payload.maxChapter as number | undefined) ?? null;
+  const capitulosDoBloco = parsed.claims.map((c) => c.chapterRef?.numberInPart ?? c.chapterRef?.number ?? null).filter((n): n is number => n !== null);
+  const menorDoBloco = capitulosDoBloco.length > 0 ? Math.min(...capitulosDoBloco) : null;
+  const heranca = parteDoBloco.changes || !partStillValid(maiorCapituloVisto, menorDoBloco) ? null : parteDoBloco.start;
+  const parte = parteDaFonte ?? heranca;
   const comParte = parsed.claims.map((claim) => {
     if (!parte || !claim.chapterRef || claim.chapterRef.part) return claim;
     // Numa obra com partes, o "capítulo 3" que a fonte cita é o terceiro daquela parte.
@@ -82,7 +88,7 @@ export const runExtractStep: StepExecutor = async (step, run, ctx) => {
   return {
     enqueue: isLast
       ? []
-      : [{ kind: 'extract', subject: `${sourceId}#${index + 1}`, payload: { previousChapter: lastChapter, previousPart: parteDoBloco.end } }],
+      : [{ kind: 'extract', subject: `${sourceId}#${index + 1}`, payload: { previousChapter: lastChapter, previousPart: parte === null ? null : parteDoBloco.end, maxChapter: Math.max(maiorCapituloVisto ?? 0, ...capitulosDoBloco, 0) } }],
     payload: { afirmacoes: parsed.claims.length, descartadas: parsed.rejected.length, ...(parte ? { parte } : {}) },
   };
 };

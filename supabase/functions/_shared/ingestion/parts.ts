@@ -92,3 +92,14 @@ export function chunkPart(chunk: string, running: string | null): ChunkPart {
   if (noComeco) return { start: last, end: last, changes: false };
   return { start: running, end: last, changes: true };
 }
+
+/**
+ * A parte herdada do bloco anterior deixa de valer quando a numeração de capítulo recua — a fonte
+ * saiu do capítulo 8 e voltou ao 1, ou seja, mudou de parte — sem que um cabeçalho novo diga qual
+ * parte é. Continuar na anterior transforma "não sei" em "Parte 1": foi assim que um PDF longo do
+ * archive.org mandou Julia e a Sala 101 para o capítulo 1 no sétimo teste do 1984 (BER-59).
+ */
+export function partStillValid(maxChapterSeen: number | null, chapterInChunk: number | null): boolean {
+  if (maxChapterSeen === null || chapterInChunk === null) return true;
+  return chapterInChunk >= maxChapterSeen;
+}
