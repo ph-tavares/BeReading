@@ -565,3 +565,11 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
     - a extração que ficou pela metade não é reaproveitada por outro run (§11 item 40): a cópia
       traria só parte do que a fonte diz, em silêncio. O passo `fetch` confere se sobrou bloco de
       extração pendente, rodando ou falho naquela fonte antes de reaproveitar.
+42. **Credencial de reserva.** Quando a credencial principal acusa saldo esgotado, a chamada é
+    repetida uma vez com a credencial de reserva, e só se ela também faltar (ou falhar) o run pausa
+    pelo item 41. As secrets de reserva espelham as principais com o sufixo `_FALLBACK`
+    (`ANTHROPIC_FALLBACK_API_KEY`, `ANTHROPIC_FALLBACK_BASE_URL`, `ANTHROPIC_FALLBACK_MODEL`; o
+    mesmo para `AI_*`), e `BASE_URL` permite apontar para outra conta, um gateway ou uma nuvem. O
+    aviso da operação diz qual credencial faltou. O que vai nessa secret é decisão do time: usar
+    credencial de assinatura como backend contraria os termos do provedor e arrisca a suspensão da
+    conta, que derrubaria junto os quizzes do app.

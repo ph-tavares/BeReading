@@ -303,6 +303,7 @@ Definidos com `supabase secrets set` (não são secrets do GitHub):
 | `INGESTION_ENABLED` | `false`/`0`/`off`/`no` (sem diferenciar caixa, com ou sem espaço em volta) desligam tudo sem deploy: `ingest-book` devolve 503 e o worker não executa |
 | `INGESTION_ALLOW_NO_DNS` | Desligado por padrão (não definir). Se o runtime não expuser DNS, o download recusa todo host em vez de pular a checagem de IP interno (SSRF); `true` libera sem essa checagem, só com o risco aceito |
 | `ANTHROPIC_API_KEY` / `AI_PROVIDER` | Já existem (quiz). A ingestão usa o mesmo provedor |
+| `ANTHROPIC_FALLBACK_API_KEY` | Opcional. Credencial de reserva, usada só quando a principal acusa saldo esgotado (spec §11, item 42). `ANTHROPIC_FALLBACK_BASE_URL` e `ANTHROPIC_FALLBACK_MODEL` acompanham quando a reserva fica em outra conta, gateway ou nuvem; para OpenAI, os equivalentes `AI_FALLBACK_*` |
 | `CRON_SECRET` | Já existe (BER-33). O cron da ingestão usa o mesmo |
 | `OPS_ALERT_WEBHOOK_URL` | Já existe (BER-39, `_shared/ops-alert.ts`). Opcional: sem ela, os avisos do worker (`ctx.notify`) só vão para os logs da function; com ela, também vão para o webhook (Slack/Discord/ntfy — qualquer um que aceite `POST { text }`) |
 
