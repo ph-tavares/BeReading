@@ -52,7 +52,7 @@ Deno.test('extract: grava afirmações e estrutura, passa o capítulo corrente a
   assertEquals((await store.getSource(source.id)).declaredStructure?.length, 1);
   assertEquals(primeiro.enqueue, [{
     kind: 'extract', subject: `${source.id}#1`,
-    payload: { previousChapter: { number: 1, part: null, numberInPart: null, title: 'A chegada' }, previousPart: null },
+    payload: { previousChapter: { number: 1, part: null, numberInPart: null, title: 'A chegada' }, previousPart: null, maxChapter: 1 },
   }]);
   // BER-59: o gasto de IA vai ao run assim que a IA responde, não no resultado do passo.
   assertEquals(primeiro.stats, undefined);

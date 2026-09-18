@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import { chunkPart, partFromSource, partLabel } from './parts.ts';
+import { chunkPart, partFromSource, partLabel, partStillValid } from './parts.ts';
 
 Deno.test('partLabel: reconhece as formas que as fontes usam', () => {
   assertEquals(partLabel('PARTE 2'), 'Parte 2');
@@ -33,4 +33,15 @@ Deno.test('chunkPart: bloco que troca de parte no meio não atribui parte a ning
   const texto = ['Fim do último capítulo da primeira parte.', '', 'PARTE 2', '', 'Começo da segunda parte.'].join('\n');
   const r = chunkPart(texto, 'Parte 1');
   assertEquals([r.start, r.end, r.changes], ['Parte 1', 'Parte 2', true]);
+});
+
+// Sétimo teste do 1984 (BER-59): um PDF longo do archive.org teve "Parte 1" reconhecida no começo
+// do arquivo e carregada por 30 blocos; os blocos finais, que falavam de Julia e da Sala 101,
+// entraram como Parte 1, capítulo 1.
+Deno.test('partStillValid: numeração que recua invalida a parte herdada', () => {
+  assertEquals(partStillValid(8, 1), false, 'saiu do capítulo 8 e voltou ao 1: mudou de parte');
+  assertEquals(partStillValid(3, 4), true);
+  assertEquals(partStillValid(3, 3), true, 'o mesmo capítulo continua no bloco seguinte');
+  assertEquals(partStillValid(null, 2), true, 'primeiro bloco da fonte');
+  assertEquals(partStillValid(5, null), true, 'bloco sem capítulo não diz nada');
 });

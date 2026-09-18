@@ -523,3 +523,9 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
     Bloco que troca de parte no meio não atribui parte a nenhuma afirmação dele: metade ficaria com
     a parte errada, e marcar conteúdo do meio do livro como início é o que gera spoiler. Quando a
     parte é conhecida, o número que a fonte cita passa a ser o número dentro da parte.
+38. **A parte herdada expira quando a numeração recua.** No sétimo teste do 1984, a parte achada
+    no começo de um PDF longo do archive.org foi carregada por 30 blocos, e os blocos finais — que
+    falavam de Julia e da Sala 101 — entraram como Parte 1, capítulo 1. Carregar a parte indefinida
+    transforma "não sei" em "Parte 1". Agora, se o menor capítulo citado num bloco for menor que o
+    maior já visto naquela fonte, e nenhum cabeçalho novo disser a parte, o bloco fica sem parte —
+    e as afirmações dele, sem capítulo.
