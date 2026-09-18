@@ -239,6 +239,10 @@ export class MemoryIngestionStore implements IngestionStore {
     return this.claims.filter((c) => c.sourceId === sourceId).length;
   }
 
+  async hasUnfinishedExtraction(sourceId: string) {
+    return this.steps.some((s) => s.kind === 'extract' && s.subject.startsWith(`${sourceId}#`) && s.status !== 'done');
+  }
+
   async copyClaims(fromSourceId: string, to: { runId: string; sourceId: string }) {
     const origem = this.claims.filter((c) => c.sourceId === fromSourceId);
     for (const claim of origem) {

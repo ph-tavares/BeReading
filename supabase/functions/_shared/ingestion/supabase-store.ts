@@ -329,6 +329,14 @@ export class SupabaseIngestionStore implements IngestionStore {
     return count ?? 0;
   }
 
+  async hasUnfinishedExtraction(sourceId: string) {
+    const { count, error, status } = await this.db.from('ingestion_steps')
+      .select('id', { count: 'exact', head: true })
+      .eq('kind', 'extract').like('subject', `${sourceId}#%`).neq('status', 'done');
+    if (error) throw storeError(status, `hasUnfinishedExtraction: ${error.message}`);
+    return (count ?? 0) > 0;
+  }
+
   async copyClaims(fromSourceId: string, to: { runId: string; sourceId: string }) {
     const origem = await selectAll(
       () => this.db.from('ingestion_claims').select('*').eq('source_id', fromSourceId),
