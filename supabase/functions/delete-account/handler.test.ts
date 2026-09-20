@@ -41,6 +41,17 @@ function fixture() {
       ],
       student_badges: [{ user_id: USER_ID, badge_id: 'b1' }],
       subscriptions: [{ user_id: USER_ID, plan_id: 'premium_monthly', status: 'active' }],
+      // BER-100: a conversa com o assistente guarda a transcrição das páginas
+      // fotografadas. Sem ela nesta lista, apagar a conta deixaria o texto do livro
+      // do leitor para trás.
+      assistant_conversations: [
+        { id: 'conv-1', user_id: USER_ID, book_id: 'book-1' },
+        { id: 'conv-2', user_id: OTHER_USER_ID, book_id: 'book-1' },
+      ],
+      assistant_messages: [
+        { id: 'msg-1', conversation_id: 'conv-1', user_id: USER_ID, kind: 'page_text', content: 'trecho do 1984' },
+        { id: 'msg-2', conversation_id: 'conv-2', user_id: OTHER_USER_ID, kind: 'page_text', content: 'trecho de outro' },
+      ],
     },
   };
 }
@@ -80,12 +91,16 @@ Deno.test('delete-account: apaga só o dado do dono do JWT e a conta de auth, pr
     assertEquals(fake.tables.answers.some((r) => r.user_id === USER_ID), false);
     assertEquals(fake.tables.student_badges.some((r) => r.user_id === USER_ID), false);
     assertEquals(fake.tables.subscriptions.some((r) => r.user_id === USER_ID), false);
+    assertEquals(fake.tables.assistant_conversations.some((r) => r.user_id === USER_ID), false);
+    assertEquals(fake.tables.assistant_messages.some((r) => r.user_id === USER_ID), false);
     assertEquals(fake.deletedAuthUsers, [USER_ID]);
 
     // ...mas o outro leitor não foi tocado.
     assertEquals(fake.tables.profiles.some((r) => r.user_id === OTHER_USER_ID), true);
     assertEquals(fake.tables.reading_sessions.some((r) => r.user_id === OTHER_USER_ID), true);
     assertEquals(fake.tables.answers.some((r) => r.user_id === OTHER_USER_ID), true);
+    assertEquals(fake.tables.assistant_conversations.some((r) => r.user_id === OTHER_USER_ID), true);
+    assertEquals(fake.tables.assistant_messages.some((r) => r.user_id === OTHER_USER_ID), true);
   } finally {
     await fake.close();
   }
