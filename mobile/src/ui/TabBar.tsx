@@ -1,17 +1,23 @@
-// A barra de navegação nova: quatro abas, sem notch em SVG e sem FAB
-// flutuante. A ação de registrar leitura sai da barra e vai para o contexto
-// de cada tela (decisão D5 da spec). Os nomes de rota (index, livros,
+// A barra de navegação: quatro abas e um botão central de registrar leitura.
+//
+// O botão saiu na F3 (decisão D5 da spec, "a ação vai para o contexto de cada
+// tela") e isso deixou `app/register-reading.tsx` sem NENHUM caminho no app
+// inteiro, com a suíte verde — o defeito que `__tests__/guards/rotas.test.ts`
+// documenta em detalhe. Na BER-120 ele volta, mas SOMANDO: o botão dentro do
+// bloco do livro na Hoje continua existindo. Dois caminhos para a ação central
+// do produto, não um frágil. Os nomes de rota (index, livros,
 // catalogo, perfil) não mudam, para não quebrar deep link — ver
 // src/components/CustomTabBar.tsx, a barra legada que esta substitui aos
 // poucos, tela por tela, até a F6.
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import Svg, { Circle, Path } from 'react-native-svg';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { Text, TONE_COLOR, type Tone } from './Text';
-import { color, hitSlop, space, type as typeTokens, MIN_TOUCH } from '../theme/tokens';
+import { color, hitSlop, radius, space, type as typeTokens, MIN_TOUCH } from '../theme/tokens';
 
 type IconProps = { size: number; color: string };
 
@@ -109,6 +115,25 @@ function resolveLabel(options: BottomTabNavigationOptions | undefined, fallback:
 
 const ICON_SIZE = 22;
 
+/**
+ * Lado do botão central. Maior que MIN_TOUCH de propósito: ele é a ação mais
+ * usada do app e compete com quatro abas do mesmo tamanho ao redor.
+ */
+const FAB_SIZE = 56;
+
+function PlusIcon() {
+  return (
+    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 5v14M5 12h14"
+        stroke={color.brandInk}
+        strokeWidth={2.6}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
 // Altura do conteúdo da barra, sem a faixa de safe area: ícone + respiro +
 // rótulo + respiro vertical acima e abaixo, tudo a partir de tokens. A F2
 // tinha 28px de faixa fixa (bug que esta barra resolve com insets reais no
@@ -119,7 +144,18 @@ export const TAB_BAR_HEIGHT =
 
 export function TabBar({ state, navigation, descriptors }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const activeName = state.routes[state.index]?.name;
+
+  // `register-reading` é rota de stack, não aba: por isso router.push e não
+  // navigation.navigate. Um `navigate` aqui procuraria uma aba com esse nome
+  // e não acharia nenhuma.
+  const onPressRegistrar = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    }
+    router.push('/register-reading');
+  };
 
   return (
     <View
@@ -130,7 +166,7 @@ export function TabBar({ state, navigation, descriptors }: BottomTabBarProps) {
         { height: TAB_BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom },
       ]}
     >
-      {TABS.map((tab) => {
+      {TABS.map((tab, indice) => {
         const route = state.routes.find((r) => r.name === tab.name);
         const selected = tab.name === activeName;
         // Ícone e rótulo saem do MESMO tom. Antes eram duas fontes paralelas —
@@ -154,7 +190,23 @@ export function TabBar({ state, navigation, descriptors }: BottomTabBarProps) {
           navigation.navigate(tab.name as never);
         };
 
-        return (
+        // O botão nasce entre a segunda e a terceira aba. Ele não é uma aba:
+        // `accessibilityRole="button"` mantém o leitor de tela ouvindo quatro
+        // abas, não cinco, e o teste trava isso.
+        const central = indice === 2 ? (
+          <Pressable
+            key="fab"
+            testID="fab-registrar"
+            accessibilityRole="button"
+            accessibilityLabel="Registrar leitura"
+            onPress={onPressRegistrar}
+            style={styles.fab}
+          >
+            <PlusIcon />
+          </Pressable>
+        ) : null;
+
+        const aba = (
           <Pressable
             key={tab.name}
             accessibilityRole="tab"
@@ -170,6 +222,8 @@ export function TabBar({ state, navigation, descriptors }: BottomTabBarProps) {
             </Text>
           </Pressable>
         );
+
+        return central ? [central, aba] : aba;
       })}
     </View>
   );
@@ -188,5 +242,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.xs,
+  },
+  fab: {
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    marginHorizontal: space.sm,
+    // Sobe metade para fora da barra: é o que o distingue das abas sem
+    // precisar de entalhe em SVG, que a F3 removeu de propósito.
+    marginTop: -space.xl,
+    borderRadius: radius.card,
+    backgroundColor: color.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Borda na cor da barra: separa o botão do fundo sem sombra falsa.
+    borderWidth: 3,
+    borderColor: color.surface1,
   },
 });
