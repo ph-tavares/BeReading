@@ -21,10 +21,10 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 47, bottom: 34, left: 0, right: 0 }),
 }));
 
-// O botao central nao e' aba: ele empurra uma rota de stack, entao usa o
-// router do expo-router e nao o `navigation` das abas.
-const mockPush = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+// O destino do botao central chega por prop: `src/ui` nao importa
+// `expo-router` (ver o cabecalho de TabBar.tsx). Um espiao simples basta, e o
+// teste deixou de depender de mock de modulo.
+const onPressRegistrar = jest.fn();
 
 import * as Haptics from 'expo-haptics';
 
@@ -44,13 +44,14 @@ function makeProps(activeIndex = 0, descriptors: Record<string, { options: any }
     // useSafeAreaInsets(), mockado acima, nao esta prop.
     insets: { top: 0, bottom: 0, left: 0, right: 0 },
     descriptors: descriptors as any,
+    onPressRegistrar,
   };
 }
 
 describe('TabBar', () => {
   beforeEach(() => {
     (Haptics.impactAsync as jest.Mock).mockClear();
-    mockPush.mockClear();
+    onPressRegistrar.mockClear();
   });
 
   it('mostra os quatro rotulos e o botao central', () => {
@@ -66,10 +67,12 @@ describe('TabBar', () => {
   // `app/register-reading.tsx` sem nenhum caminho no app inteiro — o defeito
   // que a guarda de rotas documenta. Agora ele SOMA ao botao da Hoje, nao
   // substitui: sao dois caminhos para a acao central do produto.
-  it('o botao central leva para registrar leitura', () => {
+  it('o botao central dispara a acao de registrar, e com haptic de acao primaria', () => {
     const { getByTestId } = render(<TabBar {...makeProps()} />);
     fireEvent.press(getByTestId('fab-registrar'));
-    expect(mockPush).toHaveBeenCalledWith('/register-reading');
+    expect(onPressRegistrar).toHaveBeenCalledTimes(1);
+    // Medio, contra o leve das abas: e' a acao central do produto.
+    expect(Haptics.impactAsync).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Medium);
   });
 
   it('o botao central nao e aba: leitor de tela ouve quatro abas, nao cinco', () => {

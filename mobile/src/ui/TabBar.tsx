@@ -5,12 +5,19 @@
 // inteiro, com a suíte verde — o defeito que `__tests__/guards/rotas.test.ts`
 // documenta em detalhe. Na BER-120 ele volta, mas SOMANDO: o botão dentro do
 // bloco do livro na Hoje continua existindo. Dois caminhos para a ação central
-// do produto, não um frágil. Os nomes de rota (index, livros,
+// do produto, não um frágil.
+//
+// O destino do botão central chega por prop, e NÃO de um `useRouter` aqui
+// dentro. Importar `expo-router` em `src/ui` arrastava a árvore ESM do router
+// para dentro de qualquer teste que tocasse `src/ui/index.ts`, e sete suítes
+// quebravam com "Cannot use import statement outside a module" — invisível na
+// minha máquina, vermelho no `npm ci` limpo do CI. A regra que fica é mais
+// simples que o sintoma: o design system não conhece rotas; quem conhece é a
+// tela que o monta. Os nomes de rota (index, livros,
 // catalogo, perfil) não mudam, para não quebrar deep link — ver
 // src/components/CustomTabBar.tsx, a barra legada que esta substitui aos
 // poucos, tela por tela, até a F6.
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
@@ -142,19 +149,24 @@ function PlusIcon() {
 export const TAB_BAR_HEIGHT =
   space.sm * 2 + ICON_SIZE + space.xs + typeTokens.caption.lineHeight;
 
-export function TabBar({ state, navigation, descriptors }: BottomTabBarProps) {
+interface Props extends BottomTabBarProps {
+  /**
+   * O que o botão central faz. `register-reading` é rota de stack, não aba,
+   * então quem monta a barra resolve o destino — ver app/(tabs)/_layout.tsx.
+   */
+  onPressRegistrar: () => void;
+}
+
+export function TabBar({ state, navigation, descriptors, onPressRegistrar }: Props) {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const activeName = state.routes[state.index]?.name;
 
-  // `register-reading` é rota de stack, não aba: por isso router.push e não
-  // navigation.navigate. Um `navigate` aqui procuraria uma aba com esse nome
-  // e não acharia nenhuma.
-  const onPressRegistrar = () => {
+  const aoRegistrar = () => {
+    // Haptic médio, o da ação primária, contra o leve das abas.
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     }
-    router.push('/register-reading');
+    onPressRegistrar();
   };
 
   return (
@@ -199,7 +211,7 @@ export function TabBar({ state, navigation, descriptors }: BottomTabBarProps) {
             testID="fab-registrar"
             accessibilityRole="button"
             accessibilityLabel="Registrar leitura"
-            onPress={onPressRegistrar}
+            onPress={aoRegistrar}
             style={styles.fab}
           >
             <PlusIcon />
