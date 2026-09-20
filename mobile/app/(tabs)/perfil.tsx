@@ -1,6 +1,11 @@
 // Voce (spec 7.9, F6 Tarefa 3). Anel com monograma e nivel, tres numeros,
 // mapa de constancia de 12 semanas, conquistas com progresso, plano e conta.
-// A logica do time continua: plano (BER-61), turma, sair e excluir conta
+// A logica do time continua: plano (BER-61), sair e excluir conta.
+//
+// BER-64: "Entrar em uma turma" saiu daqui. O produto e B2C desde a BER-52 e
+// nao tem turma; a entrada era a unica no app inteiro para um fluxo que
+// tambem nunca funcionou (BER-32, cancelada). O componente `ClassroomSheet` e
+// o backend NAO foram apagados: ficam prontos para a fase 2 escolar (BER-47).
 // (BER-62), agora com Sheet e confirmacao destrutiva do sistema.
 import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -19,7 +24,7 @@ import { decorateBadges, type DecoratedBadge } from '../../src/game/badges';
 import { formatXp } from '../../src/game/xp';
 import { Banner, ListRow, Screen, Skeleton, Text, confirmDestructive, useToast } from '../../src/ui';
 import {
-  BadgeList, BadgeSheet, ClassroomSheet, ConstancyMap, ProfileHeader, StatsRow,
+  BadgeList, BadgeSheet, ConstancyMap, ProfileHeader, StatsRow,
   badgeStatsFrom, constancyWeeks, overallAverage,
 } from '../../src/features/profile';
 import { color, radius, space } from '../../src/theme/tokens';
@@ -41,7 +46,6 @@ export default function PerfilScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
   const [badgeAberta, setBadgeAberta] = useState<DecoratedBadge | null>(null);
-  const [turmaAberta, setTurmaAberta] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
 
   const load = useCallback(async (id: string) => {
@@ -189,27 +193,11 @@ export default function PerfilScreen() {
 
       <View style={styles.secao}>
         <Text variant="subhead">Conta</Text>
-        {!profile.classroom_id ? (
-          <ListRow
-            title="Entrar em uma turma"
-            subtitle="Com o código do seu professor"
-            trailing={<ChevronRight size={20} color={color.text3} />}
-            onPress={() => setTurmaAberta(true)}
-          />
-        ) : null}
         <ListRow title="Sair" tone="destructive" onPress={handleLogout} />
         <ListRow title="Excluir conta" tone="destructive" loading={excluindo} onPress={handleDeleteAccount} last />
       </View>
 
       <BadgeSheet badge={badgeAberta} onDismiss={() => setBadgeAberta(null)} />
-      <ClassroomSheet
-        visible={turmaAberta}
-        onDismiss={() => setTurmaAberta(false)}
-        onSuccess={() => {
-          setTurmaAberta(false);
-          toast.show({ message: 'Você entrou na turma.', tone: 'positive' });
-        }}
-      />
     </Screen>
   );
 }

@@ -47,7 +47,7 @@ export function EmailPing() {
 
 const styles = StyleSheet.create({
   box: { width: TAMANHO, height: TAMANHO, alignSelf: 'center' },
-  anel: { ...StyleSheet.absoluteFillObject, borderRadius: radius.pill, backgroundColor: color.accentSoft },
+  anel: { ...StyleSheet.absoluteFill, borderRadius: radius.pill, backgroundColor: color.accentSoft },
   circulo: {
     width: TAMANHO,
     height: TAMANHO,

@@ -36,15 +36,21 @@ export function QuizConversation({
   const ultima = currentIndex === questions.length - 1;
 
   return (
-    <Screen
-      scroll={false}
-      edges={['top', 'bottom']}
-      onBack={onBack}
-      title="Quiz"
-      subtitle={`Pergunta ${currentIndex + 1} de ${questions.length}`}
-      contentStyle={styles.flex}
-    >
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    // BER-121: o KeyboardAvoidingView envolve o Screen, e nao o contrario.
+    // Com `behavior="padding"` o RN mede do TOPO DA JANELA ate o teclado; com o
+    // KAV comecando abaixo do inset e do cabecalho, sobrava a altura do
+    // cabecalho por baixo do teclado e o `Enviar` ficava inalcancavel no
+    // iPhone. Mesmo formato de app/(auth)/login.tsx. Guarda em
+    // __tests__/guards/teclado.test.ts.
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Screen
+        scroll={false}
+        edges={['top', 'bottom']}
+        onBack={onBack}
+        title="Quiz"
+        subtitle={`Pergunta ${currentIndex + 1} de ${questions.length}`}
+        contentStyle={styles.flex}
+      >
         <ScrollView
           ref={rolagem}
           style={styles.flex}
@@ -66,8 +72,8 @@ export function QuizConversation({
             <Composer value={answer} onChangeText={onChangeAnswer} onSend={onSubmit} sending={evaluating} />
           )}
         </View>
-      </KeyboardAvoidingView>
-    </Screen>
+      </Screen>
+    </KeyboardAvoidingView>
   );
 }
 
