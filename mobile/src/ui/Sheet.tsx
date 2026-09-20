@@ -43,7 +43,7 @@ export function Sheet({ visible, onDismiss, accessibilityLabel, children }: Prop
 
 const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: 'flex-end' },
-  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: color.scrim },
+  scrim: { ...StyleSheet.absoluteFill, backgroundColor: color.scrim },
   panel: {
     ...elevation.floating,
     borderBottomWidth: 0,
