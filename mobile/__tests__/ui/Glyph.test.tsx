@@ -44,10 +44,12 @@ describe('Glyph', () => {
   it('usa cor de tokens, nunca literal', () => {
     const { getByTestId } = render(<Glyph />);
     // Confere que o path do marcador (o retangulo em si, nao os olhos) esta
-    // pintado com color.accent, o unico acento do produto (DESIGN.md secao 1).
+    // pintado com color.brandText: quem fala e' camada de leitura, nao de jogo
+    // (BER-120). O jade de TEXTO, nao o de preenchimento, porque o glyph e'
+    // uma forma fina ao lado de letra — ver DESIGN.md secao 1.
     // O react-native-svg devolve a cor ja processada (processColor), nao a
     // string original: compara os dois lados pela mesma funcao.
     const path = getByTestId('glyph-shape', HIDDEN);
-    expect(lerCorProcessada(path.props.fill)).toBe(lerCorProcessada(processColor(color.accent)));
+    expect(lerCorProcessada(path.props.fill)).toBe(lerCorProcessada(processColor(color.brandText)));
   });
 });

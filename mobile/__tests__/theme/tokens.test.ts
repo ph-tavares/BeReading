@@ -96,3 +96,26 @@ describe('tokens · escalas', () => {
     expect(radius.card).toBeGreaterThan(radius.control);
   });
 });
+
+/**
+ * BER-120: a regra "âmbar é jogo, jade é leitura e ação" só vale se os
+ * componentes obedecerem. Estes casos travam a divisão no nível do sistema,
+ * não de cada tela: são o que impede o jade e o âmbar de trocarem de lado num
+ * merge distraído. O `Ring` (nível) e a `StreakWeek` continuam em `accent` de
+ * propósito — a mecânica de jogo não mudou.
+ */
+describe('tokens · quem é jogo e quem é leitura', () => {
+  it('jade e âmbar são cores distintas, com tintas distintas', () => {
+    expect(color.brand).not.toBe(color.accent);
+    expect(color.brandInk).not.toBe(color.accentInk);
+  });
+
+  it('o jade de texto é mais claro que o de preenchimento', () => {
+    const luz = (hex: string) => {
+      const v = hex.replace('#', '');
+      const ch = [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16));
+      return ch[0] + ch[1] + ch[2];
+    };
+    expect(luz(color.brandText)).toBeGreaterThan(luz(color.brand));
+  });
+});

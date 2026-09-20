@@ -21,15 +21,17 @@ interface Props {
   style?: ViewStyle;
 }
 
+// BER-120: acao primaria e' leitura, entao o primario pinta com o jade. O
+// ambar ficou com a camada de jogo.
 const BG: Record<Variant, string> = {
-  primary: color.accent,
+  primary: color.brand,
   secondary: color.surface2,
   ghost: 'transparent',
   destructive: color.dangerSoft,
 };
 
-const INK: Record<Variant, 'inverse' | 'primary' | 'secondary' | 'danger'> = {
-  primary: 'inverse',
+const INK: Record<Variant, 'brandInk' | 'primary' | 'secondary' | 'danger'> = {
+  primary: 'brandInk',
   secondary: 'primary',
   ghost: 'secondary',
   destructive: 'danger',

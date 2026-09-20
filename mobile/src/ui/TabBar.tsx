@@ -138,7 +138,10 @@ export function TabBar({ state, navigation, descriptors }: BottomTabBarProps) {
         // Text — que hoje calham de casar. Mudar TONE_COLOR faria a barra ficar
         // com o ícone de uma cor e a palavra embaixo de outra, sem nada
         // acusando. Aqui só existe `tone`; a cor do ícone é consequência.
-        const tone: Tone = selected ? 'primary' : 'tertiary';
+        // BER-120: a aba ativa e' acao, entao vai no jade. Antes era
+        // 'primary' (a cor do texto comum), que na base nova deixava o
+        // selecionado indistinguivel do rotulo ao lado.
+        const tone: Tone = selected ? 'brand' : 'tertiary';
         const label = resolveLabel(route ? descriptors[route.key]?.options : undefined, tab.fallbackLabel);
 
         const onPress = () => {

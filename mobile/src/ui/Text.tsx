@@ -1,7 +1,13 @@
 import { Text as RNText, StyleSheet, type TextProps, type TextStyle, type StyleProp } from 'react-native';
 import { type as typeTokens, color, type TypeVariant } from '../theme/tokens';
 
-export type Tone = 'primary' | 'secondary' | 'tertiary' | 'accent' | 'positive' | 'danger' | 'inverse';
+export type Tone =
+  | 'primary' | 'secondary' | 'tertiary'
+  // BER-120: 'brand' e' o jade de LEITURA como letra; 'brandInk' e' a tinta
+  // escura que vai POR CIMA do jade preenchido. 'accent' segue sendo o ambar
+  // da camada de jogo. Os tres existem separados porque so' 'brand' passa AA
+  // como texto — ver DESIGN.md secao 1.
+  | 'brand' | 'brandInk' | 'accent' | 'positive' | 'danger' | 'inverse';
 
 // Exportado para outros primitivos (ex.: Button) pintarem icone exatamente na
 // mesma cor do tone do texto ao lado, sem duplicar a tabela.
@@ -9,6 +15,8 @@ export const TONE_COLOR: Record<Tone, string> = {
   primary: color.text,
   secondary: color.text2,
   tertiary: color.text3,
+  brand: color.brandText,
+  brandInk: color.brandInk,
   accent: color.accent,
   positive: color.positive,
   danger: color.danger,
