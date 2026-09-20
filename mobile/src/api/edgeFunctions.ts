@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { PENDING_FEEDBACK } from '../utils/quizAnswers';
 import { parseQuotaExceeded, QuotaExceededError } from '../utils/billing';
+import type { ScanFailure } from '../features/assistant/logic';
 import type { StudentBook } from '../types/database';
 
 export interface RegisterReadingResponse {
@@ -158,6 +159,81 @@ export async function evaluateAnswer(
   }
   if (data.error) throw new Error(data.error);
   return data.data as EvaluateAnswerResponse;
+}
+
+export interface ScanPageResult {
+  conversation_id: string;
+  page_text: string;
+  suggestions: string[];
+  detected_page: number | null;
+  chapter_number: number | null;
+  registered_page: number | null;
+  book: { id: string; title: string; author: string } | null;
+  book_title_text: string | null;
+}
+
+/**
+ * BER-100: falha do `scan-page`, com o código que a tela usa para escolher a fala.
+ * O texto que o leitor lê mora em `src/features/assistant/logic.ts`, não aqui.
+ */
+export class ScanPageError extends Error {
+  constructor(readonly code: ScanFailure) {
+    super(code);
+    this.name = 'ScanPageError';
+  }
+}
+
+/**
+ * Traduz a resposta não-2xx do `scan-page` no código que a tela conhece.
+ *
+ * Um status sem corpo reconhecido vira `unknown` e não `scan_failed`: só chamamos
+ * de falha nossa o que o servidor disse que é.
+ */
+export function interpretScanFailure(status: number | undefined, body: unknown): ScanFailure {
+  const erro = (body as { error?: unknown } | null)?.error;
+  if (typeof erro === 'string') {
+    const conhecidos: ScanFailure[] = [
+      'not_a_book_page', 'image_too_large', 'ai_image_unsupported', 'ai_unavailable', 'scan_failed',
+    ];
+    if ((conhecidos as string[]).includes(erro)) return erro as ScanFailure;
+  }
+  if (status === 413) return 'image_too_large';
+  if (status === 422) return 'not_a_book_page';
+  if (status === 503) return 'ai_unavailable';
+  return 'unknown';
+}
+
+/**
+ * BER-100: manda a foto da página e recebe transcrição, sugestões e a página detectada.
+ *
+ * A imagem sobe já redimensionada (ver `MAX_IMAGE_EDGE`) e não é gravada em lugar
+ * nenhum — nem aqui, nem no servidor.
+ *
+ * @throws ScanPageError sempre que não der para seguir, com o código da falha.
+ */
+export async function scanPage(input: {
+  imageBase64: string;
+  imageMediaType: string;
+  bookId?: string;
+  bookTitle?: string;
+}): Promise<ScanPageResult> {
+  const { data, error } = await supabase.functions.invoke('scan-page', {
+    body: {
+      image_base64: input.imageBase64,
+      image_media_type: input.imageMediaType,
+      ...(input.bookId ? { book_id: input.bookId } : {}),
+      ...(input.bookTitle ? { book_title: input.bookTitle } : {}),
+    },
+  });
+
+  if (error) {
+    const { status, body } = await readHttpError(error);
+    // Sem resposta nenhuma do outro lado: o aparelho não chegou ao servidor.
+    if (status === undefined) throw new ScanPageError('offline');
+    throw new ScanPageError(interpretScanFailure(status, body));
+  }
+  if (!data?.data) throw new ScanPageError('unknown');
+  return data.data as ScanPageResult;
 }
 
 /**

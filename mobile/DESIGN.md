@@ -204,13 +204,22 @@ estado "erro" descrito, por exemplo, ainda entra incompleto.
   role atrás da barra. Variação por `scroll` (rolável ou fixa) e por `tabBar` (telas fora das abas
   não reservam o espaço de baixo). Não é estado: é a única forma de uma tela conhecer a borda do
   aparelho. Nenhuma tela lê `useSafeAreaInsets` por conta própria.
-- **TabBar**: as quatro abas (Hoje, Estante, Explorar, Você), sem entalhe em SVG e sem botão
-  flutuante — a ação de registrar leitura vive no contexto de cada tela. Estados por aba:
+- **TabBar**: as quatro abas (Hoje, Estante, Explorar, Você), sem entalhe em SVG. A ação de
+  registrar leitura vive no contexto de cada tela, nunca na barra. Estados por aba:
   selected (`Tone` `primary` no ícone e no rótulo, que saem do mesmo tom, nunca de duas fontes) e
   idle (`tertiary`). Tocar na aba já ativa não navega nem vibra. O rótulo vem do `title` da rota;
   o ícone é fixo por nome de rota, porque é ativo de marca e não configuração de tela. Fundo
   `color.surface1` com divisória `color.line` no topo, altura derivada de tokens mais o inset
   inferior real.
+- **AssistantBubble** (BER-100): a única superfície flutuante do app. Canto inferior **esquerdo**,
+  acima da TabBar mais o inset inferior, sobre o conteúdo, em todas as abas. Abre a câmera do
+  assistente de leitura. Até a BER-100 este documento proibia botão flutuante; a proibição existia
+  porque a única candidata era "registrar leitura", que já tem lugar no contexto de cada tela, e
+  disputaria com o acento dela. O assistente é o caso que a regra não previu: ele é uma ação
+  contínua, que acompanha o leitor em qualquer tela, e não pertence a nenhuma delas. A regra
+  atualizada é mais estreita e mais honesta: **botão flutuante só para o assistente, um só, e
+  sempre à esquerda** — a direita é onde passa a mão que segura o livro, e é onde o CTA da tela
+  fica. Qualquer outro candidato a botão flutuante volta a ser proibido.
 
 ## 6. Motion
 
@@ -275,6 +284,10 @@ sem infantilizar. Explicitamente não Duolingo: sem mascote, sem tom de aplicati
 
 **Sentimento alvo:** que o app pareça editorial e feito à mão, não um template genérico de
 gamificação. Um acento por tela. Métrica real, nunca inflada. Confiança sóbria, sem grito.
+
+A bolinha do assistente (seção 5) não conta como segundo acento: ela é superfície `floating`, com
+o marcador em âmbar dentro, e não um botão preenchido de acento. O acento cheio continua sendo um
+por tela.
 
 **O marcador.** A marca é um marcador de página: um retângulo de topo arredondado com um entalhe
 em V embaixo. Ele aparece em dois recortes, e a diferença entre eles é regra, não descuido:

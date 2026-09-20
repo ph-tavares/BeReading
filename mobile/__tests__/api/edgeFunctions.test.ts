@@ -8,6 +8,8 @@ import {
   buildEvaluateAnswerPayload,
   evaluateAnswer,
   interpretEvaluateFailure,
+  interpretScanFailure,
+  scanPage,
   deleteAccount,
   registerReadingSession,
   startReadingBook,
@@ -187,5 +189,69 @@ describe('deleteAccount (BER-62)', () => {
   it('erro de negócio no corpo vira Error', async () => {
     invoke.mockResolvedValue({ data: { data: null, error: 'Failed to delete account data' }, error: null });
     await expect(deleteAccount()).rejects.toThrow('Failed to delete account data');
+  });
+});
+
+describe('scanPage (BER-100)', () => {
+  beforeEach(() => invoke.mockReset());
+
+  const RESULTADO = {
+    conversation_id: 'conv-1',
+    page_text: 'Quem controla o passado controla o futuro.',
+    suggestions: ['o que é duplipensar', 'me explica esse trecho'],
+    detected_page: 220,
+    chapter_number: 9,
+    registered_page: 200,
+    book: { id: 'book-1', title: '1984', author: 'George Orwell' },
+    book_title_text: null,
+  };
+
+  it('manda a foto e o livro, e devolve transcrição e sugestões', async () => {
+    invoke.mockResolvedValue({ data: { data: RESULTADO, error: null }, error: null });
+
+    const result = await scanPage({
+      imageBase64: 'QUJD',
+      imageMediaType: 'image/jpeg',
+      bookId: 'book-1',
+    });
+
+    expect(result).toEqual(RESULTADO);
+    expect(invoke).toHaveBeenCalledWith('scan-page', {
+      body: { image_base64: 'QUJD', image_media_type: 'image/jpeg', book_id: 'book-1' },
+    });
+  });
+
+  it('sem livro na estante, o corpo vai sem book_id (D20)', async () => {
+    invoke.mockResolvedValue({ data: { data: RESULTADO, error: null }, error: null });
+    await scanPage({ imageBase64: 'QUJD', imageMediaType: 'image/jpeg' });
+    expect(invoke.mock.calls[0][1].body).toEqual({ image_base64: 'QUJD', image_media_type: 'image/jpeg' });
+  });
+
+  it('cada recusa do servidor vira o código que a tela conhece', async () => {
+    const casos: [number, string, string][] = [
+      [422, 'not_a_book_page', 'not_a_book_page'],
+      [413, 'image_too_large', 'image_too_large'],
+      [503, 'ai_image_unsupported', 'ai_image_unsupported'],
+      [503, 'ai_unavailable', 'ai_unavailable'],
+      [500, 'scan_failed', 'scan_failed'],
+    ];
+    for (const [status, erro, esperado] of casos) {
+      invoke.mockResolvedValue({ data: null, error: httpError(status, { error: erro }) });
+      await expect(scanPage({ imageBase64: 'QUJD', imageMediaType: 'image/jpeg' }))
+        .rejects.toMatchObject({ code: esperado });
+    }
+  });
+
+  it('erro sem resposta do servidor é falta de internet, não falha nossa', async () => {
+    invoke.mockResolvedValue({ data: null, error: new Error('Network request failed') });
+    await expect(scanPage({ imageBase64: 'QUJD', imageMediaType: 'image/jpeg' }))
+      .rejects.toMatchObject({ code: 'offline' });
+  });
+
+  it('corpo desconhecido não vira "falha nossa" por conta própria', () => {
+    expect(interpretScanFailure(400, { error: 'algo que o app não conhece' })).toBe('unknown');
+    expect(interpretScanFailure(undefined, null)).toBe('unknown');
+    // Sem corpo reconhecível, o status ainda diz o suficiente.
+    expect(interpretScanFailure(422, null)).toBe('not_a_book_page');
   });
 });
