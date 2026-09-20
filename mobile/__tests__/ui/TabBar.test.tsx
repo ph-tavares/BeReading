@@ -21,6 +21,11 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 47, bottom: 34, left: 0, right: 0 }),
 }));
 
+// O destino do botao central chega por prop: `src/ui` nao importa
+// `expo-router` (ver o cabecalho de TabBar.tsx). Um espiao simples basta, e o
+// teste deixou de depender de mock de modulo.
+const onPressRegistrar = jest.fn();
+
 import * as Haptics from 'expo-haptics';
 
 // Os nomes de rota nao mudam (deep link): index, livros, catalogo, perfil.
@@ -39,21 +44,52 @@ function makeProps(activeIndex = 0, descriptors: Record<string, { options: any }
     // useSafeAreaInsets(), mockado acima, nao esta prop.
     insets: { top: 0, bottom: 0, left: 0, right: 0 },
     descriptors: descriptors as any,
+    onPressRegistrar,
   };
 }
 
 describe('TabBar', () => {
   beforeEach(() => {
     (Haptics.impactAsync as jest.Mock).mockClear();
+    onPressRegistrar.mockClear();
   });
 
-  it('mostra os quatro rotulos, sem FAB', () => {
-    const { getByText, queryByTestId } = render(<TabBar {...makeProps()} />);
+  it('mostra os quatro rotulos e o botao central', () => {
+    const { getByText, getByTestId } = render(<TabBar {...makeProps()} />);
     expect(getByText('Hoje')).toBeTruthy();
     expect(getByText('Estante')).toBeTruthy();
     expect(getByText('Explorar')).toBeTruthy();
     expect(getByText('Você')).toBeTruthy();
-    expect(queryByTestId('fab-registrar')).toBeNull();
+    expect(getByTestId('fab-registrar')).toBeTruthy();
+  });
+
+  // BER-120: o FAB volta. Ele foi tirado na F3 e isso deixou
+  // `app/register-reading.tsx` sem nenhum caminho no app inteiro — o defeito
+  // que a guarda de rotas documenta. Agora ele SOMA ao botao da Hoje, nao
+  // substitui: sao dois caminhos para a acao central do produto.
+  it('o botao central dispara a acao de registrar, e com haptic de acao primaria', () => {
+    const { getByTestId } = render(<TabBar {...makeProps()} />);
+    fireEvent.press(getByTestId('fab-registrar'));
+    expect(onPressRegistrar).toHaveBeenCalledTimes(1);
+    // Medio, contra o leve das abas: e' a acao central do produto.
+    expect(Haptics.impactAsync).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Medium);
+  });
+
+  it('o botao central nao e aba: leitor de tela ouve quatro abas, nao cinco', () => {
+    const props = makeProps();
+    const { getByTestId, getAllByRole } = render(<TabBar {...props} />);
+    expect(getByTestId('fab-registrar').props.accessibilityRole).toBe('button');
+    expect(getAllByRole('tab')).toHaveLength(4);
+    // E nao navega como aba nenhuma.
+    fireEvent.press(getByTestId('fab-registrar'));
+    expect(props.navigation.navigate).not.toHaveBeenCalled();
+  });
+
+  it('o botao central respeita o alvo minimo de toque', () => {
+    const { getByTestId } = render(<TabBar {...makeProps()} />);
+    const s = StyleSheet.flatten(getByTestId('fab-registrar').props.style);
+    expect(s.width).toBeGreaterThanOrEqual(MIN_TOUCH);
+    expect(s.height).toBeGreaterThanOrEqual(MIN_TOUCH);
   });
 
   it('navega e vibra leve ao tocar em uma aba diferente da ativa', () => {

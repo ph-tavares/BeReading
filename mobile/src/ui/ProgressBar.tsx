@@ -23,7 +23,7 @@ export function ProgressBar({ progress, accessibilityLabel, height = 4 }: Props)
       accessibilityValue={{ min: 0, max: 100, now: Math.round(seguro * 100) }}
       style={[styles.track, { height, borderRadius: height / 2 }]}
     >
-      <View testID="progress-fill" style={{ width: pct, height: '100%', backgroundColor: color.text, borderRadius: height / 2 }} />
+      <View testID="progress-fill" style={{ width: pct, height: '100%', backgroundColor: color.brand, borderRadius: height / 2 }} />
     </View>
   );
 }

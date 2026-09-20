@@ -1,30 +1,34 @@
 # BeReading: DESIGN.md
 
-> Contrato de marca. Toda UI obedece este arquivo. Direção: **Noturno editorial**,
+> Contrato de marca. Toda UI obedece este arquivo. Direção: **verde com mascote** (BER-120),
 > público de 18 a 24 anos, dark-first, anti-template.
 > Valores canônicos em `src/theme/tokens.ts`. Este documento explica, não duplica a fonte.
-
+>
 ## 1. Color
 
-Neutros quentes (tinta e papel) e um acento só. Todo valor de cor em `src/ui`, `src/assistant` e
-`src/game` vem de `color` em `src/theme/tokens.ts` — as pastas que a F2 entregou, varridas por
-`__tests__/guards`. `app/` e `src/features` (blocos de tela) ainda não existem em código; entram
-sob guarda na F4, quando as telas forem migrando. Nada de hex, `rgb()` ou `rgba()` literal fora
-de `tokens.ts` nas pastas vigiadas.
+Neutros esverdeados (tinta e mata) e **duas** cores com papel fixo. Todo valor de cor em `src/ui`,
+`src/assistant` e `src/game` vem de `color` em `src/theme/tokens.ts` — as pastas que a F2 entregou,
+varridas por `__tests__/guards`. `app/` e `src/features` (blocos de tela) ainda não existem em
+código; entram sob guarda na F4, quando as telas forem migrando. Nada de hex, `rgb()` ou `rgba()`
+literal fora de `tokens.ts` nas pastas vigiadas.
 
 | token | valor | uso |
 |---|---|---|
-| `color.bg` | `#12100E` | fundo das telas |
-| `color.surface1` | `#1B1916` | cards, sheets, tab bar |
-| `color.surface2` | `#25221E` | inputs, trilhas, botão secundário |
-| `color.surface3` | `#302C27` | pressed / selecionado |
-| `color.floating` | `#2A2622` | toast, superfície flutuante |
-| `color.line` | `rgba(243,237,226,0.08)` | divisória |
-| `color.line2` | `rgba(243,237,226,0.14)` | borda de superfície flutuante |
-| `color.text` | `#F3EDE2` | texto principal |
-| `color.text2` | `#B9B0A3` | texto secundário |
-| `color.text3` | `#A0978B` | legenda, desabilitado |
-| `color.accent` | `#F0A83A` | progresso e ação primária, apenas |
+| `color.bg` | `#0A1310` | fundo das telas |
+| `color.surface1` | `#111F1A` | cards, sheets, tab bar |
+| `color.surface2` | `#192B24` | inputs, trilhas, botão secundário |
+| `color.surface3` | `#23392F` | pressed / selecionado |
+| `color.floating` | `#1B2C25` | toast, superfície flutuante |
+| `color.line` | `rgba(246,241,228,0.08)` | divisória |
+| `color.line2` | `rgba(246,241,228,0.14)` | borda de superfície flutuante |
+| `color.text` | `#F6F1E4` | texto principal |
+| `color.text2` | `#AFBCB2` | texto secundário |
+| `color.text3` | `#9AA8A0` | legenda, desabilitado |
+| `color.brand` | `#1BA36B` | **preenchimento** de leitura e ação: bloco do livro, botão primário, aba ativa |
+| `color.brandInk` | `#04231A` | texto sobre `color.brand` |
+| `color.brandText` | `#2FC98A` | o jade **como letra ou ícone**, sobre superfície escura |
+| `color.brandSoft` | `rgba(27,163,107,0.14)` | fundo de realce de leitura |
+| `color.accent` | `#F0A83A` | camada de jogo: XP, nível, sequência, conquista |
 | `color.accentInk` | `#1B1206` | texto sobre `color.accent` |
 | `color.accentSoft` | `rgba(240,168,58,0.14)` | aviso, chip de XP |
 | `color.positive` | `#8CC28F` | sucesso |
@@ -32,14 +36,23 @@ de `tokens.ts` nas pastas vigiadas.
 | `color.danger` | `#EE7B67` | erro, destrutivo |
 | `color.dangerSoft` | `rgba(238,123,103,0.14)` | fundo de estado de erro |
 
-O acento `color.accent` `#F0A83A` é o único acento do produto. Uma tela não usa uma segunda cor de
-destaque: quando tudo chama atenção, nada chama atenção.
+**Âmbar é jogo, jade é leitura e ação** (BER-120). É a mesma regra de antes — "âmbar é jogo, neutro
+é leitura" — com a metade da leitura ganhando cor própria. O âmbar não mudou de valor nem de
+significado: `Ring`, XP, sequência e conquista continuam exatamente onde estavam, porque a mecânica
+delas também não mudou. O que ganhou tinta foi a ação: o que antes era neutro ou âmbar-de-botão
+agora é jade. Duas cores por tela, cada uma com um trabalho — nunca uma terceira.
 
-**Âmbar é jogo, neutro é leitura.** O acento marca o progresso da camada de jogo (nível, XP,
-sequência); o neutro (`color.text`) marca o progresso de leitura de um livro (capítulo, sessão).
-Não é contradição o `Ring` (nível) usar `accent` e a `ProgressBar` (capítulo) usar `text`: são
-duas métricas diferentes, e cada uma tem sua cor porque uma tela nunca mistura as duas camadas na
-mesma barra.
+**O jade tem duas formas, e isso não é redundância.** Não existe um verde só que sirva para
+preencher e para escrever. Medido em 20/09: `brand` sobre `surface3` dá **3,83**, abaixo do mínimo
+de 4,5 — ele é preenchimento, e por cima dele vai `brandInk`. Para letra e ícone existe
+`brandText`, a mesma família clareada (5,80 na pior superfície). Trocar um pelo outro em texto
+reprova no `__tests__/theme/tokens.test.ts`, que guarda os dois lados da regra, inclusive um teste
+que afirma que `brand` **deve** reprovar como texto — se alguém "simplificar" os dois num token só,
+esse teste morre junto e avisa.
+
+**Legenda é o token que mais sofre quando a base muda de tom.** O `text3` do mockup (`#84938B`)
+reprovava sobre `surface3` (3,84), a mesma armadilha que o `#978E82` tinha criado na F2. Subiu para
+`#9AA8A0` (mínimo 5,00). Sempre que mexer nas superfícies, confira o `text3` primeiro.
 
 **Paleta de capas geradas** (`COVER_PALETTE_COLORS`, oito tons: `#5E2A2A` `#2F4A3A` `#22324F`
 `#7A5A1E` `#4A2F4F` `#1F4A4F` `#3A3F47` `#7A3B22`), escolhida por hash determinístico do `book.id`.
@@ -47,26 +60,37 @@ O texto sobre qualquer uma delas é `COVER_INK` `#F6E9D4`, legível nas oito.
 
 ## 2. Typography
 
-Duas famílias com papéis fixos, nunca misturados dentro do mesmo elemento: `fontFamily.serif*`
-(Newsreader) fala pela camada do livro, título, pergunta de quiz, citação; `fontFamily.ui*`
-(Hanken Grotesk) fala pela interface e pelos números. Todo texto usa uma variante de `type`
-(`TypeVariant` em `tokens.ts`); `fontSize` ou `fontFamily` literal fora de `tokens.ts` não existe.
+Duas famílias com papéis fixos, nunca misturados dentro do mesmo elemento: `fontFamily.display*`
+(**Unbounded**) fala pelo que grita — título, número grande, wordmark; `fontFamily.ui*`
+(**Bricolage Grotesque**) fala pelo que trabalha — interface, rótulo e texto corrido. Todo texto
+usa uma variante de `type` (`TypeVariant` em `tokens.ts`); `fontSize` ou `fontFamily` literal fora
+de `tokens.ts` não existe. As duas são SIL Open Font License 1.1.
 
 | variante | família · peso | tamanho/linha |
 |---|---|---|
-| `type.display` | `fontFamily.serifMedium` | 34/38 |
-| `type.title` | `fontFamily.serifMedium` | 28/32 |
-| `type.heading` | `fontFamily.serifMedium` | 22/28 |
-| `type.subhead` | `fontFamily.uiSemi` | 17/24 |
-| `type.body` | `fontFamily.ui` | 16/24 |
-| `type.reading` | `fontFamily.serif`, itálico | 17/27 |
-| `type.callout` | `fontFamily.ui` | 14/20 |
-| `type.label` | `fontFamily.uiSemi` | 13/18 |
+| `type.display` | `fontFamily.displayHeavy` | 29/33 |
+| `type.title` | `fontFamily.display` | 22/26 |
+| `type.heading` | `fontFamily.uiBold` | 21/26 |
+| `type.subhead` | `fontFamily.uiBold` | 17/22 |
+| `type.body` | `fontFamily.uiMedium` | 16/22 |
+| `type.callout` | `fontFamily.uiMedium` | 14/20 |
+| `type.label` | `fontFamily.uiBold` | 13/17 |
 | `type.caption` | `fontFamily.uiMedium` | 12/16 |
-| `type.button` | `fontFamily.uiSemi` | 16/20 |
-| `type.numericXL` | `fontFamily.uiBold`, tabular | 40/44 |
-| `type.numericL` | `fontFamily.uiBold`, tabular | 28/32 |
-| `type.numericM` | `fontFamily.uiBold`, tabular | 20/24 |
+| `type.button` | `fontFamily.uiBold` | 16/20 |
+| `type.numericXL` | `fontFamily.displayHeavy`, tabular | 40/44 |
+| `type.numericL` | `fontFamily.displayHeavy`, tabular | 24/28 |
+| `type.numericM` | `fontFamily.display`, tabular | 17/22 |
+
+**Display e title encolheram, e isso não é recuo** (BER-120). Unbounded é uma face bem mais larga
+que Newsreader no mesmo corpo: manter os 34 antigos estourava "Capítulo 4, fechado." em duas
+linhas numa moldura de 390pt. Os valores saíram do mockup aprovado, medido em escala real.
+
+**A serifa saiu, e com ela a variante `reading`.** Ela existia para a camada do livro ter voz
+própria — pergunta de quiz, citação —, mas nenhuma tela chegou a usá-la: conferido em 20/09 com
+grep em `src/` e `app/`, zero consumidores. Quem de fato falava pela serifa era o título, e título
+agora é Unbounded. Carregar uma família inteira por uma variante morta era custo de rede a cada
+abertura, pago em nome de um princípio que nenhuma tela exercia. `__tests__/theme/fonts.test.ts`
+reprova qualquer volta de família serifada ao mapa de carga.
 
 Piso: nada abaixo de 12 (`type.caption`, a menor variante, já está nesse piso). Números usam
 sempre `fontVariant: ['tabular-nums']`, para não "pular" de largura quando contam. Caixa de frase
@@ -204,8 +228,14 @@ estado "erro" descrito, por exemplo, ainda entra incompleto.
   role atrás da barra. Variação por `scroll` (rolável ou fixa) e por `tabBar` (telas fora das abas
   não reservam o espaço de baixo). Não é estado: é a única forma de uma tela conhecer a borda do
   aparelho. Nenhuma tela lê `useSafeAreaInsets` por conta própria.
-- **TabBar**: as quatro abas (Hoje, Estante, Explorar, Você), sem entalhe em SVG e sem botão
-  flutuante — a ação de registrar leitura vive no contexto de cada tela. Estados por aba:
+- **TabBar**: as quatro abas (Hoje, Estante, Explorar, Você) **mais um botão central de registrar
+  leitura** (BER-120), sem entalhe em SVG. O botão saiu na F3, com a justificativa de que a ação
+  viveria no contexto de cada tela — e isso deixou `app/register-reading.tsx` sem nenhum caminho no
+  app inteiro, com a suíte verde (o defeito que `__tests__/guards/rotas.test.ts` documenta). Ele
+  volta **somando**: o botão dentro do bloco do livro na Hoje continua. São dois caminhos para a
+  ação central do produto, não um frágil. O central tem 56pt, sobe metade para fora da barra e usa
+  `color.brand`; `accessibilityRole="button"`, não `tab`, para o leitor de tela continuar ouvindo
+  quatro abas e não cinco. Estados por aba:
   selected (`Tone` `primary` no ícone e no rótulo, que saem do mesmo tom, nunca de duas fontes) e
   idle (`tertiary`). Tocar na aba já ativa não navega nem vibra. O rótulo vem do `title` da rota;
   o ícone é fixo por nome de rota, porque é ativo de marca e não configuração de tela. Fundo
@@ -266,30 +296,46 @@ registro de voz novo. Nenhuma copy inventa um número: toda métrica citada vem 
 **Essência:** BeReading trata a leitura como hábito que se constrói, não como tarefa escolar. A
 interface fala como alguém que também lê e não acha isso um sacrifício.
 
-**Direção:** Noturno editorial. Fundo escuro de tinta (`color.bg`), papel quente (`color.text`),
-um único acento âmbar (`color.accent`). Serifa (Newsreader) para a camada do livro, sans (Hanken
-Grotesk) para a interface: a leitura tem uma voz, o produto tem outra.
+**Direção:** verde com mascote (BER-120). Fundo escuro esverdeado (`color.bg`), creme para o
+texto, jade para leitura e ação, âmbar para a camada de jogo. Unbounded no que grita, Bricolage
+Grotesque no que trabalha.
 
-**Referências de acabamento:** Spotify Wrapped e BookTok, pelo registro visual jovem e editorial
-sem infantilizar. Explicitamente não Duolingo: sem mascote, sem tom de aplicativo escolar.
+**Referências de acabamento:** Spotify Wrapped e BookTok continuam valendo pelo registro jovem sem
+infantilizar. **O "explicitamente não Duolingo" caiu em 20/09/2026**, por decisão de grupo: a visão
+fundadora do produto cita Duolingo como inspiração em cinco documentos, e a regra anterior foi
+escrita sem acesso a eles. O que não volta é o **tom de aplicativo escolar** — o produto é B2C e
+saiu da escola em 31/08/2026 (BER-52).
 
-**Sentimento alvo:** que o app pareça editorial e feito à mão, não um template genérico de
-gamificação. Um acento por tela. Métrica real, nunca inflada. Confiança sóbria, sem grito.
+**Sentimento alvo:** que o app pareça feito à mão e com humor, não um template genérico de
+gamificação. Métrica real, nunca inflada. O mascote é simpático, a interface não grita: quem faz a
+festa é ele, não o efeito.
 
-**O marcador.** A marca é um marcador de página: um retângulo de topo arredondado com um entalhe
-em V embaixo. Ele aparece em dois recortes, e a diferença entre eles é regra, não descuido:
+**A marca tem três peças, e cada uma existe por um limite de tamanho.** Não é redundância: é a
+mesma forma resolvida para escalas em que as outras não funcionam.
 
-- **`src/assistant/Glyph.tsx`**, dentro do app, tem dois olhos e é o rosto do assistente. Só ele
-  fala; onde houver Glyph, há fala vinda de `src/assistant/lines.ts`. Cor `color.accent` sobre
-  fundo escuro, traço casando com o das abas. É decorativo para leitor de tela: quem lê a fala é o
-  texto ao lado, e um "imagem" a mais só atrapalharia.
-- **`assets/brand/icon-mark.svg`**, nos ícones de sistema (app, splash, favicon), **não tem
-  olhos** e é cerca de 15% mais estreito. Descoberto na F3, gerando o ícone a 1024px: em tamanho
-  grande os dois pontos sobre a forma larga param de ler como marcador e viram cara. O ícone é a
-  marca do produto, não o mascote — e o projeto não tem mascote (ver referências acima).
+- **`src/assistant/Mascote.tsx`** (BER-120) é a ilustração — um macaco de moletom, óculos escuros
+  e livro, recortado como adesivo. É quem o leitor reconhece. Aparece onde há espaço: a bolha do
+  assistente na Hoje e a tela de capítulo fechado. `size` é um **conjunto nomeado**
+  (`sm` 96 · `md` 134 · `lg` 178), nunca um número: abaixo de ~80pt o desenho vira borrão, e um
+  prop numérico deixaria alguém escrever `size={20}` e só descobrir no aparelho.
+- **`src/assistant/Glyph.tsx`** continua sendo a marca pequena — marcador de página com dois
+  olhos, em `color.brandText`. É o que diz "quem está falando" ao lado de um rótulo, nos nove
+  lugares onde roda a 20, 28 e 40px. **O mascote não o substitui**, porque nesse tamanho a
+  ilustração não lê.
+- **`assets/brand/icon-mark.svg`**, nos ícones de sistema (app, splash, favicon), **não tem olhos**
+  e é cerca de 15% mais estreito. Descoberto na F3, gerando o ícone a 1024px: em tamanho grande os
+  dois pontos sobre a forma larga param de ler como marcador e viram cara.
 
-O SVG-fonte dos dois fica em `assets/brand/`, e os PNGs saem dele. PNG de ícone não se edita à
-mão: regenera-se do SVG.
+A simetria vale a pena notar: o `icon-mark` nasceu porque a forma **grande demais** deixava de
+funcionar, e o `Glyph` sobrevive à BER-120 porque a ilustração **pequena demais** deixa de
+funcionar. É o mesmo problema nas duas pontas.
+
+⚠️ **O arquivo do mascote é imagem gerada por IA e a licença comercial do gerador ainda não foi
+conferida.** Este repositório é público. Antes de qualquer publicação em loja, a licença precisa
+ser verificada, e o arquivo trocado por um asset com origem conhecida se não estiver liberada.
+
+O SVG-fonte do glyph e do ícone fica em `assets/brand/`, e os PNGs saem dele. PNG de ícone não se
+edita à mão: regenera-se do SVG.
 
 ## 9. Anti-patterns
 
@@ -311,7 +357,8 @@ Checklist de revisão. **(T)** marca o item coberto por teste automatizado na Ta
 - Borda lateral de destaque em card
 - Sombra em card de lista
 - Maiúsculas espaçadas como rótulo
-- Mascote, dragão, espada, coroa (T: coroa, `__tests__/guards/brand.test.ts`)
+- Dragão, espada, coroa (T: coroa, `__tests__/guards/brand.test.ts`). **Mascote saiu desta lista
+  na BER-120** — a guarda nunca chegou a cobri-lo, só a coroa
 - Mais de um acento por tela
 - Número inventado: toda métrica sai de dado persistido
 - Spinner de tela cheia: o carregamento usa skeleton no formato do conteúdo

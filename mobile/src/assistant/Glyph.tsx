@@ -37,9 +37,9 @@ export function Glyph({ size = 20 }: Props) {
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      <Path testID="glyph-shape" d={GLYPH_PATH} fill={color.accent} />
+      <Path testID="glyph-shape" d={GLYPH_PATH} fill={color.brandText} />
       {GLYPH_EYES.map((olho) => (
-        <Circle key={`${olho.cx}-${olho.cy}`} cx={olho.cx} cy={olho.cy} r={GLYPH_EYE_RADIUS} fill={color.accentInk} />
+        <Circle key={`${olho.cx}-${olho.cy}`} cx={olho.cx} cy={olho.cy} r={GLYPH_EYE_RADIUS} fill={color.bg} />
       ))}
     </Svg>
   );

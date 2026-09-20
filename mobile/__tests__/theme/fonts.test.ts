@@ -23,10 +23,21 @@ jest.mock('@expo-google-fonts/hanken-grotesk', () => ({
   HankenGrotesk_600SemiBold: 'HankenGrotesk_600SemiBold',
   HankenGrotesk_700Bold: 'HankenGrotesk_700Bold',
 }));
+jest.mock('@expo-google-fonts/unbounded', () => ({
+  useFonts: jest.fn(),
+  Unbounded_700Bold: 'Unbounded_700Bold',
+  Unbounded_800ExtraBold: 'Unbounded_800ExtraBold',
+}));
+jest.mock('@expo-google-fonts/bricolage-grotesque', () => ({
+  BricolageGrotesque_400Regular: 'BricolageGrotesque_400Regular',
+  BricolageGrotesque_500Medium: 'BricolageGrotesque_500Medium',
+  BricolageGrotesque_600SemiBold: 'BricolageGrotesque_600SemiBold',
+  BricolageGrotesque_700Bold: 'BricolageGrotesque_700Bold',
+}));
 
-import { fontFamily } from '../../src/theme/tokens';
+import { fontFamily, type } from '../../src/theme/tokens';
 import { APP_FONT_MAP, useAppFonts } from '../../src/theme/fonts';
-import { useFonts as useNewsreaderMock } from '@expo-google-fonts/newsreader';
+import { useFonts as useAppFontLoaderMock } from '@expo-google-fonts/unbounded';
 
 describe('fontes do app', () => {
   it('toda família citada nos tokens está no mapa de carga', () => {
@@ -42,15 +53,35 @@ describe('fontes do app', () => {
       expect(usadas.has(chave)).toBe(true);
     }
   });
+
+  // BER-120: a serifa saiu. Newsreader falava pela "camada do livro", mas a
+  // unica variante que a usava como corpo (`reading`, serifa italica) nunca
+  // teve consumidor — conferido em 20/09 com grep em src/ e app/: zero usos.
+  // O que a serifa realmente fazia era titulo, e titulo virou Unbounded.
+  // Carregar uma familia inteira por uma variante morta era custo de rede a
+  // cada abertura do app, pago em nome de um principio que nenhuma tela
+  // exercia.
+  it('nenhuma família serifada continua no mapa de carga', () => {
+    for (const chave of Object.keys(APP_FONT_MAP)) {
+      expect(chave).not.toMatch(/Newsreader/);
+    }
+  });
+
+  it('as duas famílias novas dividem os papéis: Unbounded no display, Bricolage na interface', () => {
+    expect(type.display.fontFamily).toMatch(/^Unbounded_/);
+    expect(type.numericXL.fontFamily).toMatch(/^Unbounded_/);
+    expect(type.body.fontFamily).toMatch(/^BricolageGrotesque_/);
+    expect(type.caption.fontFamily).toMatch(/^BricolageGrotesque_/);
+  });
 });
 
 describe('useAppFonts', () => {
   afterEach(() => {
-    (useNewsreaderMock as jest.Mock).mockReset();
+    (useAppFontLoaderMock as jest.Mock).mockReset();
   });
 
   it('libera a splash quando a fonte carrega normalmente', () => {
-    (useNewsreaderMock as jest.Mock).mockReturnValue([true, null]);
+    (useAppFontLoaderMock as jest.Mock).mockReturnValue([true, null]);
     expect(useAppFonts()).toBe(true);
   });
 
@@ -58,7 +89,7 @@ describe('useAppFonts', () => {
     // Sem a correção (descartar o segundo elemento do hook), `loaded` fica
     // `false` para sempre aqui e useAppFonts devolveria `false` — a splash
     // nunca sai. Ver Tarefa da rodada de correção da F2.
-    (useNewsreaderMock as jest.Mock).mockReturnValue([false, new Error('falha ao baixar a fonte')]);
+    (useAppFontLoaderMock as jest.Mock).mockReturnValue([false, new Error('falha ao baixar a fonte')]);
     expect(useAppFonts()).toBe(true);
   });
 });
