@@ -645,7 +645,7 @@ describe('registrar leitura: durante e depois do envio', () => {
   });
 
   it('enquanto envia, o voltar do Android nao fecha o sheet', async () => {
-    const registros: { handler: () => boolean | null | undefined; ativo: boolean }[] = [];
+    const registros: { handler: Parameters<typeof BackHandler.addEventListener>[1]; ativo: boolean }[] = [];
     espioes.push(
       jest.spyOn(BackHandler, 'addEventListener').mockImplementation((evento, handler) => {
         const registro = { handler, ativo: evento === 'hardwareBackPress' };
@@ -663,7 +663,7 @@ describe('registrar leitura: durante e depois do envio', () => {
     fireEvent.press(getByRole('button', { name: 'Registrar 28 páginas' }));
     expect(ativos()).toHaveLength(1);
     // true = "tratei o voltar": a navegacao nao desempilha o sheet.
-    expect(ativos()[0].handler()).toBe(true);
+    expect(ativos()[0].handler({ type: 'hardwareBackPress', timeStamp: Date.now() })).toBe(true);
 
     await act(async () => {
       envio.rejeitar(new Error('falhou'));

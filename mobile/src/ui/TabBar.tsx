@@ -20,9 +20,12 @@
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+// SDK 57 (BER-117): o `Tabs` do expo-router deixou de depender do pacote
+// público @react-navigation/bottom-tabs e passou a vender seu próprio fork;
+// o tipo que o `tabBar` de fato recebe é este, não o do pacote npm (que nem
+// está mais instalado).
+import type { BottomTabBarProps, BottomTabNavigationOptions } from 'expo-router/build/react-navigation/bottom-tabs';
 import Svg, { Circle, Path } from 'react-native-svg';
-import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { Text, TONE_COLOR, type Tone } from './Text';
 import { color, hitSlop, radius, space, type as typeTokens, MIN_TOUCH } from '../theme/tokens';
 
