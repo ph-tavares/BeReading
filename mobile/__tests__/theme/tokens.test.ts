@@ -43,6 +43,31 @@ describe('tokens · contraste', () => {
     expect(contrast(color.accentInk, color.accent)).toBeGreaterThanOrEqual(4.5);
   });
 
+  // BER-120: o jade tem duas formas porque nao existe um verde so' que sirva
+  // pros dois usos. `brand` e' preenchimento (bloco, botao, aba ativa) e
+  // reprova como texto — medido em 20/09: 3,83 sobre surface3, contra o
+  // minimo de 4,5. `brandText` e' a mesma familia clareada, e' o que pode
+  // virar letra. Separar os dois foi o que permitiu manter a guarda inteira
+  // em vez de abrir excecao pro verde.
+  it('brandInk é legível sobre brand (texto dentro do bloco e do botão)', () => {
+    expect(contrast(color.brandInk, color.brand)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('brandText passa em AA sobre as superfícies', () => {
+    for (const surface of SURFACES) {
+      expect(contrast(color.brandText, surface)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  /**
+   * Tripwire: se alguem "simplificar" trocando brandText por brand em texto,
+   * este teste morre junto e a regressao passa. Ele grava o motivo da
+   * separacao existir — brand REPROVA como texto, e isso e' esperado.
+   */
+  it('brand, sozinho, não serve como texto — é por isso que brandText existe', () => {
+    expect(contrast(color.brand, color.surface3)).toBeLessThan(4.5);
+  });
+
   it('o creme da capa é legível sobre toda a paleta de capas', () => {
     for (const c of COVER_PALETTE_COLORS) {
       expect(contrast(COVER_INK, c)).toBeGreaterThanOrEqual(4.5);

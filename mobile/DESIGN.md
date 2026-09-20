@@ -3,28 +3,37 @@
 > Contrato de marca. Toda UI obedece este arquivo. Direção: **Noturno editorial**,
 > público de 18 a 24 anos, dark-first, anti-template.
 > Valores canônicos em `src/theme/tokens.ts`. Este documento explica, não duplica a fonte.
+>
+> ⚠️ **Em transição (BER-120).** O grupo aprovou em 20/09/2026 a troca para a direção verde com
+> mascote. A §1 já vale; §2 (tipografia), §5 (TabBar) e §8/§9 (marca) ainda descrevem a direção
+> anterior e mudam nos PRs seguintes da BER-120. Onde as duas se contradisserem, **vale a seção já
+> migrada** — e o que ainda não migrou está marcado como tal.
 
 ## 1. Color
 
-Neutros quentes (tinta e papel) e um acento só. Todo valor de cor em `src/ui`, `src/assistant` e
-`src/game` vem de `color` em `src/theme/tokens.ts` — as pastas que a F2 entregou, varridas por
-`__tests__/guards`. `app/` e `src/features` (blocos de tela) ainda não existem em código; entram
-sob guarda na F4, quando as telas forem migrando. Nada de hex, `rgb()` ou `rgba()` literal fora
-de `tokens.ts` nas pastas vigiadas.
+Neutros esverdeados (tinta e mata) e **duas** cores com papel fixo. Todo valor de cor em `src/ui`,
+`src/assistant` e `src/game` vem de `color` em `src/theme/tokens.ts` — as pastas que a F2 entregou,
+varridas por `__tests__/guards`. `app/` e `src/features` (blocos de tela) ainda não existem em
+código; entram sob guarda na F4, quando as telas forem migrando. Nada de hex, `rgb()` ou `rgba()`
+literal fora de `tokens.ts` nas pastas vigiadas.
 
 | token | valor | uso |
 |---|---|---|
-| `color.bg` | `#12100E` | fundo das telas |
-| `color.surface1` | `#1B1916` | cards, sheets, tab bar |
-| `color.surface2` | `#25221E` | inputs, trilhas, botão secundário |
-| `color.surface3` | `#302C27` | pressed / selecionado |
-| `color.floating` | `#2A2622` | toast, superfície flutuante |
-| `color.line` | `rgba(243,237,226,0.08)` | divisória |
-| `color.line2` | `rgba(243,237,226,0.14)` | borda de superfície flutuante |
-| `color.text` | `#F3EDE2` | texto principal |
-| `color.text2` | `#B9B0A3` | texto secundário |
-| `color.text3` | `#A0978B` | legenda, desabilitado |
-| `color.accent` | `#F0A83A` | progresso e ação primária, apenas |
+| `color.bg` | `#0A1310` | fundo das telas |
+| `color.surface1` | `#111F1A` | cards, sheets, tab bar |
+| `color.surface2` | `#192B24` | inputs, trilhas, botão secundário |
+| `color.surface3` | `#23392F` | pressed / selecionado |
+| `color.floating` | `#1B2C25` | toast, superfície flutuante |
+| `color.line` | `rgba(246,241,228,0.08)` | divisória |
+| `color.line2` | `rgba(246,241,228,0.14)` | borda de superfície flutuante |
+| `color.text` | `#F6F1E4` | texto principal |
+| `color.text2` | `#AFBCB2` | texto secundário |
+| `color.text3` | `#9AA8A0` | legenda, desabilitado |
+| `color.brand` | `#1BA36B` | **preenchimento** de leitura e ação: bloco do livro, botão primário, aba ativa |
+| `color.brandInk` | `#04231A` | texto sobre `color.brand` |
+| `color.brandText` | `#2FC98A` | o jade **como letra ou ícone**, sobre superfície escura |
+| `color.brandSoft` | `rgba(27,163,107,0.14)` | fundo de realce de leitura |
+| `color.accent` | `#F0A83A` | camada de jogo: XP, nível, sequência, conquista |
 | `color.accentInk` | `#1B1206` | texto sobre `color.accent` |
 | `color.accentSoft` | `rgba(240,168,58,0.14)` | aviso, chip de XP |
 | `color.positive` | `#8CC28F` | sucesso |
@@ -32,14 +41,23 @@ de `tokens.ts` nas pastas vigiadas.
 | `color.danger` | `#EE7B67` | erro, destrutivo |
 | `color.dangerSoft` | `rgba(238,123,103,0.14)` | fundo de estado de erro |
 
-O acento `color.accent` `#F0A83A` é o único acento do produto. Uma tela não usa uma segunda cor de
-destaque: quando tudo chama atenção, nada chama atenção.
+**Âmbar é jogo, jade é leitura e ação** (BER-120). É a mesma regra de antes — "âmbar é jogo, neutro
+é leitura" — com a metade da leitura ganhando cor própria. O âmbar não mudou de valor nem de
+significado: `Ring`, XP, sequência e conquista continuam exatamente onde estavam, porque a mecânica
+delas também não mudou. O que ganhou tinta foi a ação: o que antes era neutro ou âmbar-de-botão
+agora é jade. Duas cores por tela, cada uma com um trabalho — nunca uma terceira.
 
-**Âmbar é jogo, neutro é leitura.** O acento marca o progresso da camada de jogo (nível, XP,
-sequência); o neutro (`color.text`) marca o progresso de leitura de um livro (capítulo, sessão).
-Não é contradição o `Ring` (nível) usar `accent` e a `ProgressBar` (capítulo) usar `text`: são
-duas métricas diferentes, e cada uma tem sua cor porque uma tela nunca mistura as duas camadas na
-mesma barra.
+**O jade tem duas formas, e isso não é redundância.** Não existe um verde só que sirva para
+preencher e para escrever. Medido em 20/09: `brand` sobre `surface3` dá **3,83**, abaixo do mínimo
+de 4,5 — ele é preenchimento, e por cima dele vai `brandInk`. Para letra e ícone existe
+`brandText`, a mesma família clareada (5,80 na pior superfície). Trocar um pelo outro em texto
+reprova no `__tests__/theme/tokens.test.ts`, que guarda os dois lados da regra, inclusive um teste
+que afirma que `brand` **deve** reprovar como texto — se alguém "simplificar" os dois num token só,
+esse teste morre junto e avisa.
+
+**Legenda é o token que mais sofre quando a base muda de tom.** O `text3` do mockup (`#84938B`)
+reprovava sobre `surface3` (3,84), a mesma armadilha que o `#978E82` tinha criado na F2. Subiu para
+`#9AA8A0` (mínimo 5,00). Sempre que mexer nas superfícies, confira o `text3` primeiro.
 
 **Paleta de capas geradas** (`COVER_PALETTE_COLORS`, oito tons: `#5E2A2A` `#2F4A3A` `#22324F`
 `#7A5A1E` `#4A2F4F` `#1F4A4F` `#3A3F47` `#7A3B22`), escolhida por hash determinístico do `book.id`.

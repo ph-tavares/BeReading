@@ -5,29 +5,44 @@
 // tela) ainda não existem em código; entram sob guarda na F4.
 
 export const color = {
-  bg: '#12100E',
-  surface1: '#1B1916',
-  surface2: '#25221E',
-  surface3: '#302C27',
-  floating: '#2A2622',
+  // BER-120: os neutros saíram do marrom-tinta para um preto esverdeado, a
+  // base do mascote. Só a temperatura mudou — a escala de luminosidade é a
+  // mesma, então nenhum par de contraste piorou (tokens.test.ts cobre os cinco).
+  bg: '#0A1310',
+  surface1: '#111F1A',
+  surface2: '#192B24',
+  surface3: '#23392F',
+  floating: '#1B2C25',
   // Fundo escurecido atras de sheet e modal: esconde a tela sem apagar o
   // contexto de onde o leitor veio.
   scrim: 'rgba(0,0,0,0.6)',
 
-  line: 'rgba(243,237,226,0.08)',
-  line2: 'rgba(243,237,226,0.14)',
+  line: 'rgba(246,241,228,0.08)',
+  line2: 'rgba(246,241,228,0.14)',
 
-  text: '#F3EDE2',
-  text2: '#B9B0A3',
-  // Era #978E82: reprovava AA (4,5) sobre surface3 (4,295) e apertava sobre
-  // floating (4,652) — as duas superfícies onde legenda/desabilitado convive
-  // com "pressed" e toast. #A0978B passa nas cinco superfícies com folga
-  // (mínimo 4,814); ver __tests__/theme/tokens.test.ts.
-  text3: '#A0978B',
+  text: '#F6F1E4',
+  text2: '#AFBCB2',
+  // Mesma armadilha que o #978E82 tinha na F2, agora na família verde: o
+  // #84938B do mockup reprovava AA sobre surface3 (3,84). O #9AA8A0 passa nas
+  // cinco superfícies (mínimo 5,00). Legenda é o token que mais sofre quando a
+  // base muda de tom — confira-o sempre que mexer nas superfícies.
+  text3: '#9AA8A0',
 
+  // A camada de JOGO. Não mudou na BER-120, de propósito: XP, nível, sequência
+  // e conquista continuam âmbar porque a mecânica delas também não mudou.
   accent: '#F0A83A',
   accentInk: '#1B1206',
   accentSoft: 'rgba(240,168,58,0.14)',
+
+  // A camada de LEITURA E AÇÃO (BER-120). O jade do moletom do mascote.
+  // `brand` é preenchimento — bloco do livro, botão primário, aba ativa — e
+  // reprova como texto (3,83 sobre surface3). Para letra existe `brandText`,
+  // a mesma família clareada. Não troque um pelo outro: o teste registra por
+  // que os dois existem.
+  brand: '#1BA36B',
+  brandInk: '#04231A',
+  brandText: '#2FC98A',
+  brandSoft: 'rgba(27,163,107,0.14)',
 
   positive: '#8CC28F',
   positiveSoft: 'rgba(140,194,143,0.14)',
