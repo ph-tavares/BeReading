@@ -6,17 +6,16 @@ import {
   PlusJakartaSans_800ExtraBold,
 } from '@expo-google-fonts/plus-jakarta-sans';
 import {
-  useFonts as useNewsreader,
-  Newsreader_400Regular,
-  Newsreader_400Regular_Italic,
-  Newsreader_500Medium,
-} from '@expo-google-fonts/newsreader';
+  useFonts as useAppFontLoader,
+  Unbounded_700Bold,
+  Unbounded_800ExtraBold,
+} from '@expo-google-fonts/unbounded';
 import {
-  HankenGrotesk_400Regular,
-  HankenGrotesk_500Medium,
-  HankenGrotesk_600SemiBold,
-  HankenGrotesk_700Bold,
-} from '@expo-google-fonts/hanken-grotesk';
+  BricolageGrotesque_400Regular,
+  BricolageGrotesque_500Medium,
+  BricolageGrotesque_600SemiBold,
+  BricolageGrotesque_700Bold,
+} from '@expo-google-fonts/bricolage-grotesque';
 
 export function useLuminousFonts(): boolean {
   const [fontsLoaded] = useFonts({
@@ -35,13 +34,12 @@ export function useLuminousFonts(): boolean {
  * aparece no aparelho.
  */
 export const APP_FONT_MAP = {
-  Newsreader_400Regular,
-  Newsreader_400Regular_Italic,
-  Newsreader_500Medium,
-  HankenGrotesk_400Regular,
-  HankenGrotesk_500Medium,
-  HankenGrotesk_600SemiBold,
-  HankenGrotesk_700Bold,
+  Unbounded_700Bold,
+  Unbounded_800ExtraBold,
+  BricolageGrotesque_400Regular,
+  BricolageGrotesque_500Medium,
+  BricolageGrotesque_600SemiBold,
+  BricolageGrotesque_700Bold,
 } as const;
 
 export function useAppFonts(): boolean {
@@ -50,6 +48,6 @@ export function useAppFonts(): boolean {
   // enquanto isso — a splash ficava presa para sempre. Falha de fonte deve
   // degradar para o fallback do sistema, nao travar o app: por isso o erro
   // tambem libera a splash.
-  const [loaded, erro] = useNewsreader(APP_FONT_MAP);
+  const [loaded, erro] = useAppFontLoader(APP_FONT_MAP);
   return loaded || !!erro;
 }

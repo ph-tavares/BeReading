@@ -5,9 +5,9 @@
 > Valores canônicos em `src/theme/tokens.ts`. Este documento explica, não duplica a fonte.
 >
 > ⚠️ **Em transição (BER-120).** O grupo aprovou em 20/09/2026 a troca para a direção verde com
-> mascote. A §1 já vale; §2 (tipografia), §5 (TabBar) e §8/§9 (marca) ainda descrevem a direção
-> anterior e mudam nos PRs seguintes da BER-120. Onde as duas se contradisserem, **vale a seção já
-> migrada** — e o que ainda não migrou está marcado como tal.
+> mascote. A §1 (cor) e a §2 (tipografia) já valem; a §5 (TabBar) e as §8/§9 (marca) ainda
+> descrevem a direção anterior e mudam nos PRs seguintes da BER-120. Onde as duas se
+> contradisserem, **vale a seção já migrada** — e o que ainda não migrou está marcado como tal.
 
 ## 1. Color
 
@@ -65,26 +65,37 @@ O texto sobre qualquer uma delas é `COVER_INK` `#F6E9D4`, legível nas oito.
 
 ## 2. Typography
 
-Duas famílias com papéis fixos, nunca misturados dentro do mesmo elemento: `fontFamily.serif*`
-(Newsreader) fala pela camada do livro, título, pergunta de quiz, citação; `fontFamily.ui*`
-(Hanken Grotesk) fala pela interface e pelos números. Todo texto usa uma variante de `type`
-(`TypeVariant` em `tokens.ts`); `fontSize` ou `fontFamily` literal fora de `tokens.ts` não existe.
+Duas famílias com papéis fixos, nunca misturados dentro do mesmo elemento: `fontFamily.display*`
+(**Unbounded**) fala pelo que grita — título, número grande, wordmark; `fontFamily.ui*`
+(**Bricolage Grotesque**) fala pelo que trabalha — interface, rótulo e texto corrido. Todo texto
+usa uma variante de `type` (`TypeVariant` em `tokens.ts`); `fontSize` ou `fontFamily` literal fora
+de `tokens.ts` não existe. As duas são SIL Open Font License 1.1.
 
 | variante | família · peso | tamanho/linha |
 |---|---|---|
-| `type.display` | `fontFamily.serifMedium` | 34/38 |
-| `type.title` | `fontFamily.serifMedium` | 28/32 |
-| `type.heading` | `fontFamily.serifMedium` | 22/28 |
-| `type.subhead` | `fontFamily.uiSemi` | 17/24 |
-| `type.body` | `fontFamily.ui` | 16/24 |
-| `type.reading` | `fontFamily.serif`, itálico | 17/27 |
-| `type.callout` | `fontFamily.ui` | 14/20 |
-| `type.label` | `fontFamily.uiSemi` | 13/18 |
+| `type.display` | `fontFamily.displayHeavy` | 29/33 |
+| `type.title` | `fontFamily.display` | 22/26 |
+| `type.heading` | `fontFamily.uiBold` | 21/26 |
+| `type.subhead` | `fontFamily.uiBold` | 17/22 |
+| `type.body` | `fontFamily.uiMedium` | 16/22 |
+| `type.callout` | `fontFamily.uiMedium` | 14/20 |
+| `type.label` | `fontFamily.uiBold` | 13/17 |
 | `type.caption` | `fontFamily.uiMedium` | 12/16 |
-| `type.button` | `fontFamily.uiSemi` | 16/20 |
-| `type.numericXL` | `fontFamily.uiBold`, tabular | 40/44 |
-| `type.numericL` | `fontFamily.uiBold`, tabular | 28/32 |
-| `type.numericM` | `fontFamily.uiBold`, tabular | 20/24 |
+| `type.button` | `fontFamily.uiBold` | 16/20 |
+| `type.numericXL` | `fontFamily.displayHeavy`, tabular | 40/44 |
+| `type.numericL` | `fontFamily.displayHeavy`, tabular | 24/28 |
+| `type.numericM` | `fontFamily.display`, tabular | 17/22 |
+
+**Display e title encolheram, e isso não é recuo** (BER-120). Unbounded é uma face bem mais larga
+que Newsreader no mesmo corpo: manter os 34 antigos estourava "Capítulo 4, fechado." em duas
+linhas numa moldura de 390pt. Os valores saíram do mockup aprovado, medido em escala real.
+
+**A serifa saiu, e com ela a variante `reading`.** Ela existia para a camada do livro ter voz
+própria — pergunta de quiz, citação —, mas nenhuma tela chegou a usá-la: conferido em 20/09 com
+grep em `src/` e `app/`, zero consumidores. Quem de fato falava pela serifa era o título, e título
+agora é Unbounded. Carregar uma família inteira por uma variante morta era custo de rede a cada
+abertura, pago em nome de um princípio que nenhuma tela exercia. `__tests__/theme/fonts.test.ts`
+reprova qualquer volta de família serifada ao mapa de carga.
 
 Piso: nada abaixo de 12 (`type.caption`, a menor variante, já está nesse piso). Números usam
 sempre `fontVariant: ['tabular-nums']`, para não "pular" de largura quando contam. Caixa de frase

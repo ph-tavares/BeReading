@@ -66,18 +66,27 @@ export const radius = {
   tag: 6, chip: 10, control: 14, card: 20, sheet: 28, pill: 999,
 } as const;
 
+// BER-120: a serifa saiu. `display*` é Unbounded, uma grotesca larga e
+// arredondada que carrega título e número; `ui*` é Bricolage Grotesque, que
+// tem pequenas esquisitices de desenho e continua legível em 12px. As duas
+// são SIL Open Font License 1.1.
 export const fontFamily = {
-  serif: 'Newsreader_400Regular',
-  serifItalic: 'Newsreader_400Regular_Italic',
-  serifMedium: 'Newsreader_500Medium',
-  ui: 'HankenGrotesk_400Regular',
-  uiMedium: 'HankenGrotesk_500Medium',
-  uiSemi: 'HankenGrotesk_600SemiBold',
-  uiBold: 'HankenGrotesk_700Bold',
+  display: 'Unbounded_700Bold',
+  displayHeavy: 'Unbounded_800ExtraBold',
+  ui: 'BricolageGrotesque_400Regular',
+  uiMedium: 'BricolageGrotesque_500Medium',
+  uiSemi: 'BricolageGrotesque_600SemiBold',
+  uiBold: 'BricolageGrotesque_700Bold',
 } as const;
 
+/**
+ * `reading` (serifa itálica) saiu junto com a serifa. Ela existia para a
+ * "camada do livro" ter voz própria, mas nenhuma tela chegou a usá-la:
+ * conferido em 20/09 com grep em `src/` e `app/`, zero consumidores. Quem
+ * realmente falava pela serifa era o título, e título agora é Unbounded.
+ */
 export type TypeVariant =
-  | 'display' | 'title' | 'heading' | 'subhead' | 'body' | 'reading'
+  | 'display' | 'title' | 'heading' | 'subhead' | 'body'
   | 'callout' | 'label' | 'caption' | 'button'
   | 'numericXL' | 'numericL' | 'numericM';
 
@@ -92,22 +101,27 @@ interface TypeStyle {
   maxFontSizeMultiplier: number;
 }
 
-// A camada do livro fala em serifa; a da interface, em sans. Números sempre
-// tabulares, para não "pular" quando contam.
+// Unbounded fala pelo que grita (título e número); Bricolage, pelo que
+// trabalha (interface e texto corrido). Números sempre tabulares, para não
+// "pular" quando contam.
+//
+// O tamanho de display e title CAIU (34→29, 28→22) e o tracking apertou. Não é
+// recuo: Unbounded é uma face bem mais larga que Newsreader no mesmo corpo, e
+// manter 34 estourava "Capítulo 4, fechado." em duas linhas numa moldura de
+// 390pt. Medido no mockup aprovado antes de escolher os valores.
 export const type: Record<TypeVariant, TypeStyle> = {
-  display:   { fontFamily: fontFamily.serifMedium, fontSize: 34, lineHeight: 38, letterSpacing: -0.4, maxFontSizeMultiplier: 1.2 },
-  title:     { fontFamily: fontFamily.serifMedium, fontSize: 28, lineHeight: 32, letterSpacing: -0.3, maxFontSizeMultiplier: 1.2 },
-  heading:   { fontFamily: fontFamily.serifMedium, fontSize: 22, lineHeight: 28, maxFontSizeMultiplier: 1.3 },
-  subhead:   { fontFamily: fontFamily.uiSemi,      fontSize: 17, lineHeight: 24, maxFontSizeMultiplier: 1.3 },
-  body:      { fontFamily: fontFamily.ui,          fontSize: 16, lineHeight: 24, maxFontSizeMultiplier: 1.4 },
-  reading:   { fontFamily: fontFamily.serif,       fontSize: 17, lineHeight: 27, fontStyle: 'italic', maxFontSizeMultiplier: 1.4 },
-  callout:   { fontFamily: fontFamily.ui,          fontSize: 14, lineHeight: 20, maxFontSizeMultiplier: 1.3 },
-  label:     { fontFamily: fontFamily.uiSemi,      fontSize: 13, lineHeight: 18, maxFontSizeMultiplier: 1.3 },
-  caption:   { fontFamily: fontFamily.uiMedium,    fontSize: 12, lineHeight: 16, maxFontSizeMultiplier: 1.3 },
-  button:    { fontFamily: fontFamily.uiSemi,      fontSize: 16, lineHeight: 20, maxFontSizeMultiplier: 1.2 },
-  numericXL: { fontFamily: fontFamily.uiBold, fontSize: 40, lineHeight: 44, letterSpacing: -1, fontVariant: ['tabular-nums'], maxFontSizeMultiplier: 1.1 },
-  numericL:  { fontFamily: fontFamily.uiBold, fontSize: 28, lineHeight: 32, letterSpacing: -0.6, fontVariant: ['tabular-nums'], maxFontSizeMultiplier: 1.1 },
-  numericM:  { fontFamily: fontFamily.uiBold, fontSize: 20, lineHeight: 24, letterSpacing: -0.3, fontVariant: ['tabular-nums'], maxFontSizeMultiplier: 1.2 },
+  display:   { fontFamily: fontFamily.displayHeavy, fontSize: 29, lineHeight: 33, letterSpacing: -0.9, maxFontSizeMultiplier: 1.2 },
+  title:     { fontFamily: fontFamily.display,      fontSize: 22, lineHeight: 26, letterSpacing: -0.6, maxFontSizeMultiplier: 1.2 },
+  heading:   { fontFamily: fontFamily.uiBold,       fontSize: 21, lineHeight: 26, letterSpacing: -0.3, maxFontSizeMultiplier: 1.3 },
+  subhead:   { fontFamily: fontFamily.uiBold,       fontSize: 17, lineHeight: 22, maxFontSizeMultiplier: 1.3 },
+  body:      { fontFamily: fontFamily.uiMedium,     fontSize: 16, lineHeight: 22, maxFontSizeMultiplier: 1.4 },
+  callout:   { fontFamily: fontFamily.uiMedium,     fontSize: 14, lineHeight: 20, maxFontSizeMultiplier: 1.3 },
+  label:     { fontFamily: fontFamily.uiBold,       fontSize: 13, lineHeight: 17, maxFontSizeMultiplier: 1.3 },
+  caption:   { fontFamily: fontFamily.uiMedium,     fontSize: 12, lineHeight: 16, maxFontSizeMultiplier: 1.3 },
+  button:    { fontFamily: fontFamily.uiBold,       fontSize: 16, lineHeight: 20, maxFontSizeMultiplier: 1.2 },
+  numericXL: { fontFamily: fontFamily.displayHeavy, fontSize: 40, lineHeight: 44, letterSpacing: -2, fontVariant: ['tabular-nums'], maxFontSizeMultiplier: 1.1 },
+  numericL:  { fontFamily: fontFamily.displayHeavy, fontSize: 24, lineHeight: 28, letterSpacing: -0.9, fontVariant: ['tabular-nums'], maxFontSizeMultiplier: 1.1 },
+  numericM:  { fontFamily: fontFamily.display,      fontSize: 17, lineHeight: 22, letterSpacing: -0.4, fontVariant: ['tabular-nums'], maxFontSizeMultiplier: 1.2 },
 };
 
 // Regras de motion da Wiki (standards/frontend/animation-patterns.md): saída em
