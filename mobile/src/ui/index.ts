@@ -29,3 +29,4 @@ export { Sheet } from './Sheet';
 // lines.ts), mas exporta por aqui tambem para o src/ui ser a superficie
 // unica de import dos primitivos visuais.
 export { Glyph, GLYPH_PATH, GLYPH_VIEWBOX, GLYPH_EYES, GLYPH_EYE_RADIUS } from '../assistant/Glyph';
+export { Mascote, MASCOTE_SIZES, type MascoteSize } from '../assistant/Mascote';

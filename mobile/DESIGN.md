@@ -1,13 +1,12 @@
 # BeReading: DESIGN.md
 
-> Contrato de marca. Toda UI obedece este arquivo. Direção: **Noturno editorial**,
+> Contrato de marca. Toda UI obedece este arquivo. Direção: **verde com mascote** (BER-120),
 > público de 18 a 24 anos, dark-first, anti-template.
 > Valores canônicos em `src/theme/tokens.ts`. Este documento explica, não duplica a fonte.
 >
 > ⚠️ **Em transição (BER-120).** O grupo aprovou em 20/09/2026 a troca para a direção verde com
-> mascote. A §1 (cor) e a §2 (tipografia) já valem; a §5 (TabBar) e as §8/§9 (marca) ainda
-> descrevem a direção anterior e mudam nos PRs seguintes da BER-120. Onde as duas se
-> contradisserem, **vale a seção já migrada** — e o que ainda não migrou está marcado como tal.
+> mascote. A §1 (cor), a §2 (tipografia) e as §8/§9 (marca) já valem; falta a §5 (TabBar), que
+> muda no próximo PR da BER-120.
 
 ## 1. Color
 
@@ -295,30 +294,46 @@ registro de voz novo. Nenhuma copy inventa um número: toda métrica citada vem 
 **Essência:** BeReading trata a leitura como hábito que se constrói, não como tarefa escolar. A
 interface fala como alguém que também lê e não acha isso um sacrifício.
 
-**Direção:** Noturno editorial. Fundo escuro de tinta (`color.bg`), papel quente (`color.text`),
-um único acento âmbar (`color.accent`). Serifa (Newsreader) para a camada do livro, sans (Hanken
-Grotesk) para a interface: a leitura tem uma voz, o produto tem outra.
+**Direção:** verde com mascote (BER-120). Fundo escuro esverdeado (`color.bg`), creme para o
+texto, jade para leitura e ação, âmbar para a camada de jogo. Unbounded no que grita, Bricolage
+Grotesque no que trabalha.
 
-**Referências de acabamento:** Spotify Wrapped e BookTok, pelo registro visual jovem e editorial
-sem infantilizar. Explicitamente não Duolingo: sem mascote, sem tom de aplicativo escolar.
+**Referências de acabamento:** Spotify Wrapped e BookTok continuam valendo pelo registro jovem sem
+infantilizar. **O "explicitamente não Duolingo" caiu em 20/09/2026**, por decisão de grupo: a visão
+fundadora do produto cita Duolingo como inspiração em cinco documentos, e a regra anterior foi
+escrita sem acesso a eles. O que não volta é o **tom de aplicativo escolar** — o produto é B2C e
+saiu da escola em 31/08/2026 (BER-52).
 
-**Sentimento alvo:** que o app pareça editorial e feito à mão, não um template genérico de
-gamificação. Um acento por tela. Métrica real, nunca inflada. Confiança sóbria, sem grito.
+**Sentimento alvo:** que o app pareça feito à mão e com humor, não um template genérico de
+gamificação. Métrica real, nunca inflada. O mascote é simpático, a interface não grita: quem faz a
+festa é ele, não o efeito.
 
-**O marcador.** A marca é um marcador de página: um retângulo de topo arredondado com um entalhe
-em V embaixo. Ele aparece em dois recortes, e a diferença entre eles é regra, não descuido:
+**A marca tem três peças, e cada uma existe por um limite de tamanho.** Não é redundância: é a
+mesma forma resolvida para escalas em que as outras não funcionam.
 
-- **`src/assistant/Glyph.tsx`**, dentro do app, tem dois olhos e é o rosto do assistente. Só ele
-  fala; onde houver Glyph, há fala vinda de `src/assistant/lines.ts`. Cor `color.accent` sobre
-  fundo escuro, traço casando com o das abas. É decorativo para leitor de tela: quem lê a fala é o
-  texto ao lado, e um "imagem" a mais só atrapalharia.
-- **`assets/brand/icon-mark.svg`**, nos ícones de sistema (app, splash, favicon), **não tem
-  olhos** e é cerca de 15% mais estreito. Descoberto na F3, gerando o ícone a 1024px: em tamanho
-  grande os dois pontos sobre a forma larga param de ler como marcador e viram cara. O ícone é a
-  marca do produto, não o mascote — e o projeto não tem mascote (ver referências acima).
+- **`src/assistant/Mascote.tsx`** (BER-120) é a ilustração — um macaco de moletom, óculos escuros
+  e livro, recortado como adesivo. É quem o leitor reconhece. Aparece onde há espaço: a bolha do
+  assistente na Hoje e a tela de capítulo fechado. `size` é um **conjunto nomeado**
+  (`sm` 96 · `md` 134 · `lg` 178), nunca um número: abaixo de ~80pt o desenho vira borrão, e um
+  prop numérico deixaria alguém escrever `size={20}` e só descobrir no aparelho.
+- **`src/assistant/Glyph.tsx`** continua sendo a marca pequena — marcador de página com dois
+  olhos, em `color.brandText`. É o que diz "quem está falando" ao lado de um rótulo, nos nove
+  lugares onde roda a 20, 28 e 40px. **O mascote não o substitui**, porque nesse tamanho a
+  ilustração não lê.
+- **`assets/brand/icon-mark.svg`**, nos ícones de sistema (app, splash, favicon), **não tem olhos**
+  e é cerca de 15% mais estreito. Descoberto na F3, gerando o ícone a 1024px: em tamanho grande os
+  dois pontos sobre a forma larga param de ler como marcador e viram cara.
 
-O SVG-fonte dos dois fica em `assets/brand/`, e os PNGs saem dele. PNG de ícone não se edita à
-mão: regenera-se do SVG.
+A simetria vale a pena notar: o `icon-mark` nasceu porque a forma **grande demais** deixava de
+funcionar, e o `Glyph` sobrevive à BER-120 porque a ilustração **pequena demais** deixa de
+funcionar. É o mesmo problema nas duas pontas.
+
+⚠️ **O arquivo do mascote é imagem gerada por IA e a licença comercial do gerador ainda não foi
+conferida.** Este repositório é público. Antes de qualquer publicação em loja, a licença precisa
+ser verificada, e o arquivo trocado por um asset com origem conhecida se não estiver liberada.
+
+O SVG-fonte do glyph e do ícone fica em `assets/brand/`, e os PNGs saem dele. PNG de ícone não se
+edita à mão: regenera-se do SVG.
 
 ## 9. Anti-patterns
 
@@ -340,7 +355,8 @@ Checklist de revisão. **(T)** marca o item coberto por teste automatizado na Ta
 - Borda lateral de destaque em card
 - Sombra em card de lista
 - Maiúsculas espaçadas como rótulo
-- Mascote, dragão, espada, coroa (T: coroa, `__tests__/guards/brand.test.ts`)
+- Dragão, espada, coroa (T: coroa, `__tests__/guards/brand.test.ts`). **Mascote saiu desta lista
+  na BER-120** — a guarda nunca chegou a cobri-lo, só a coroa
 - Mais de um acento por tela
 - Número inventado: toda métrica sai de dado persistido
 - Spinner de tela cheia: o carregamento usa skeleton no formato do conteúdo
