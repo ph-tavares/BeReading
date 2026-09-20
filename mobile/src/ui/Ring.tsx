@@ -171,5 +171,5 @@ export function Ring({
 const styles = StyleSheet.create({
   // O arco comeca no topo, nao na direita.
   svg: { transform: [{ rotate: '-90deg' }] },
-  center: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  center: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
 });
