@@ -574,3 +574,27 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
     aviso da operação diz qual credencial faltou. O que vai nessa secret é decisão do time: usar
     credencial de assinatura como backend contraria os termos do provedor e arrisca a suspensão da
     conta, que derrubaria junto os quizzes do app.
+43. **Runner local com a IA pelo Claude Code.** Iterar no pipeline exigia crédito de API, e a conta
+    ficou sem saldo no meio do quinto teste do *1984* (item 41). Agora o desenvolvimento roda na
+    máquina, com a chamada de IA saindo pelo **Claude Code CLI** — credencial de assinatura usada
+    pelo cliente oficial dela, o mesmo mecanismo do agente do Schools Out (`claude setup-token` +
+    `CLAUDE_CODE_OAUTH_TOKEN`). Três arquivos novos, nenhum importado por código de produção:
+    `_shared/ai-claude-code.ts` (adaptador com o contrato de `callAI`),
+    `_shared/ingestion/local-context.ts` (contexto de passo) e `scripts/ingest-local.ts` (runner).
+    `_shared/ai.ts` e `production-context.ts` ficam intocados: o Edge Runtime não abre subprocesso,
+    e produção continua na credencial de API.
+    - **O que isso prova:** o encanamento. Medido em 20/09/2026 com IA real e rede dublada: as duas
+      fontes caem em grupos independentes, a estrutura confirma 2 capítulos, a verificação publica
+      fatos cruzados e não sobra texto bruto. O prompt de extração real volta parseável pelo
+      `parseExtraction` sem nenhum item descartado.
+    - **O que isso NÃO prova:** qualidade. O modelo é o do Claude Code, não o `claude-haiku-4-5`. A
+      aceitação de 15/09 continua exigindo o modelo de produção, pela API.
+    - **Três diferenças deliberadas de comportamento,** todas por limites que só existem na Edge
+      Function: timeout de 5 min em vez de 60 s (uma extração pelo Claude Code passa de 60 s e o
+      subprocesso leva SIGTERM), `cpuMs` nulo (não há teto de 2 s de CPU fora do Edge Runtime) e
+      `usage` zerado — o teto de US$ 3 por run mede a fatura da API, e os números do CLI são
+      dominados pelo system prompt do próprio harness (~32 mil tokens de cache numa pergunta de três
+      palavras). Somá-los fecharia o run local `partial` por um custo que produção não teria.
+    - **Credencial expirada é pausa, não morte:** `401`/`403` do CLI devolvem o passo à fila com a
+      instrução de renovar o token, pela mesma razão do item 41.
+    - Como rodar, e o que fazer quando falha: `docs/ingestao-local.md`.
