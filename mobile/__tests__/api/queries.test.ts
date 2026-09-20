@@ -4,6 +4,7 @@ jest.mock('../../src/lib/supabase', () => {
     insert: jest.fn().mockReturnThis(),
     update: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
+    is: jest.fn().mockReturnThis(),
     order: jest.fn().mockReturnThis(),
     or: jest.fn().mockReturnThis(),
     single: jest.fn(),
@@ -19,6 +20,7 @@ import {
   getClassroomByCode,
   getMyAnswers,
   getBooks,
+  getPendingQuizChapterIds,
 } from '../../src/api/queries';
 import type { MyAnswer } from '../../src/api/queries';
 import type { Profile, Classroom, Book } from '../../src/types/database';
@@ -49,6 +51,7 @@ beforeEach(() => {
   chain.insert.mockReturnValue(chain);
   chain.update.mockReturnValue(chain);
   chain.eq.mockReturnValue(chain);
+  chain.is.mockReturnValue(chain);
   chain.order.mockReturnValue(chain);
   chain.or.mockReturnValue(chain);
   chain.data = undefined;
@@ -146,6 +149,49 @@ describe('getMyAnswers', () => {
     chain.data = null;
     chain.error = { message: 'db error' };
     await expect(getMyAnswers('u1')).rejects.toBeTruthy();
+  });
+});
+
+describe('getPendingQuizChapterIds', () => {
+  // Este mock não prova a semântica do PostgREST — ele não sabe a diferença
+  // entre filtrar o embed e filtrar o pai, que é justamente onde estava o bug
+  // da BER-93. O que ele trava é a regressão: quem trocar `'answers'` de volta
+  // por `'answers.id'` reprova aqui. A semântica foi conferida contra um
+  // PostgREST real, e está descrita na BER-93.
+  it('descarta a pergunta respondida filtrando o PAI, não o embed', async () => {
+    chain.data = [{ chapter_id: 'ch2' }];
+    chain.error = null;
+
+    await getPendingQuizChapterIds('u1');
+
+    expect(supabase.from).toHaveBeenCalledWith('questions');
+    expect(chain.select).toHaveBeenCalledWith('chapter_id, answers!left(id, user_id)');
+    // Restringe o embed a este usuário: resposta de outra pessoa não pode
+    // esconder o capítulo (vale para conta de professor, que enxerga as dos alunos).
+    expect(chain.eq).toHaveBeenCalledWith('answers.user_id', 'u1');
+    expect(chain.is).toHaveBeenCalledWith('answers', null);
+    expect(chain.is).not.toHaveBeenCalledWith('answers.id', null);
+  });
+
+  it('devolve cada capítulo uma vez, mesmo com várias perguntas pendentes', async () => {
+    chain.data = [{ chapter_id: 'ch2' }, { chapter_id: 'ch2' }, { chapter_id: 'ch3' }];
+    chain.error = null;
+
+    expect(await getPendingQuizChapterIds('u1')).toEqual(['ch2', 'ch3']);
+  });
+
+  it('sem pendência, devolve lista vazia', async () => {
+    chain.data = null;
+    chain.error = null;
+
+    expect(await getPendingQuizChapterIds('u1')).toEqual([]);
+  });
+
+  it('lança erro quando a consulta falha', async () => {
+    chain.data = null;
+    chain.error = { message: 'db error' };
+
+    await expect(getPendingQuizChapterIds('u1')).rejects.toBeTruthy();
   });
 });
 
