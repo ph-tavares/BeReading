@@ -135,9 +135,15 @@ describe('Você (spec 7.9)', () => {
     expect(mockClear).toHaveBeenCalled();
   });
 
-  it('Entrar em uma turma abre o sheet com o campo do codigo', async () => {
+  // BER-64: a entrada de turma saiu do perfil. O produto e B2C desde a BER-52
+  // e nao tem turma; esta era a unica porta no app inteiro para um fluxo que
+  // tambem nunca funcionou (BER-32, cancelada). O teste antigo afirmava que a
+  // linha existia — virou o contrario, para a superficie escolar nao voltar
+  // sem alguem decidir. O componente e o backend continuam de pe para a fase
+  // 2 (BER-47).
+  it('nao oferece entrar em uma turma: o produto B2C nao tem turma', async () => {
     const tela = await montar();
-    fireEvent.press(tela.getByRole('button', { name: 'Entrar em uma turma' }));
-    expect(tela.getByLabelText('Código da turma')).toBeTruthy();
+    expect(tela.queryByRole('button', { name: 'Entrar em uma turma' })).toBeNull();
+    expect(tela.queryByText('Com o código do seu professor')).toBeNull();
   });
 });
