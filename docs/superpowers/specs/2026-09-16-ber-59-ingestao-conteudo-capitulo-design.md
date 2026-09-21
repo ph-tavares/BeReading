@@ -440,8 +440,8 @@ Decididos depois do primeiro teste em produção (*1984*, Companhia das Letras, 
     chega ao último capítulo, e é conflito se tiver número além do último ou capítulo que não bate.
     Custo aceito: uma edição com capítulos a menos no fim não se distingue de uma lista cortada.
 25. **Segunda tentativa de estrutura.** Sem confirmação na primeira tentativa, o passo `structure`
-    busca capítulo a capítulo pelo melhor palpite (a maior lista completa; sem nenhuma, a maior que
-    começa no capítulo 1), dentro do teto de buscas do run, e o planejador agenda `structure` de
+    busca capítulo a capítulo pelo melhor palpite (a maior lista completa; sem nenhuma, a lista de
+    números seguidos que chega mais longe — ver item 44), dentro do teto de buscas do run, e o planejador agenda `structure` de
     novo (assunto `2`) quando a coleta terminar. O motivo `estrutura_nao_confirmada` só é gravado
     se a segunda tentativa também falhar. O palpite nunca localiza fato.
 26. **Limite de 2 s de CPU da Edge Function.** Extrair um PDF de 384 páginas de uma vez estourou o
@@ -538,7 +538,7 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
     - todo texto integral da obra entra num único grupo de independência (rótulo obra), de modo
       que confirmar um fato continua exigindo uma voz de natureza diferente (guia, enciclopédia,
       análise);
-    - só o primeiro texto integral aceito no run é extraído pela IA. Os seguintes não vão para a
+    - só um texto integral por run é extraído pela IA — o de maior peso, ver item 44. Os demais não vão para a
       IA: o nosso código conta os cabeçalhos de capítulo deles e o passo publish avisa quando a
       cópia lida mostra bem menos capítulos que a de conferência, sinal de cópia truncada ou
       adaptada. A comparação usa o mesmo trecho inicial das duas (primeiro lote de páginas), então
@@ -598,3 +598,24 @@ Decididos no segundo teste do *1984* (17/09/2026), com as correções anteriores
     - **Credencial expirada é pausa, não morte:** `401`/`403` do CLI devolvem o passo à fila com a
       instrução de renovar o token, pela mesma razão do item 41.
     - Como rodar, e o que fazer quando falha: `docs/ingestao-local.md`.
+44. **Defeitos achados no run local do *1984* (21/09/2026).** Primeiro run com o código depois do
+    item 38, pelo runner do item 43 com o Tavily real. Fechou `partial` sem estrutura confirmada, e
+    mostrou quatro defeitos:
+    - **Texto bruto sobrevivia ao run.** Só o último bloco da extração apagava o texto; uma extração
+      que falhava de vez deixava a página guardada até o prazo de 24 h, dentro da janela do backup
+      diário. Agora o worker apaga o texto quando um passo `extract` (ou um lote de PDF) falha de
+      vez, e o `publish` apaga o que ainda sobrar no run e avisa a operação — sobra ali é defeito de
+      algum passo.
+    - **Resposta da IA sem JSON matava a fonte na primeira tentativa.** Era tratada como erro
+      permanente; no run, derrubou o Brasil Escola, a única fonte com a lista completa dos 24
+      capítulos, e com ela a confirmação da estrutura. Passa a ser transitória (`RetryableStepError`),
+      com as mesmas 3 retentativas de rede e 5xx, no `extract` e no `verify`.
+    - **O texto integral lido era o primeiro a terminar de baixar.** Uma tradução em PDF (peso B)
+      chegou antes do Gutenberg AU (peso A, domínio público) e foi a lida. Agora o texto de maior
+      peso vence, e domínio público desempata; o que chega depois e é melhor toma o lugar, e o texto
+      do anterior é apagado (seus passos pendentes param sozinhos, sem texto). O que o anterior já
+      extraiu fica: está no mesmo grupo de independência (item 39), então não soma apoio.
+    - **Palpite de estrutura exigia começar no capítulo 1.** O PDF declarou os capítulos 2 a 8 e um
+      post do Medium só o 1; o palpite ficou com o Medium e a segunda tentativa buscou 1 capítulo.
+      Sem lista completa, o palpite passa a ser a lista de números seguidos que chega mais longe,
+      com os capítulos que faltam no começo sem título. Não muda o risco: o palpite só monta buscas.

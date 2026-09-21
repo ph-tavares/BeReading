@@ -17,8 +17,15 @@ export class HttpStatusError extends Error {
 /** Falha que tentar de novo não resolve (dado inválido, recurso inexistente). */
 export class PermanentStepError extends Error {}
 
+/**
+ * Falha que outra chamada pode resolver sem que nada mude do nosso lado, como a IA responder sem o
+ * JSON pedido: a mesma pergunta costuma voltar certa na tentativa seguinte (BER-59).
+ */
+export class RetryableStepError extends Error {}
+
 export function isTransientError(err: unknown): boolean {
   if (err instanceof PermanentStepError) return false;
+  if (err instanceof RetryableStepError) return true;
   const status = (err as { status?: unknown } | null)?.status;
   if (typeof status === 'number') return status === 429 || status >= 500;
   if (err instanceof TypeError) return true;

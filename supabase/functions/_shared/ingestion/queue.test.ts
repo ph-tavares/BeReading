@@ -6,6 +6,7 @@ import {
   isTransientError,
   nextUtcDay,
   PermanentStepError,
+  RetryableStepError,
   startOfUtcDay,
 } from './queue.ts';
 
@@ -17,6 +18,7 @@ Deno.test('isTransientError: 429, 5xx, rede e timeout são transitórios', () =>
   assertEquals(isTransientError(Object.assign(new Error('ai'), { status: 500 })), true);
   assertEquals(isTransientError(new TypeError('error sending request')), true);
   assertEquals(isTransientError(new DOMException('t', 'TimeoutError')), true);
+  assertEquals(isTransientError(new RetryableStepError('resposta da IA sem JSON')), true);
 });
 
 Deno.test('isTransientError: 404, erro permanente e erro comum não são', () => {

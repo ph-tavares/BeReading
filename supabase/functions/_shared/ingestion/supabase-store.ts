@@ -301,6 +301,17 @@ export class SupabaseIngestionStore implements IngestionStore {
     ok(await this.db.from('ingestion_source_texts').delete().lt('created_at', iso), 'deleteSourceTextsBefore');
   }
 
+  async deleteSourceTextsForRun(runId: string) {
+    const ids = (await this.listSources(runId)).map((s) => s.id);
+    let total = 0;
+    for (let i = 0; i < ids.length; i += ID_CHUNK) {
+      const result = await this.db.from('ingestion_source_texts').delete({ count: 'exact' }).in('source_id', ids.slice(i, i + ID_CHUNK));
+      ok(result, 'deleteSourceTextsForRun');
+      total += result.count ?? 0;
+    }
+    return total;
+  }
+
   async findExtractedSource(input: { editionId: string; workKey: string | null; url: string; sinceIso: string }) {
     // Mesma edição: qualquer fonte serve. Outra edição da mesma obra: só fonte que não esteja
     // presa ao ISBN, porque essa fala de uma edição específica (BER-59, spec §11 item 40).

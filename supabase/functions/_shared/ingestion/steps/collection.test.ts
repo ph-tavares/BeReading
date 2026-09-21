@@ -294,6 +294,29 @@ Deno.test('fetch: segunda cópia do texto integral não vai para a IA, só confe
   assertEquals(segundo.stats?.textos_integrais_conferidos, 1);
 });
 
+// Run local do 1984, 21/09/2026 (BER-59): um PDF de tradução (peso B) terminou de baixar primeiro e
+// virou o texto lido; o Gutenberg AU, domínio público e peso A, ficou só de conferência.
+Deno.test('fetch: texto integral de peso maior que chega depois toma o lugar do principal; o de peso menor vira conferência', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seedRun(store);
+  store.policies.push({ domain: 'traducao.example', policy: 'allowed', weight: 'B', sourceType: 'open_license_text', authorizesFullText: true, hostCountry: 'CL' });
+  store.policies.push({ domain: 'dominio-publico.example', policy: 'allowed', weight: 'A', sourceType: 'public_domain_text', authorizesFullText: true, hostCountry: 'AU' });
+  store.policies.push({ domain: 'outra-traducao.example', policy: 'allowed', weight: 'B', sourceType: 'open_license_text', authorizesFullText: true, hostCountry: 'ES' });
+  const livro = ['Capítulo 1', RESUMO, 'Capítulo 2', RESUMO].join(String.fromCharCode(10));
+  const ctx = fakeContext(store, { fetchPage: (url) => Promise.resolve(page(url, livro, { kind: 'pdf', html: null, pdfPages: 300 })) });
+
+  const traducao = await runFetchStep(stepRow(run, 'fetch', 'https://traducao.example/1984.pdf'), run, ctx);
+  const original = await runFetchStep(stepRow(run, 'fetch', 'https://dominio-publico.example/1984.pdf'), run, ctx);
+  const outra = await runFetchStep(stepRow(run, 'fetch', 'https://outra-traducao.example/1984.pdf'), run, ctx);
+
+  assertEquals(traducao.payload?.principal, true);
+  assertEquals([original.payload?.principal, original.payload?.substitui], [true, traducao.payload?.fonte]);
+  assertEquals(original.enqueue?.map((s) => s.kind), ['extract']);
+  assertEquals(original.stats?.textos_integrais_trocados, 1);
+  assertEquals([...store.texts.keys()], [original.payload?.fonte], 'só o texto do original fica guardado para a IA');
+  assertEquals([outra.payload?.conferencia, outra.enqueue], [true, undefined]);
+});
+
 /** Fonte aceita de um run anterior, com afirmações já extraídas. */
 async function fonteExtraida(
   store: MemoryIngestionStore,

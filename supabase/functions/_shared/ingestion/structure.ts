@@ -172,12 +172,20 @@ export function confirmStructure(candidates: StructureCandidate[]): ConfirmedStr
 
 /**
  * Melhor palpite de estrutura quando nada confirmou: a maior lista completa, ou, sem nenhuma, a
- * maior lista que começa no capítulo 1. Serve só para buscar capítulo a capítulo antes de uma
- * segunda tentativa de confirmação (spec §11, item 25); nunca localiza fato.
+ * lista de números seguidos que chega mais longe, com os capítulos que faltam no começo sem título.
+ * Serve só para buscar capítulo a capítulo antes de uma segunda tentativa de confirmação (spec §11,
+ * itens 25 e 44); nunca localiza fato.
  */
 export function bestStructureGuess(candidates: StructureCandidate[]): DeclaredChapter[] | null {
-  const fromOne = candidates.filter((c) => isContiguous(c.chapters));
-  const pool = fromOne.some((c) => c.complete) ? fromOne.filter((c) => c.complete) : fromOne;
-  const best = [...pool].sort((a, b) => b.chapters.length - a.chapters.length)[0];
-  return best ? best.chapters : null;
+  const completas = candidates.filter((c) => c.complete && isContiguous(c.chapters));
+  if (completas.length > 0) return [...completas].sort((a, b) => b.chapters.length - a.chapters.length)[0].chapters;
+
+  // Empate no último capítulo: a lista que traz mais capítulos de verdade, e com eles mais títulos.
+  const seguidas = candidates
+    .filter((c) => isContiguousRun(c.chapters))
+    .sort((a, b) => b.chapters[b.chapters.length - 1].number - a.chapters[a.chapters.length - 1].number || b.chapters.length - a.chapters.length);
+  if (seguidas.length === 0) return null;
+  const { chapters } = seguidas[0];
+  const faltantes = Array.from({ length: chapters[0].number - 1 }, (_, i) => ({ number: i + 1, part: null, numberInPart: null, title: null }));
+  return [...faltantes, ...chapters];
 }

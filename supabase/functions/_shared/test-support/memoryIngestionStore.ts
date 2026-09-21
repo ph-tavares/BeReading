@@ -221,6 +221,14 @@ export class MemoryIngestionStore implements IngestionStore {
     for (const [id, value] of this.texts) if (value.createdAt < iso) this.texts.delete(id);
   }
 
+  async deleteSourceTextsForRun(runId: string) {
+    let total = 0;
+    for (const source of this.sources.filter((s) => s.runId === runId)) {
+      if (this.texts.delete(source.id)) total++;
+    }
+    return total;
+  }
+
   async findExtractedSource(input: { editionId: string; workKey: string | null; url: string; sinceIso: string }) {
     // Espelha o SupabaseIngestionStore (BER-59, spec §11 item 40).
     const runsDaEdicao = new Set(this.runs.filter((r) => r.editionId === input.editionId).map((r) => r.id));
