@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { BookOpen } from 'lucide-react-native';
+import { BookOpen, Camera } from 'lucide-react-native';
 import { getBookWithChapters, getMyAnswers, getStudentBookEntry } from '../../src/api/queries';
 import { startReadingBook, stopReadingBook } from '../../src/api/edgeFunctions';
 import { PaywallSheet } from '../../src/components/PaywallSheet';
@@ -14,10 +14,10 @@ import { useEntitlementStore } from '../../src/stores/entitlementStore';
 import { useAuthStore } from '../../src/stores/authStore';
 import { isQuotaExceededError, type QuotaExceeded } from '../../src/utils/billing';
 import {
-  Button, Cover, EmptyState, ProgressBar, Screen, Skeleton, Tag, Text, confirmDestructive, useToast,
+  Button, Cover, EmptyState, IconButton, ProgressBar, Screen, Skeleton, Tag, Text, confirmDestructive, useToast,
 } from '../../src/ui';
 import { ChapterRow, answersByChapter, chapterStates } from '../../src/features/book';
-import { radius, space } from '../../src/theme/tokens';
+import { MIN_TOUCH, radius, space } from '../../src/theme/tokens';
 import type { Book, Chapter, StudentBook } from '../../src/types/database';
 
 const LARGURA_DA_CAPA = 100; // spec 7.4 e DESIGN.md secao 5 (Cover).
@@ -191,9 +191,25 @@ export default function BookDetailScreen() {
 
       {readingStatus === 'reading' ? (
         <View style={styles.barra}>
-          <Button icon={BookOpen} onPress={() => router.push({ pathname: '/register-reading', params: { bookId: data.id } })}>
+          {/* BER-100: o botao novo e o da direita. Travou numa pagina, pergunta
+              aqui. O "Registrar leitura" continua sendo o acento da tela. */}
+          <Button
+            icon={BookOpen}
+            style={styles.flex}
+            onPress={() => router.push({ pathname: '/register-reading', params: { bookId: data.id } })}
+          >
             Registrar leitura
           </Button>
+          <IconButton
+            icon={Camera}
+            accessibilityLabel="Perguntar sobre uma página deste livro"
+            variant="surface"
+            style={styles.botaoAssistente}
+            onPress={() => router.push({
+              pathname: '/assistant/scan',
+              params: { bookId: data.id, bookTitle: data.title },
+            })}
+          />
         </View>
       ) : null}
 
@@ -212,5 +228,6 @@ const styles = StyleSheet.create({
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.xs },
   progresso: { gap: space.xs },
   secao: { marginBottom: space.sm },
-  barra: { paddingVertical: space.md },
+  barra: { paddingVertical: space.md, flexDirection: 'row', alignItems: 'center', gap: space.md },
+  botaoAssistente: { height: MIN_TOUCH + space.md },
 });

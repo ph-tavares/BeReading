@@ -28,6 +28,13 @@
       "expo-router",
       "expo-secure-store",
       "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O BeReading usa a câmera pra fotografar a página que você está lendo e te ajudar a entender o trecho. A foto não fica salva.",
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-image",
       [
         "expo-splash-screen",

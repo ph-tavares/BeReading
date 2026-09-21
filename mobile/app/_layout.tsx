@@ -152,6 +152,9 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen name="session/index" options={{ presentation: 'fullScreenModal' }} />
+            {/* BER-100: a camera do assistente. Tela cheia pelo mesmo motivo do
+                quiz: a tab bar atras de um visor de camera nao faz sentido. */}
+            <Stack.Screen name="assistant/scan" options={{ presentation: 'fullScreenModal' }} />
           </Stack>
         </ToastProvider>
       </View>

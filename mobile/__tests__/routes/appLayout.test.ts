@@ -107,3 +107,23 @@ describe('app/(tabs)/_layout.tsx: rotulos e TabBar novo', () => {
     expect(codigo).toMatch(/name="perfil"\s+options=\{\{\s*title:\s*'Você'/);
   });
 });
+
+describe('BER-100: a camera do assistente e a bolinha', () => {
+  it('assistant/scan e declarada como modal de tela cheia', () => {
+    const codigo = ler('app/_layout.tsx');
+    const bloco = codigo.slice(
+      codigo.indexOf('name="assistant/scan"'),
+      codigo.indexOf('name="assistant/scan"') + 150,
+    );
+    expect(bloco).toMatch(/presentation:\s*'fullScreenModal'/);
+  });
+
+  // A bolinha segue o leitor pelas quatro abas (artboard B1), entao ela mora no
+  // layout das abas. Dentro da Hoje, ela sumiria nas outras tres.
+  it('a bolinha mora no layout das abas, nao dentro de uma tela', () => {
+    const layoutAbas = ler('app/(tabs)/_layout.tsx');
+    expect(layoutAbas).toContain('AssistantBubble');
+    expect(layoutAbas).toContain("pathname: '/assistant/scan'");
+    expect(ler('app/(tabs)/index.tsx')).not.toContain('AssistantBubble');
+  });
+});
