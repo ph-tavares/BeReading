@@ -3,6 +3,7 @@ import { fakeContext, NOW, seedRun, stepRow } from '../../test-support/ingestion
 import { MemoryIngestionStore } from '../../test-support/memoryIngestionStore.ts';
 import { LIMITS } from '../budget.ts';
 import type { AIRequest } from '../../ai.ts';
+import { RetryableStepError } from '../queue.ts';
 import { RECHECK_AFTER_MS } from '../recheck.ts';
 import type { NewSource, RunRow } from '../store.ts';
 import type { SourceWeight } from '../types.ts';
@@ -161,7 +162,8 @@ Deno.test('structure: sem confirmação na segunda tentativa, ou sem palpite, ma
   assertEquals([segunda.runStatusReason, segunda.enqueue], ['estrutura_nao_confirmada', undefined]);
 
   const outro = await seedRun(store);
-  await addSource(store, outro.run, 'b.com', 'D', { declaredStructure: [DOIS_CAPITULOS[1]] });
+  // Lista com buraco não serve de palpite.
+  await addSource(store, outro.run, 'b.com', 'D', { declaredStructure: [DOIS_CAPITULOS[0], { ...DOIS_CAPITULOS[1], number: 3 }] });
   const semPalpite = await runStructureStep(stepRow(outro.run, 'structure', '-'), outro.run, fakeContext(store));
   assertEquals(semPalpite.runStatusReason, 'estrutura_nao_confirmada');
   assertEquals((await store.listEditionChapters(edition.id)).length, 0);
@@ -263,6 +265,24 @@ Deno.test('publish: sem fonte aceita falha; sem estrutura fica partial; ambos av
   assertEquals(ctx.notifications.length, 2);
 });
 
+Deno.test('publish: texto bruto que sobrou no run é apagado ao fechar e avisa a operação (BER-59)', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run } = await seedRun(store);
+  const outro = await seedRun(store);
+  const sobra = await addSource(store, run, 'blog.com', 'D');
+  const deOutroRun = await addSource(store, outro.run, 'wiki.org', 'B');
+  await store.saveSourceText(sobra.id, 'texto da página');
+  await store.saveSourceText(deOutroRun.id, 'texto em extração');
+  const ctx = fakeContext(store);
+
+  const outcome = await runPublishStep(stepRow(run, 'publish', '-'), run, ctx);
+
+  assertEquals(await store.getSourceText(sobra.id), null);
+  assertEquals(await store.getSourceText(deOutroRun.id), 'texto em extração', 'o run que ainda roda não perde o texto');
+  assertEquals(outcome.payload?.textos_descartados, 1);
+  assertEquals(ctx.notifications.some((n) => n.includes('1 texto bruto')), true);
+});
+
 Deno.test('structureDivergence: ignora títulos genéricos "Capítulo N" e aponta títulos diferentes', () => {
   const confirmados = [
     { id: 'x', number: 1, partLabel: null, numberInPart: null, title: 'A chegada' },
@@ -312,6 +332,30 @@ Deno.test('extract: resposta da IA que não parseia ainda soma o custo ao run (B
   await assertRejects(() => runExtractStep(stepRow(run, 'extract', `${source.id}#0`), run, fakeContext(store, { ai })));
 
   assertEquals((await store.getRun(run.id)).stats.custo_ia_microusd, 1500);
+});
+
+// No run local de 21/09/2026 uma resposta sem JSON no bloco 0 do Brasil Escola matou a fonte na
+// primeira tentativa — a única com a lista completa de capítulos do 1984 (BER-59).
+Deno.test('extract e verify: resposta da IA sem JSON é erro transitório, que volta para a fila', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const { run, edition } = await seedRun(store);
+  const source = await addSource(store, run, 'blog.com', 'D');
+  await store.saveSourceText(source.id, 'texto');
+  const ai = () => Promise.resolve({ text: 'Aqui está o resumo pedido.', model: 'claude-haiku-4-5', usage: { inputTokens: 1, outputTokens: 1 } });
+  const ctx = fakeContext(store, { ai });
+
+  await assertRejects(() => runExtractStep(stepRow(run, 'extract', `${source.id}#0`), run, ctx), RetryableStepError);
+
+  const [cap1] = await store.replaceEditionChapters(edition.id, DOIS_CAPITULOS, 1);
+  const outra = await addSource(store, run, 'wiki.org', 'B');
+  const claim = (sourceId: string) => ({
+    runId: run.id, sourceId, chunkIndex: 0, chapterRef: { number: 1, part: null, numberInPart: null, title: null },
+    kind: 'event' as const, statement: 'Ana chega.', isInterpretation: false, forwardReference: false,
+  });
+  await store.insertClaims([claim(source.id), claim(outra.id)]);
+  await store.setClaimLocations(store.claims.map((c) => ({ id: c.id, editionChapterId: cap1.id, located: true })));
+
+  await assertRejects(() => runVerifyStep(stepRow(run, 'verify', '1'), run, ctx), RetryableStepError);
 });
 
 Deno.test('verify: com o teto de custo atingido, pula sem chamar a IA nem publicar (BER-59)', async () => {

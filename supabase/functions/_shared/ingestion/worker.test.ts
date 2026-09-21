@@ -2,7 +2,7 @@ import { assert, assertEquals, assertRejects } from 'https://deno.land/std@0.208
 import { AIOutOfCreditsError, type AIRequest } from '../ai.ts';
 import { fakeContext, NOW, page } from '../test-support/ingestionContext.ts';
 import { MemoryIngestionStore } from '../test-support/memoryIngestionStore.ts';
-import { HttpStatusError } from './queue.ts';
+import { HttpStatusError, MAX_RETRIES } from './queue.ts';
 import { RECHECK_AFTER_MS } from './recheck.ts';
 import { DeferStepError, type StepContext } from './steps/context.ts';
 import { EXECUTORS } from './steps/index.ts';
@@ -295,4 +295,31 @@ Deno.test('runWorker: saldo de IA esgotado devolve o passo à fila sem gastar te
   assertEquals([passo.status, passo.attempts, report.deferred], ['pending', 0, 1]);
   assertEquals(passo.nextAttemptAt, new Date(NOW + OUT_OF_CREDITS_RETRY_MS).toISOString());
   assert(ctx.notifications.some((n) => n.includes('saldo insuficiente')));
+});
+
+// Run local de 21/09/2026 (BER-59): a extração do Brasil Escola falhou de vez e o texto da página
+// ficou guardado depois de o run fechar. Só o último bloco apagava o texto.
+Deno.test('runWorker: extração que falha de vez apaga o texto bruto; falha que ainda vai tentar de novo o mantém', async () => {
+  const store = new MemoryIngestionStore(() => NOW);
+  const edition = await store.insertEdition('9780000000001', null);
+  const run = await store.createRun(edition.id, {});
+  const fonte = await store.insertSource({
+    runId: run.id, url: 'https://blog.com/resumo', finalUrl: 'https://blog.com/resumo', registrableDomain: 'blog.com', title: null,
+    sourceType: 'web', weight: 'D', decision: 'accepted', rejectionReason: null, publicDomainBasis: null,
+    isBookFile: false, tiedToIsbn: false, contentFingerprint: null, independenceGroup: null, declaredStructure: null,
+  });
+  await store.saveSourceText(fonte.id, TEXTO_BLOG);
+  await store.enqueueSteps([{ runId: run.id, kind: 'extract', subject: `${fonte.id}#0` }]);
+  const ctx = fakeContext(store, {
+    ai: () => Promise.resolve({ text: 'Aqui está o resumo.', model: 'claude-haiku-4-5', usage: { inputTokens: 1, outputTokens: 1 } }),
+  });
+  const passo = store.steps.find((s) => s.kind === 'extract')!;
+
+  await runWorker(ctx);
+  assertEquals([passo.status, await store.getSourceText(fonte.id)], ['pending', TEXTO_BLOG]);
+
+  passo.attempts = MAX_RETRIES;
+  passo.nextAttemptAt = new Date(NOW).toISOString();
+  await runWorker(ctx);
+  assertEquals([passo.status, await store.getSourceText(fonte.id)], ['failed', null]);
 });

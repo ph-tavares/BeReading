@@ -27,6 +27,14 @@ export function structureDivergence(
 export const runPublishStep: StepExecutor = async (_step, run, ctx) => {
   const edition = await ctx.store.getEdition(run.editionId);
 
+  // Rede de segurança (BER-59): o texto bruto da obra não pode sobreviver ao run. Cada passo apaga
+  // o seu, mas no run local de 21/09/2026 uma extração que falhou deixou a página guardada. Sobra
+  // aqui é defeito em algum passo, por isso avisa a operação.
+  const textosDescartados = await ctx.store.deleteSourceTextsForRun(run.id);
+  if (textosDescartados > 0) {
+    await ctx.notify('ingestion', `run ${run.id}: ${textosDescartados} texto bruto de fonte ainda estava guardado ao fechar e foi apagado`);
+  }
+
   const finish = async (status: RunStatus, reason: string | null, divergence: unknown = null) => {
     await ctx.store.updateRun(run.id, {
       status,
@@ -37,7 +45,7 @@ export const runPublishStep: StepExecutor = async (_step, run, ctx) => {
     if (status !== 'succeeded') {
       await ctx.notify('ingestion', `run ${run.id} (ISBN ${edition.isbn}) terminou ${status}${reason ? `: ${reason}` : ''}`);
     }
-    return { payload: { status, motivo: reason } };
+    return { payload: { status, motivo: reason, ...(textosDescartados > 0 ? { textos_descartados: textosDescartados } : {}) } };
   };
 
   // Conferência das cópias do texto integral (BER-59, spec §11 item 39): a segunda cópia não é

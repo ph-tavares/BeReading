@@ -172,6 +172,8 @@ export interface IngestionStore {
   getSourceText(sourceId: string): Promise<string | null>;
   deleteSourceText(sourceId: string): Promise<void>;
   deleteSourceTextsBefore(iso: string): Promise<void>;
+  /** Apaga o texto bruto que ainda houver nas fontes do run e devolve quantos eram. */
+  deleteSourceTextsForRun(runId: string): Promise<number>;
 
   /**
    * Fonte igual já extraída antes e ainda válida: mesma URL, da mesma edição ou de outra edição da

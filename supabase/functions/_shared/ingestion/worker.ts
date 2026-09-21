@@ -157,8 +157,22 @@ async function executeStep(step: StepRow, ctx: StepContext, executors: Record<St
       error: message,
       ...(failure.nextAttemptAt ? { nextAttemptAt: failure.nextAttemptAt } : {}),
     });
-    if (failure.status === 'failed') report.failed++;
+    if (failure.status === 'failed') {
+      report.failed++;
+      // Só o último bloco da extração apagava o texto bruto (BER-59): no run local de 21/09/2026 a
+      // página do Brasil Escola ficou guardada depois de o run fechar. Passo que não volta mais não
+      // vai precisar do texto.
+      const sourceId = sourceWithTextOf(step);
+      if (sourceId) await ctx.store.deleteSourceText(sourceId);
+    }
   }
+}
+
+/** Fonte cujo texto bruto o passo usa: extração (`fonte#bloco`) ou lote seguinte de um PDF. */
+function sourceWithTextOf(step: StepRow): string | null {
+  if (step.kind === 'extract') return step.subject.split('#')[0];
+  if (step.kind === 'fetch' && typeof step.payload.continuacao === 'string') return step.payload.continuacao;
+  return null;
 }
 
 export async function runWorker(ctx: StepContext, executors: Record<StepKind, StepExecutor> = EXECUTORS): Promise<WorkerReport> {

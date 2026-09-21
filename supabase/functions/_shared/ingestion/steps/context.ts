@@ -8,6 +8,7 @@ import type { BeforeRequest, FetchedPage, FetchOptions } from '../sources/fetch-
 import type { GoogleBooksVolume } from '../sources/googlebooks.ts';
 import type { OpenLibraryEdition } from '../sources/openlibrary-edition.ts';
 import type { SearchResponse } from '../sources/tavily.ts';
+import { RetryableStepError } from '../queue.ts';
 import type { IngestionStore, NewStep, RunRow, StepRow } from '../store.ts';
 
 /**
@@ -48,5 +49,17 @@ export type StepExecutor = (step: StepRow, run: RunRow, ctx: StepContext) => Pro
 export class DeferStepError extends Error {
   constructor(readonly until: string) {
     super(`adiado até ${until}`);
+  }
+}
+
+/**
+ * Interpreta a resposta da IA; sem o JSON pedido, o passo volta para a fila em vez de morrer na
+ * primeira tentativa (BER-59). A mensagem original fica no erro, sem trecho da resposta.
+ */
+export function parseAIResponse<T>(parse: () => T): T {
+  try {
+    return parse();
+  } catch (err) {
+    throw new RetryableStepError(`resposta da IA fora do formato: ${err instanceof Error ? err.message : String(err)}`);
   }
 }

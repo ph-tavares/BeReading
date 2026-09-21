@@ -10,7 +10,7 @@ import { reliableSources, sourceNumbersWholeBook } from '../numbering.ts';
 import { RECHECK_AFTER_MS } from '../recheck.ts';
 import type { EditionChapter } from '../types.ts';
 import { type SourceSupport, verifyChapter } from '../verify.ts';
-import { AI_STEP_TIMEOUT_MS, type StepExecutor } from './context.ts';
+import { AI_STEP_TIMEOUT_MS, parseAIResponse, type StepExecutor } from './context.ts';
 
 function chapterLabel(c: EditionChapter): string {
   const position = c.partLabel && c.numberInPart !== null ? `${c.partLabel}, capítulo ${c.numberInPart}` : `capítulo ${c.number}`;
@@ -61,7 +61,7 @@ export const runVerifyStep: StepExecutor = async (step, run, ctx) => {
       const result = await ctx.ai({ prompt: buildGroupingPrompt(chapterLabel(chapter), inputs), maxTokens: GROUPING_MAX_TOKENS, temperature: 0, timeoutMs: AI_STEP_TIMEOUT_MS });
       // Gasto registrado no run assim que a IA responde, antes de parsear (BER-59): nada escapa do teto.
       await ctx.store.incrementRunStats(run.id, aiUsageDelta(result.model, result.usage));
-      const parsed = parseGrouping(result.text, inputs);
+      const parsed = parseAIResponse(() => parseGrouping(result.text, inputs));
       const offset = grouping.groups.length;
       grouping.groups.push(...parsed.groups);
       grouping.contradictions.push(...parsed.contradictions.map(([a, b]) => [a + offset, b + offset] as [number, number]));

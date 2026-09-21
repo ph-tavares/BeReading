@@ -158,22 +158,30 @@ export const runFetchStep: StepExecutor = async (step, run, ctx) => {
   if (looksFullText({ isBookFile, sourceType: decision.sourceType })) {
     const outrosIntegrais = (await ctx.store.listSources(run.id))
       .filter((s) => s.id !== source.id && s.decision === 'accepted' && looksFullText(s));
-    if (outrosIntegrais.length > 0) {
+    // A leitura fica com o texto de maior peso, não com o que baixou primeiro (spec §11, item 44):
+    // no run local de 21/09/2026 uma tradução em PDF (peso B) chegou antes do Gutenberg AU (peso A,
+    // domínio público) e foi a lida. O texto do anterior é apagado: seus passos pendentes de
+    // extração ou de lote de PDF acham o texto vazio e param.
+    const melhorAnterior = outrosIntegrais.sort((a, b) => fullTextRank(a) - fullTextRank(b))[0];
+    const substitui = melhorAnterior !== undefined && fullTextRank(source) < fullTextRank(melhorAnterior);
+    if (melhorAnterior !== undefined && !substitui) {
       const capitulos = countChapterHeadings(fetched.text);
       return {
         stats: { ...sourceDelta(decision, isBookFile), textos_integrais_conferidos: 1 },
         payload: { decisao: 'accepted', fonte: source.id, conferencia: true, capitulos_no_texto: capitulos },
       };
     }
+    for (const anterior of outrosIntegrais) await ctx.store.deleteSourceText(anterior.id);
     await ctx.store.saveSourceText(source.id, fetched.text);
     const next = fetched.kind === 'pdf' ? fetched.pdfNextPage : null;
     return {
       enqueue: [next ? pdfContinuation(step.subject, source.id, next) : { kind: 'extract', subject: `${source.id}#0` }],
-      stats: { ...sourceDelta(decision, isBookFile), textos_integrais_lidos: 1 },
+      stats: { ...sourceDelta(decision, isBookFile), textos_integrais_lidos: 1, ...(substitui ? { textos_integrais_trocados: 1 } : {}) },
       payload: {
         decisao: 'accepted',
         fonte: source.id,
         principal: true,
+        ...(substitui ? { substitui: melhorAnterior.id } : {}),
         capitulos_no_texto: countChapterHeadings(fetched.text),
         ...(next ? { paginas_lidas: next - 1, paginas: fetched.pdfPages } : {}),
       },
@@ -191,6 +199,12 @@ export const runFetchStep: StepExecutor = async (step, run, ctx) => {
     payload: { decisao: 'accepted', fonte: source.id, ...(next ? { paginas_lidas: next - 1, paginas: fetched.pdfPages } : {}) },
   };
 };
+
+/** Ordem de preferência do texto integral: peso da fonte, e domínio público antes do resto. */
+function fullTextRank(source: { weight: string | null; sourceType: string | null }): number {
+  const peso = source.weight ? 'ABCD'.indexOf(source.weight) : 4;
+  return peso * 2 + (source.sourceType === 'public_domain_text' ? 0 : 1);
+}
 
 function pdfContinuation(url: string, sourceId: string, page: number) {
   // O assunto precisa ser único por lote: o índice (run_id, kind, subject) deduplica passos.

@@ -7,7 +7,7 @@ import { buildExtractionPrompt, EXTRACTION_MAX_TOKENS, parseExtraction, splitInt
 import { chunkPart, partFromSource, partStillValid } from '../parts.ts';
 import { mergeDeclared } from '../structure.ts';
 import type { ChapterRef } from '../types.ts';
-import { AI_STEP_TIMEOUT_MS, type StepExecutor } from './context.ts';
+import { AI_STEP_TIMEOUT_MS, parseAIResponse, type StepExecutor } from './context.ts';
 
 export const runExtractStep: StepExecutor = async (step, run, ctx) => {
   const [sourceId, indexText] = step.subject.split('#');
@@ -49,7 +49,7 @@ export const runExtractStep: StepExecutor = async (step, run, ctx) => {
   // O gasto vai ao run antes de parsear (BER-59): resposta inválida também custou, e se ficasse
   // no resultado do passo, que só é somado quando ele termina bem, o teto de custo não a veria.
   await ctx.store.incrementRunStats(run.id, aiUsageDelta(result.model, result.usage));
-  const parsed = parseExtraction(result.text);
+  const parsed = parseAIResponse(() => parseExtraction(result.text));
 
   // A parte do livro é achada pelo nosso código, não pedida ao modelo (spec §11, item 37): a URL da
   // página ("book-2-chapter-1") ou o cabeçalho no texto ("SEGUNDA PARTE") dizem onde o bloco está.

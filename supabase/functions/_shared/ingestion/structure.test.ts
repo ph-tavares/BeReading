@@ -115,13 +115,24 @@ Deno.test('confirmStructure: lista parcial nunca vira hipótese de estrutura, me
   ]), null);
 });
 
-Deno.test('bestStructureGuess: prefere a maior lista completa; sem nenhuma, a maior que começa no 1', () => {
+Deno.test('bestStructureGuess: prefere a maior lista completa; sem nenhuma, a maior lista de números seguidos', () => {
   assertEquals(bestStructureGuess([
     cand({ complete: false, chapters: vinte4 }),
     cand({ chapters: [ch(1), ch(2)] }),
   ])?.length, 2);
   assertEquals(bestStructureGuess([cand({ complete: false, chapters: vinte4.slice(2) }), cand({ complete: false, chapters: vinte4 })])?.length, 24);
-  assertEquals(bestStructureGuess([cand({ complete: false, chapters: vinte4.slice(2) })]), null);
+  assertEquals(bestStructureGuess([cand({ complete: false, chapters: [ch(2), ch(4)] })]), null);
+});
+
+// Run local do 1984, 21/09/2026 (BER-59): o PDF declarou os capítulos 2 a 8 e um post do Medium só
+// o 1. Exigir começo no 1 elegia o Medium, e a segunda tentativa buscou 1 capítulo em vez de 8.
+// O palpite só monta buscas (spec §11, item 25), então completar o começo não localiza fato.
+Deno.test('bestStructureGuess: lista que começa depois do 1 vence a mais curta e ganha os capítulos que faltam no começo', () => {
+  const guess = bestStructureGuess([
+    cand({ complete: false, chapters: [ch(1)] }),
+    cand({ complete: false, chapters: [ch(2, 'Dois'), ch(3), ch(4), ch(5), ch(6), ch(7), ch(8)] }),
+  ]);
+  assertEquals(guess?.map((c) => [c.number, c.title]), [[1, null], [2, 'Dois'], [3, null], [4, null], [5, null], [6, null], [7, null], [8, null]]);
 });
 
 // Caso do run de 1984 (BER-59): uma lista completa sem títulos (24), um índice parcial que começa
