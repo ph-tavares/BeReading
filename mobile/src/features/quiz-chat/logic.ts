@@ -2,7 +2,7 @@
 // mensagens e derivada da mesma entrada que a rota do time ja mantem
 // (questions + results + answerTexts + currentIndex + evaluating): a maquina de
 // estados nao muda, muda so quem conta o que aconteceu.
-import type { Question } from '../../types/database';
+import type { Question, QuizGrounding } from '../../types/database';
 import type { QuestionResult } from '../../utils/quizUtils';
 import { quizTransitionLine, scoreLine } from '../../assistant/lines';
 
@@ -73,4 +73,20 @@ export function buildConversation({
     }
   }
   return mensagens;
+}
+
+/** Quantos domínios aparecem por nome; o resto vira "e mais N". */
+const DOMINIOS_VISIVEIS = 3;
+
+/**
+ * Linha que diz ao leitor de onde saiu o conteúdo das perguntas (BER-59). Mostra a origem, nunca
+ * o conteúdo: "a IA não lê por você" (docs/product.md) vale também para o que o quiz sabe.
+ */
+export function groundingCaption(grounding: QuizGrounding | null | undefined): string | null {
+  if (!grounding || grounding.fontes < 1) return null;
+  const nomes = grounding.dominios.slice(0, DOMINIOS_VISIVEIS);
+  const resto = grounding.dominios.length - nomes.length;
+  const lista = resto > 0 ? `${nomes.join(', ')} e mais ${resto}` : nomes.join(', ');
+  const fontes = grounding.fontes === 1 ? '1 fonte' : `${grounding.fontes} fontes independentes`;
+  return `Perguntas feitas a partir de fatos conferidos em ${fontes}${lista ? `: ${lista}` : ''}.`;
 }

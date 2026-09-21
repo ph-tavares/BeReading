@@ -21,7 +21,7 @@ import { Screen, Skeleton, useToast } from '../../src/ui';
 import { AssistantStateView, QuizConversation } from '../../src/features/quiz-chat';
 import type { QuizStateKey } from '../../src/assistant/lines';
 import { radius, space } from '../../src/theme/tokens';
-import type { Question } from '../../src/types/database';
+import type { Question, QuizGrounding } from '../../src/types/database';
 import type { QuestionResult } from '../../src/utils/quizUtils';
 import { pollDelayMs, shouldKeepPolling } from '../../src/utils/quizPolling';
 import { quizScreenStateFor } from '../../src/utils/quizStatus';
@@ -56,6 +56,8 @@ export default function QuizScreen() {
   // BER-48: o texto que o leitor escreveu em cada pergunta já respondida.
   const [answerTexts, setAnswerTexts] = useState<Record<number, string>>({});
   const [quota, setQuota] = useState<QuotaExceeded | null>(null);
+  // BER-59: de onde veio o conteúdo das perguntas, gravado pelo generate-questions.
+  const [grounding, setGrounding] = useState<QuizGrounding | null>(null);
   // Recarrega o quiz quando o leitor volta da tela de planos (assinou ou não).
   const [reloadKey, setReloadKey] = useState(0);
   const screenStateRef = useRef(screenState);
@@ -102,6 +104,7 @@ export default function QuizScreen() {
         if (next === 'ready') {
           const loaded = await loadQuizForReader(chapterId!, profile?.user_id);
           if (cancelled) return;
+          setGrounding(status?.grounding ?? null);
           applyLoaded(loaded);
         } else {
           // 'polling', 'failed' ou 'no-content' (BER-66).
@@ -135,6 +138,7 @@ export default function QuizScreen() {
         if (next === 'ready') {
           const loaded = await loadQuizForReader(chapterId!, profile?.user_id);
           if (cancelled) return;
+          setGrounding(status?.grounding ?? null);
           applyLoaded(loaded);
         } else if (next === 'polling') {
           setPollCount((c) => c + 1);
@@ -280,6 +284,7 @@ export default function QuizScreen() {
       onSubmit={handleSubmit}
       onNext={handleNext}
       onBack={() => router.back()}
+      grounding={grounding}
     />
   );
 }

@@ -201,3 +201,59 @@ Deno.test('generate-questions: falha da IA marca o capítulo como failed para o 
     await fake.close();
   }
 });
+
+// BER-59: capítulo sem texto no catálogo, mas com conhecimento verificado da edição ligada ao livro.
+// O app chama o capítulo de "Parte 2 - Capítulo 1"; na edição ele é o 3º (a parte recomeça a contagem).
+Deno.test('generate-questions: usa o conhecimento verificado da edição e grava de onde ele veio', async () => {
+  const fake = startFakeSupabase({
+    tables: {
+      questions: [],
+      chapters: [
+        { id: 'ch-a', number: 1, title: 'Parte 1 - Capítulo 1', book_id: 'book-1' },
+        {
+          id: 'ch-1', number: 2, title: 'Parte 2 - Capítulo 1', book_id: 'book-1',
+          book_contents: null, books: { title: '1984', author: 'George Orwell' },
+        },
+      ],
+      book_editions: [{ id: 'ed-1', book_id: 'book-1', created_at: '2026-09-17T00:00:00Z' }],
+      edition_chapters: [1, 2, 3, 4].map((n) => ({
+        id: `ec-${n}`, edition_id: 'ed-1', number: n, part_label: null, number_in_part: n <= 2 ? n : n - 2, title: null,
+      })),
+      chapter_knowledge: [
+        { id: 'k-3', edition_chapter_id: 'ec-3', status: 'confirmed', confidence: 0.95, summary: '', recheck_count: 0 },
+        { id: 'k-4', edition_chapter_id: 'ec-4', status: 'confirmed', confidence: 0.95, summary: '', recheck_count: 0 },
+      ],
+      chapter_facts: [
+        { id: 'f-1', chapter_knowledge_id: 'k-3', kind: 'event', statement: 'Julia entrega um bilhete a Winston.', is_interpretation: false, confidence: 1 },
+        { id: 'f-2', chapter_knowledge_id: 'k-3', kind: 'event', statement: 'Os dois marcam um encontro no campo.', is_interpretation: false, confidence: 0.9 },
+        { id: 'f-9', chapter_knowledge_id: 'k-4', kind: 'event', statement: 'FATO DO CAPÍTULO SEGUINTE.', is_interpretation: false, confidence: 1 },
+      ],
+      chapter_fact_sources: [
+        { fact_id: 'f-1', source_id: 's-1' }, { fact_id: 'f-2', source_id: 's-2' }, { fact_id: 'f-9', source_id: 's-3' },
+      ],
+      ingestion_sources: [
+        { id: 's-1', registrable_domain: 'wikipedia.org' },
+        { id: 's-2', registrable_domain: 'uol.com.br' },
+        { id: 's-3', registrable_domain: 'outro.com' },
+      ],
+    },
+  });
+  withEnv(fake.url);
+
+  try {
+    const { handler } = await import('./index.ts');
+    const requests: unknown[] = [];
+    const res = await withMockedAIFetch(VALID_AI_RESPONSE, () => handler(request({ chapter_id: 'ch-1' })), requests);
+
+    assertEquals(res.status, 200);
+    const prompt = JSON.stringify(requests[0]);
+    assertEquals(prompt.includes('Julia entrega um bilhete a Winston.'), true);
+    assertEquals(prompt.includes('FATO DO CAPÍTULO SEGUINTE'), false, 'nada do capítulo adiante entra no prompt');
+
+    const status = fake.tables.chapter_quiz_status.find((s) => s.chapter_id === 'ch-1');
+    assertEquals(status?.status, 'generated');
+    assertEquals(status?.grounding, { fontes: 2, dominios: ['uol.com.br', 'wikipedia.org'], fatos: 2, status: 'confirmed' });
+  } finally {
+    await fake.close();
+  }
+});

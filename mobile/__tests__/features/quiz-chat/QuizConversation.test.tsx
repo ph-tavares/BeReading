@@ -96,6 +96,14 @@ describe('QuizConversation (spec 7.5)', () => {
     expect(tela.getByRole('button', { name: 'Enviar' }).props.accessibilityState.busy).toBe(true);
   });
 
+  it('mostra de onde veio o conteudo das perguntas quando o quiz tem conhecimento verificado (BER-59)', () => {
+    const { tela } = montar({ grounding: { fontes: 2, dominios: ['uol.com.br', 'wikipedia.org'], fatos: 6, status: 'confirmed' } });
+    expect(tela.getByTestId('quiz-grounding')).toHaveTextContent(
+      'Perguntas feitas a partir de fatos conferidos em 2 fontes independentes: uol.com.br, wikipedia.org.',
+    );
+    expect(montar().tela.queryByTestId('quiz-grounding')).toBeNull();
+  });
+
   it('voltar fecha o quiz', () => {
     const { tela, props } = montar();
     fireEvent.press(tela.getByRole('button', { name: 'Voltar' }));

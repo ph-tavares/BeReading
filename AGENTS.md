@@ -211,6 +211,7 @@ Na prática:
 | Implantar, secrets do Actions, backup/restauração, troubleshooting | `docs/deploy.md` |
 | Build e distribuição do app | `docs/mobile-build.md` |
 | Rodar a ingestão na sua máquina, com IA pelo Claude Code | `docs/ingestao-local.md` |
+| Como o conhecimento verificado chega ao quiz, e como gerar de novo o quiz de um capítulo | `docs/quiz-com-conhecimento-verificado.md` |
 | Testar o assistente de leitura na sua máquina (foto da página) | `docs/assistente-local.md` |
 | Por que um documento antigo não vale mais | `docs/history/README.md` |
 | Boas práticas de Postgres/RLS | `.agents/skills/supabase-postgres-best-practices/` |

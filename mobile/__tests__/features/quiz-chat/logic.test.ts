@@ -1,7 +1,7 @@
 // Logica da conversa do quiz (spec 7.5, F5 Tarefa 2): a lista de mensagens sai
 // de questions + results + answerTexts + currentIndex + evaluating, a mesma
 // entrada que a rota do time ja mantem. Nada aqui muda a maquina de estados.
-import { answeredXp, buildConversation, scoreTagLabel } from '../../../src/features/quiz-chat/logic';
+import { answeredXp, buildConversation, groundingCaption, scoreTagLabel } from '../../../src/features/quiz-chat/logic';
 import { scoreLine } from '../../../src/assistant/lines';
 import type { Question } from '../../../src/types/database';
 
@@ -115,5 +115,21 @@ describe('scoreTagLabel e answeredXp', () => {
   it('XP real soma so as avaliadas (BER-42)', () => {
     expect(answeredXp([{ score: 72, feedback: '' }, { score: null, feedback: '' }, { score: 90, feedback: '' }])).toBe(32);
     expect(answeredXp([])).toBe(0);
+  });
+});
+
+// BER-59: a origem do conteúdo aparece; o conteúdo, nunca.
+describe('groundingCaption', () => {
+  const base = { fatos: 6, status: 'confirmed' as const };
+  it('sem origem registrada, nada aparece', () => {
+    expect(groundingCaption(null)).toBeNull();
+    expect(groundingCaption(undefined)).toBeNull();
+    expect(groundingCaption({ ...base, fontes: 0, dominios: [] })).toBeNull();
+  });
+  it('nomeia ate tres dominios e resume o resto', () => {
+    expect(groundingCaption({ ...base, fontes: 1, dominios: ['wikipedia.org'] }))
+      .toBe('Perguntas feitas a partir de fatos conferidos em 1 fonte: wikipedia.org.');
+    expect(groundingCaption({ ...base, fontes: 5, dominios: ['a.com', 'b.com', 'c.com', 'd.com', 'e.com'] }))
+      .toBe('Perguntas feitas a partir de fatos conferidos em 5 fontes independentes: a.com, b.com, c.com e mais 2.');
   });
 });

@@ -10,6 +10,7 @@ import { buildNoContentMessage, hasUsableContent } from '../_shared/content.ts';
 import { buildClaimableFilter, isClaimable } from './claim.ts';
 import { notifyOps } from '../_shared/ops-alert.ts';
 import { callAI } from '../_shared/ai.ts';
+import { type ChapterGrounding, groundingSummary, groundingText, loadChapterGrounding } from '../_shared/chapter-grounding.ts';
 
 const QUESTION_COUNT = 4;
 
@@ -132,16 +133,27 @@ export async function handler(req: Request): Promise<Response> {
     });
   }
 
-  const contentText = (chapter.book_contents as any)?.content_text ?? '';
+  const catalogText = (chapter.book_contents as any)?.content_text ?? '';
   const bookTitle = (chapter.books as any)?.title ?? '';
   const author = (chapter.books as any)?.author ?? '';
+
+  // BER-59: o conhecimento verificado da ingestão entra junto com o texto do catálogo. Falhar
+  // aqui nunca derruba o quiz — sem conhecimento, é o comportamento de antes.
+  let grounding: ChapterGrounding | null = null;
+  try {
+    grounding = await loadChapterGrounding(supabase, { bookId: chapter.book_id, number: chapter.number, title: chapter.title });
+  } catch (err) {
+    console.error(`[generate-questions] conhecimento verificado indisponível para o capítulo ${chapter_id}: ${err}`);
+  }
+  const contentText = [catalogText.trim(), grounding ? groundingText(grounding) : ''].filter(Boolean).join('\n\n');
 
   // BER-66: sem conteúdo, o prompt saía com "Conteúdo: " em branco e a IA gerava as
   // 4 perguntas a partir só do título — o capítulo virava `generated`, o custo de IA
   // era gasto e nada era registrado. Falha silenciosa que passa por sucesso.
   // A chamada de IA agora nem acontece.
-  if (!hasUsableContent(contentText)) {
-    const message = buildNoContentMessage(contentText);
+  // Conhecimento verificado já traz o mínimo próprio (MIN_GROUNDING_FACTS): basta um dos dois.
+  if (!hasUsableContent(catalogText) && !grounding) {
+    const message = buildNoContentMessage(catalogText);
     console.error(`[generate-questions] ${message} — capítulo ${chapter_id}`);
 
     await supabase.from('chapter_quiz_status').upsert({
@@ -219,12 +231,14 @@ export async function handler(req: Request): Promise<Response> {
       throw new Error(`Failed to insert questions: ${insertError.message}`);
     }
 
-    // Marcar como gerado
+    // Marcar como gerado. `grounding` diz ao app de onde veio o conteúdo (BER-59): null quando
+    // o quiz saiu só do texto do catálogo.
     await supabase.from('chapter_quiz_status').upsert({
       chapter_id,
       status: 'generated',
       attempts,
       last_attempt_at: new Date().toISOString(),
+      grounding: grounding ? groundingSummary(grounding) : null,
     }, { onConflict: 'chapter_id' });
 
     return new Response(JSON.stringify({

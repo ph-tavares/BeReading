@@ -4,13 +4,13 @@
 import { useRef } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { ArrowRight } from 'lucide-react-native';
-import { Button, Screen } from '../../ui';
+import { Button, Screen, Text } from '../../ui';
 import { space } from '../../theme/tokens';
-import type { Question } from '../../types/database';
+import type { Question, QuizGrounding } from '../../types/database';
 import type { QuestionResult } from '../../utils/quizUtils';
 import { ChatBubble } from './ChatBubble';
 import { Composer } from './Composer';
-import { buildConversation } from './logic';
+import { buildConversation, groundingCaption } from './logic';
 
 interface Props {
   questions: Pick<Question, 'type' | 'question_text'>[];
@@ -23,11 +23,14 @@ interface Props {
   onSubmit: () => void;
   onNext: () => void;
   onBack: () => void;
+  /** De onde veio o conteúdo das perguntas (BER-59); sem ele, nada aparece. */
+  grounding?: QuizGrounding | null;
 }
 
 export function QuizConversation({
-  questions, currentIndex, results, answerTexts, answer, onChangeAnswer, evaluating, onSubmit, onNext, onBack,
+  questions, currentIndex, results, answerTexts, answer, onChangeAnswer, evaluating, onSubmit, onNext, onBack, grounding,
 }: Props) {
+  const origem = groundingCaption(grounding);
   const rolagem = useRef<ScrollView>(null);
   const mensagens = buildConversation({
     questions, results, answerTexts, currentIndex, evaluating, pendingAnswer: answer,
@@ -51,6 +54,9 @@ export function QuizConversation({
         subtitle={`Pergunta ${currentIndex + 1} de ${questions.length}`}
         contentStyle={styles.flex}
       >
+        {origem ? (
+          <Text variant="caption" tone="secondary" style={styles.origem} testID="quiz-grounding">{origem}</Text>
+        ) : null}
         <ScrollView
           ref={rolagem}
           style={styles.flex}
@@ -81,4 +87,5 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   lista: { gap: space.md, paddingVertical: space.lg },
   rodape: { paddingTop: space.md, paddingBottom: space.md },
+  origem: { paddingTop: space.sm },
 });
