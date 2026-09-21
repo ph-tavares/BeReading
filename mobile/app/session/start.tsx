@@ -92,9 +92,13 @@ export default function SessionStartScreen() {
     // Nenhuma das duas derruba a sessao se falhar. A sessao ja esta gravada,
     // e o instante do fim tambem — quem depende do som e o conforto, nao a
     // corretude (BER-122).
-    await configureSessionAudio().catch(() => {});
-    await playStartSound().catch(() => {});
-    await armEndAlarm(sessao).catch(() => {});
+    // Falhar aqui nao derruba a sessao, mas tem de aparecer. Em 21/09 o som
+    // de inicio nao tocava e o log do Metro estava limpo, porque estas tres
+    // chamadas engoliam o erro num catch vazio — a guarda
+    // __tests__/guards/erros-da-sessao.test.ts existe por causa disso.
+    await configureSessionAudio().catch((e) => console.error('Falha ao configurar o audio da sessao:', e));
+    await playStartSound().catch((e) => console.error('Falha ao tocar o som de inicio:', e));
+    await armEndAlarm(sessao).catch((e) => console.error('Falha ao armar a notificacao de fim:', e));
 
     router.replace('/session');
   }, [livroId, modo, begin, router]);

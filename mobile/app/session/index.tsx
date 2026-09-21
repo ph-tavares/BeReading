@@ -42,7 +42,7 @@ export default function SessionScreen() {
   // depender de sino nenhum.
   useEffect(() => {
     if (!active || !keepAwake) return;
-    void activateKeepAwakeAsync().catch(() => {});
+    void activateKeepAwakeAsync().catch((e) => console.error('Falha ao manter a tela acesa:', e));
     return () => { try { deactivateKeepAwake(); } catch { /* nada a fazer */ } };
   }, [active, keepAwake]);
 
@@ -56,7 +56,7 @@ export default function SessionScreen() {
         // Falhar aqui nao derruba a sessao: o instante do fim esta gravado e
         // a duracao continua certa sem som nenhum (BER-122). A notificacao
         // local e a rede embaixo deste sino.
-        void playEndSound().catch(() => {});
+        void playEndSound().catch((e) => console.error('Falha ao tocar o som de fim:', e));
       }
     };
 
