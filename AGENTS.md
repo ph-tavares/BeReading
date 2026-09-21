@@ -206,6 +206,8 @@ Na prática:
 | Rodar o app, stack, secrets de IA | `README.md` |
 | Implantar, secrets do Actions, backup/restauração, troubleshooting | `docs/deploy.md` |
 | Build e distribuição do app | `docs/mobile-build.md` |
+| Rodar a ingestão na sua máquina, com IA pelo Claude Code | `docs/ingestao-local.md` |
+| Testar o assistente de leitura na sua máquina (foto da página) | `docs/assistente-local.md` |
 | Por que um documento antigo não vale mais | `docs/history/README.md` |
 | Boas práticas de Postgres/RLS | `.agents/skills/supabase-postgres-best-practices/` |
 | Runbook do cron lendo o Vault | `supabase/runbooks/ber-33-cron-vault.sql` |
