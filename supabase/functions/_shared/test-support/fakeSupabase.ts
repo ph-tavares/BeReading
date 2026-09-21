@@ -81,12 +81,18 @@ function compare(rowValue: unknown, target: string): number {
 
 /**
  * Um subconjunto dos operadores do PostgREST: `eq`, `neq`, `gt`, `gte`, `lt`,
- * `lte`. Combinações via `.or(...)` não são interpretadas — ver o comentário de
+ * `lte` e `in`. Combinações via `.or(...)` não são interpretadas — ver o comentário de
  * `resolveEmbeds` sobre o mesmo tipo de limite deste fake.
  */
 function matchesFilters(row: Record<string, unknown>, params: URLSearchParams): boolean {
   for (const [key, value] of params) {
     if (key === 'select' || key === 'on_conflict' || key === 'order' || key === 'limit') continue;
+    const inList = value.match(/^in\.\((.*)\)$/);
+    if (inList) {
+      const allowed = inList[1].split(',').map((v) => v.replace(/^"|"$/g, ''));
+      if (!allowed.includes(String(row[key]))) return false;
+      continue;
+    }
     const op = value.match(/^(eq|neq|gt|gte|lt|lte)\.(.*)$/);
     if (!op) continue;
     const [, operator, target] = op;

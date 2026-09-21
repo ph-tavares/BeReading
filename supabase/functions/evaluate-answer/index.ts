@@ -1,4 +1,5 @@
 // supabase/functions/evaluate-answer/index.ts
+import { contentWithGrounding } from '../_shared/chapter-grounding.ts';
 import { createServiceClient } from '../_shared/supabase-client.ts';
 import { authErrorResponse, isInternalCaller, resolveUserId } from '../_shared/auth.ts';
 import { internalCallerKeys } from '../_shared/keys.ts';
@@ -86,7 +87,7 @@ async function handleReevaluation(supabase: SupabaseClient, answerId: unknown): 
 
   const { data: answer } = await supabase
     .from('answers')
-    .select('id, answer_text, evaluation_status, questions(question_text, type, chapters(book_contents(content_text)))')
+    .select('id, answer_text, evaluation_status, questions(question_text, type, chapters(number, title, book_id, book_contents(content_text)))')
     .eq('id', answerId)
     .single();
 
@@ -106,7 +107,10 @@ async function handleReevaluation(supabase: SupabaseClient, answerId: unknown): 
   }
 
   const question = (answer.questions as any);
-  const chapterContent = question?.chapters?.book_contents?.content_text ?? '';
+  // BER-59: a pergunta pode ter saído do conhecimento verificado; a avaliação vê os mesmos fatos.
+  const chapterContent = await contentWithGrounding(supabase, question?.chapters?.book_contents?.content_text ?? '', {
+    bookId: question?.chapters?.book_id ?? null, number: question?.chapters?.number ?? null, title: question?.chapters?.title ?? null,
+  });
 
   const evaluation = await evaluateAndStore(
     supabase,
@@ -185,7 +189,7 @@ export async function handler(req: Request): Promise<Response> {
   // Buscar pergunta + capítulo (fim e livro, para a trava) + conteúdo
   const { data: question } = await supabase
     .from('questions')
-    .select('question_text, type, chapter_id, chapters(end_page, book_id, book_contents(content_text))')
+    .select('question_text, type, chapter_id, chapters(end_page, book_id, number, title, book_contents(content_text))')
     .eq('id', question_id)
     .single();
 
@@ -266,7 +270,10 @@ export async function handler(req: Request): Promise<Response> {
     });
   }
 
-  const chapterContent = (question.chapters as any)?.book_contents?.content_text ?? '';
+  const capitulo = question.chapters as any;
+  const chapterContent = await contentWithGrounding(supabase, capitulo?.book_contents?.content_text ?? '', {
+    bookId: capitulo?.book_id ?? null, number: capitulo?.number ?? null, title: capitulo?.title ?? null,
+  });
 
   const evaluation = await evaluateAndStore(
     supabase,

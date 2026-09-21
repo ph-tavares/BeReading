@@ -143,6 +143,17 @@ export interface Subscription {
   updated_at: string;
 }
 
+/**
+ * De onde veio o conteúdo do quiz (BER-59): fatos do capítulo confirmados em fontes
+ * independentes pela ingestão. Só contagens e domínios — o texto dos fatos nunca chega ao app.
+ */
+export interface QuizGrounding {
+  fontes: number;
+  dominios: string[];
+  fatos: number;
+  status: 'confirmed' | 'partial';
+}
+
 export interface ChapterQuizStatus {
   id: string;
   chapter_id: string;
@@ -150,6 +161,8 @@ export interface ChapterQuizStatus {
   attempts: number;
   last_attempt_at: string | null;
   error_message: string | null;
+  /** Null quando o quiz saiu só do texto do catálogo. */
+  grounding?: QuizGrounding | null;
 }
 
 // Schema tipado para o genérico do createClient.
