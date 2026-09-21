@@ -147,3 +147,21 @@ describe('playEndSound', () => {
     expect(mockDisarm).toHaveBeenCalled();
   });
 });
+
+describe('playStopSound', () => {
+  /**
+   * Encerrar antes da hora e o caso em que a rede NAO pode ficar armada: a
+   * sessao acabou, e a notificacao de "tempo acabou" chegava minutos depois.
+   * O desarme vem antes do som, entao um som que falha nao deixa o sino
+   * agendado.
+   */
+  it('desarma a notificacao antes de tocar', async () => {
+    const ordem: string[] = [];
+    mockDisarm.mockImplementationOnce(() => { ordem.push('desarma'); return Promise.resolve(); });
+    mockPlay.mockImplementationOnce(() => { ordem.push('toca'); });
+
+    await audio.playStopSound();
+
+    expect(ordem).toEqual(['desarma', 'toca']);
+  });
+});

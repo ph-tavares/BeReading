@@ -11,6 +11,7 @@ import { disarmEndAlarm } from './alarm';
 
 const INICIO = require('../../../assets/audio/inicio.wav');
 const FIM = require('../../../assets/audio/fim.wav');
+const ENCERRAR = require('../../../assets/audio/encerrar.wav');
 
 /**
  * Os tres valores que decidem se o sino toca. Nenhum e enfeite, e o
@@ -51,7 +52,7 @@ export async function configureSessionAudio(): Promise<void> {
  * mas nada no contrato promete isso), e depender dele fazia os dois sons
  * dividirem um player so.
  */
-type Som = 'inicio' | 'fim';
+type Som = 'inicio' | 'fim' | 'encerrar';
 
 const players = new Map<Som, AudioPlayer>();
 
@@ -134,4 +135,14 @@ export async function playStartSound(): Promise<void> {
 export async function playEndSound(): Promise<void> {
   await tocar('fim', FIM);
   await disarmEndAlarm();
+}
+
+/**
+ * O leitor encerrou antes da hora. Desarma a notificacao ANTES de tocar: sem
+ * isso o sino de rede continuava agendado e chegava minutos depois dizendo
+ * que o tempo tinha acabado, com a sessao ja encerrada.
+ */
+export async function playStopSound(): Promise<void> {
+  await disarmEndAlarm();
+  await tocar('encerrar', ENCERRAR);
 }

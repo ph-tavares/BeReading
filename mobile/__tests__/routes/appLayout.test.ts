@@ -16,14 +16,17 @@ function ler(caminhoRelativo: string): string {
 describe('app/_layout.tsx: apresentacao das rotas', () => {
   const codigo = ler('app/_layout.tsx');
 
-  it('register-reading declara formSheet com os detents e o grabber do brief', () => {
+  // O brief pedia formSheet com detents [0.7, 1]. No iPhone (SDK 57) o sheet
+  // com detent media o layout errado — cabecalho sobre os chips, titulo
+  // cortado — e as duas folhas passaram para o page sheet nativo (`modal`).
+  // A trava agora e o contrario: ninguem volta ao formSheet sem ver em aparelho.
+  it.each(['register-reading', 'session/start'])('%s abre como page sheet (modal), nao formSheet', (nome) => {
     const bloco = codigo.slice(
-      codigo.indexOf('name="register-reading"'),
-      codigo.indexOf('name="register-reading"') + 300,
+      codigo.indexOf(`name="${nome}"`),
+      codigo.indexOf(`name="${nome}"`) + 150,
     );
-    expect(bloco).toMatch(/presentation:\s*'formSheet'/);
-    expect(bloco).toMatch(/sheetAllowedDetents:\s*\[0\.7,\s*1\]/);
-    expect(bloco).toMatch(/sheetGrabberVisible:\s*true/);
+    expect(bloco).toMatch(/presentation:\s*'modal'/);
+    expect(bloco).not.toMatch(/formSheet/);
   });
 
   it('quiz/[chapterId] e quiz/summary declaram fullScreenModal', () => {

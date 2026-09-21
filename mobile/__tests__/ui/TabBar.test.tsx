@@ -24,7 +24,7 @@ jest.mock('react-native-safe-area-context', () => ({
 // O destino do botao central chega por prop: `src/ui` nao importa
 // `expo-router` (ver o cabecalho de TabBar.tsx). Um espiao simples basta, e o
 // teste deixou de depender de mock de modulo.
-const onPressSessao = jest.fn();
+const onPressCentral = jest.fn();
 
 import * as Haptics from 'expo-haptics';
 
@@ -44,14 +44,14 @@ function makeProps(activeIndex = 0, descriptors: Record<string, { options: any }
     // useSafeAreaInsets(), mockado acima, nao esta prop.
     insets: { top: 0, bottom: 0, left: 0, right: 0 },
     descriptors: descriptors as any,
-    onPressSessao,
+    onPressCentral,
   };
 }
 
 describe('TabBar', () => {
   beforeEach(() => {
     (Haptics.impactAsync as jest.Mock).mockClear();
-    onPressSessao.mockClear();
+    onPressCentral.mockClear();
   });
 
   it('mostra os quatro rotulos e o botao central', () => {
@@ -72,10 +72,12 @@ describe('TabBar', () => {
   // botao mais visivel do app segue a acao mais importante. Registrar leitura
   // continua alcancavel pelo botao secundario da Hoje, e a guarda de rotas
   // reprova o PR se alguem tirar os dois.
-  it('o botao central comeca uma sessao, e com haptic de acao primaria', () => {
+  // ADR 0016 (substitui a 0014): o botao central abre o menu com as duas
+  // acoes, sessao e registro. Quem decide o que abrir e o layout das abas.
+  it('o botao central chama a acao central, e com haptic de acao primaria', () => {
     const { getByTestId } = render(<TabBar {...makeProps()} />);
     fireEvent.press(getByTestId('fab-sessao'));
-    expect(onPressSessao).toHaveBeenCalledTimes(1);
+    expect(onPressCentral).toHaveBeenCalledTimes(1);
     // Medio, contra o leve das abas: e' a acao central do produto.
     expect(Haptics.impactAsync).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Medium);
   });

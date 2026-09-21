@@ -88,7 +88,7 @@ export const fontFamily = {
 export type TypeVariant =
   | 'display' | 'title' | 'heading' | 'subhead' | 'body'
   | 'callout' | 'label' | 'caption' | 'button'
-  | 'numericXL' | 'numericL' | 'numericM';
+  | 'numericHero' | 'numericXL' | 'numericL' | 'numericM';
 
 interface TypeStyle {
   fontFamily: string;
@@ -119,6 +119,9 @@ export const type: Record<TypeVariant, TypeStyle> = {
   label:     { fontFamily: fontFamily.uiBold,       fontSize: 13, lineHeight: 17, maxFontSizeMultiplier: 1.3 },
   caption:   { fontFamily: fontFamily.uiMedium,     fontSize: 12, lineHeight: 16, maxFontSizeMultiplier: 1.3 },
   button:    { fontFamily: fontFamily.uiBold,       fontSize: 16, lineHeight: 20, maxFontSizeMultiplier: 1.2 },
+  // O relogio da sessao (BER-123): o tempo domina a tela (spec §3.2). Teto de
+  // Dynamic Type em 1: cinco digitos a 72 ja ocupam a largura toda.
+  numericHero: { fontFamily: fontFamily.displayHeavy, fontSize: 72, lineHeight: 80, letterSpacing: -3, fontVariant: ['tabular-nums'], maxFontSizeMultiplier: 1 },
   numericXL: { fontFamily: fontFamily.displayHeavy, fontSize: 40, lineHeight: 44, letterSpacing: -2, fontVariant: ['tabular-nums'], maxFontSizeMultiplier: 1.1 },
   numericL:  { fontFamily: fontFamily.displayHeavy, fontSize: 24, lineHeight: 28, letterSpacing: -0.9, fontVariant: ['tabular-nums'], maxFontSizeMultiplier: 1.1 },
   numericM:  { fontFamily: fontFamily.display,      fontSize: 17, lineHeight: 22, letterSpacing: -0.4, fontVariant: ['tabular-nums'], maxFontSizeMultiplier: 1.2 },

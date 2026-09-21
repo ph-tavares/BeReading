@@ -1,4 +1,4 @@
-import { startSession, remainingMs, elapsedMs, isFinished, parseCustomMinutes, TIME_PRESETS, formatClock, endAlarmAt } from '../../../src/features/session/logic';
+import { startSession, remainingMs, elapsedMs, isFinished, parseCustomMinutes, TIME_PRESETS, formatClock, endAlarmAt, pauseSession, resumeSession } from '../../../src/features/session/logic';
 
 describe('startSession', () => {
   it('com tempo definido, grava o fim como instante absoluto', () => {
@@ -162,3 +162,36 @@ describe('endAlarmAt', () => {
     expect(endAlarmAt(sessao, new Date('2026-09-20T22:20:01.000Z'))).toBeNull();
   });
 });
+
+describe('pausa (BER-123)', () => {
+  const inicio = new Date('2026-09-20T22:00:00.000Z');
+  const em = (hhmm: string) => new Date(`2026-09-20T${hhmm}:00.000Z`);
+
+  it('o tempo pausado nao conta como leitura nem consome o que falta', () => {
+    const sessao = startSession({ mode: { kind: 'timed', minutes: 20 }, bookId: 'l', now: inicio });
+    const pausada = pauseSession(sessao, em('22:05'));
+
+    expect(remainingMs(pausada, em('22:09'))).toBe(15 * 60_000);
+    expect(elapsedMs(pausada, em('22:09'))).toBe(5 * 60_000);
+    expect(endAlarmAt(pausada, em('22:09'))).toBeNull();
+
+    const retomada = resumeSession(pausada, em('22:09'));
+    expect(retomada.endsAt).toBe('2026-09-20T22:24:00.000Z');
+    expect(elapsedMs(retomada, em('22:10'))).toBe(6 * 60_000);
+  });
+
+  it('sessao sem tempo definido tambem desconta a pausa, e continua sem fim', () => {
+    const sessao = startSession({ mode: { kind: 'open' }, bookId: 'l', now: inicio });
+    const retomada = resumeSession(pauseSession(sessao, em('22:05')), em('22:08'));
+
+    expect(retomada.endsAt).toBeNull();
+    expect(elapsedMs(retomada, em('22:10'))).toBe(7 * 60_000);
+  });
+
+  it('pausar duas vezes nao move o instante da pausa', () => {
+    const sessao = startSession({ mode: { kind: 'timed', minutes: 20 }, bookId: 'l', now: inicio });
+    const uma = pauseSession(sessao, em('22:05'));
+    expect(pauseSession(uma, em('22:07'))).toBe(uma);
+  });
+});
+

@@ -1,13 +1,18 @@
 import { Tabs } from 'expo-router';
 import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { View } from 'react-native';
+import { BookOpenCheck, Timer } from 'lucide-react-native';
 import { TabBar } from '../../src/ui/TabBar';
+import { ActionMenu } from '../../src/ui/ActionMenu';
 import { AssistantBubble } from '../../src/features/assistant';
 import { useReadingStore } from '../../src/stores/readingStore';
 
 export default function TabsLayout() {
   const router = useRouter();
   const { currentBook } = useReadingStore();
+  const [menuAberto, setMenuAberto] = useState(false);
+  const fecharMenu = useCallback(() => setMenuAberto(false), []);
 
   return (
     // A bolinha do assistente (BER-100) vive aqui, e nao dentro da Hoje, porque
@@ -26,11 +31,12 @@ export default function TabsLayout() {
         // design system não importa `expo-router` (ver o cabeçalho de
         // src/ui/TabBar.tsx e o CI vermelho que produziu essa regra).
         //
-        // O destino é a sessão de leitura, e não mais `register-reading`: é a
-        // ADR 0014 ("Ler agora" é a ação primária). O `main` trouxe a versão
-        // anterior deste arquivo junto com a BER-100, e a resolução do conflito
-        // mantém a bolinha do assistente E o destino novo do botão central.
-        tabBar={(props) => <TabBar {...props} onPressSessao={() => router.push('/session/start')} />}
+        // ADR 0016 (substitui a 0014): o botão abre um menu com as duas
+        // ações, sessão de leitura e registrar leitura. A 0014 tinha
+        // descartado o menu por custar um toque a mais; o time escolheu o
+        // menu mesmo assim, para quem nunca usa sessão não perder o atalho
+        // de registrar que a barra dá em toda tela.
+        tabBar={(props) => <TabBar {...props} onPressCentral={() => setMenuAberto(true)} />}
       >
         {/* Nomes de arquivo de rota (index, livros, catalogo, perfil) não mudam:
             deep link depende deles. O rótulo visível sai daqui: o TabBar lê
@@ -53,6 +59,30 @@ export default function TabsLayout() {
             ? { bookId: currentBook.book.id, bookTitle: currentBook.book.title }
             : {},
         })}
+      />
+
+      {/* Por último, para ficar por cima das abas, da barra e da bolinha. */}
+      <ActionMenu
+        visible={menuAberto}
+        title="O que vamos fazer?"
+        onClose={fecharMenu}
+        actions={[
+          {
+            key: 'sessao',
+            icon: Timer,
+            title: 'Sessão de leitura',
+            description: 'Escolhe o tempo, larga o celular e lê.',
+            primary: true,
+            onPress: () => router.push('/session/start'),
+          },
+          {
+            key: 'registrar',
+            icon: BookOpenCheck,
+            title: 'Registrar leitura',
+            description: 'Já leu? Anota até que página foi.',
+            onPress: () => router.push('/register-reading'),
+          },
+        ]}
       />
     </View>
   );

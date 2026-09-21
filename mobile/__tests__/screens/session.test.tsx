@@ -1,4 +1,4 @@
-import { render, act } from '@testing-library/react-native';
+import { render, act, fireEvent, waitFor } from '@testing-library/react-native';
 
 jest.mock('react-native-reanimated', () => {
   const real = jest.requireActual('react-native-reanimated/mock');
@@ -7,8 +7,9 @@ jest.mock('react-native-reanimated', () => {
 
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
+const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ replace: mockReplace, back: mockBack, canGoBack: () => true }),
+  useRouter: () => ({ replace: mockReplace, back: mockBack, push: mockPush, canGoBack: () => true }),
   Stack: { Screen: () => null },
 }));
 
@@ -27,8 +28,24 @@ jest.mock('expo-keep-awake', () => ({
 }));
 
 const mockTocarFim = jest.fn(() => Promise.resolve());
+const mockTocarParada = jest.fn(() => Promise.resolve());
 jest.mock('../../src/features/session/audio', () => ({
   playEndSound: () => mockTocarFim(),
+  playStopSound: () => mockTocarParada(),
+}));
+
+const mockArmar = jest.fn(() => Promise.resolve('id-1'));
+const mockDesarmar = jest.fn(() => Promise.resolve());
+jest.mock('../../src/features/session/alarm', () => ({
+  armEndAlarm: (...a: unknown[]) => mockArmar(...(a as [])),
+  disarmEndAlarm: () => mockDesarmar(),
+}));
+
+jest.mock('../../src/stores/authStore', () => ({ useAuthStore: () => ({ profile: { user_id: 'u1' } }) }));
+jest.mock('../../src/api/queries', () => ({
+  getStudentBooks: jest.fn(() => Promise.resolve([
+    { book: { id: 'b1', title: '1984', author: 'George Orwell', cover_url: null } },
+  ])),
 }));
 
 import SessionScreen from '../../app/session/index';
@@ -40,6 +57,7 @@ const INICIO = new Date('2026-09-20T22:00:00.000Z');
 beforeEach(() => {
   jest.clearAllMocks();
   jest.useFakeTimers();
+  useSessionStore.setState({ showTimer: true, keepAwake: false });
 });
 
 afterEach(() => {
@@ -133,5 +151,74 @@ describe('tela da sessao', () => {
     useSessionStore.setState({ active: sessao, lastMode: { kind: 'timed', minutes: 20 }, keepAwake: true, hydrated: true });
     render(<SessionScreen />);
     expect(mockAtivarTela).toHaveBeenCalled();
+  });
+
+  /**
+   * BER-123: "pausar e retomar funcionam, e o tempo pausado nao conta como
+   * leitura". Pausado 2 minutos, o relogio nao anda; retomado, o fim foi
+   * empurrado os mesmos 2 minutos e o sino e rearmado para o novo instante.
+   */
+  it('pausar congela o tempo, desarma o sino, e retomar empurra o fim', async () => {
+    jest.setSystemTime(new Date('2026-09-20T22:05:00.000Z'));
+    useSessionStore.setState({
+      active: startSession({ mode: { kind: 'timed', minutes: 20 }, bookId: 'b1', now: INICIO }),
+      lastMode: { kind: 'timed', minutes: 20 },
+      hydrated: true,
+    });
+
+    const tela = render(<SessionScreen />);
+    await act(async () => { fireEvent.press(tela.getByLabelText('Pausar')); });
+    expect(mockDesarmar).toHaveBeenCalled();
+
+    // O advanceTimersByTime anda o relogio falso junto: 22:06:59 + 1 s = 22:07.
+    act(() => {
+      jest.setSystemTime(new Date('2026-09-20T22:06:59.000Z'));
+      jest.advanceTimersByTime(1000);
+    });
+    expect(tela.getByText('15:00')).toBeTruthy();
+    expect(tela.getByText('Pausado')).toBeTruthy();
+
+    await act(async () => { fireEvent.press(tela.getByLabelText('Retomar')); });
+
+    expect(useSessionStore.getState().active?.endsAt).toBe('2026-09-20T22:22:00.000Z');
+    expect(mockArmar).toHaveBeenCalledWith(expect.objectContaining({ endsAt: '2026-09-20T22:22:00.000Z' }));
+  });
+
+  it('na tela calma o numero some, e um toque mostra o tempo', () => {
+    jest.setSystemTime(new Date('2026-09-20T22:05:00.000Z'));
+    useSessionStore.setState({
+      active: startSession({ mode: { kind: 'timed', minutes: 20 }, bookId: 'b1', now: INICIO }),
+      lastMode: { kind: 'timed', minutes: 20 },
+      showTimer: false,
+      hydrated: true,
+    });
+
+    const tela = render(<SessionScreen />);
+    expect(tela.queryByText('15:00')).toBeNull();
+
+    fireEvent.press(tela.getByLabelText('Mostrar o tempo'));
+    expect(tela.getByText('15:00')).toBeTruthy();
+  });
+
+  /**
+   * Spec §3.3 e S3: o fim da sessao e "ate que pagina voce foi?". Encerrar
+   * leva direto ao registro com o livro da sessao, e a sessao some.
+   */
+  it('encerrar toca o som, limpa a sessao e abre o registro do livro', async () => {
+    jest.setSystemTime(new Date('2026-09-20T22:05:00.000Z'));
+    useSessionStore.setState({
+      active: startSession({ mode: { kind: 'timed', minutes: 20 }, bookId: 'b1', now: INICIO }),
+      lastMode: { kind: 'timed', minutes: 20 },
+      hydrated: true,
+    });
+
+    const tela = render(<SessionScreen />);
+    fireEvent.press(tela.getByText('Encerrar'));
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith({ pathname: '/register-reading', params: { bookId: 'b1' } });
+    });
+    expect(mockTocarParada).toHaveBeenCalled();
+    expect(useSessionStore.getState().active).toBeNull();
   });
 });
