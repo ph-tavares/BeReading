@@ -16,6 +16,8 @@ import { getStudentBooks } from '../../src/api/queries';
 import { Screen, Button, Chip, Field, ListRow, Text } from '../../src/ui';
 import { space } from '../../src/theme/tokens';
 import { TIME_PRESETS, parseCustomMinutes, type SessionMode } from '../../src/features/session/logic';
+import { configureSessionAudio, playStartSound } from '../../src/features/session/audio';
+import { armEndAlarm } from '../../src/features/session/alarm';
 import type { Book, StudentBook } from '../../src/types/database';
 
 type Entry = StudentBook & { book: Book };
@@ -34,7 +36,7 @@ export default function SessionStartScreen() {
   const router = useRouter();
   const { profile } = useAuthStore();
   const { currentBook } = useReadingStore();
-  const { lastMode, begin } = useSessionStore();
+  const { lastMode, keepAwake, begin, setKeepAwake } = useSessionStore();
 
   const [escolha, setEscolha] = useState<Escolha>(() => escolhaInicial(lastMode));
   const [minutosDigitados, setMinutosDigitados] = useState(
@@ -77,7 +79,23 @@ export default function SessionStartScreen() {
 
   const comecar = useCallback(async () => {
     if (!livroId || !modo) return;
-    await begin({ mode: modo, bookId: livroId });
+    const sessao = await begin({ mode: modo, bookId: livroId });
+
+    // BER-124, as duas camadas do som, armadas junto com a sessao.
+    //
+    // O modo de audio vem ANTES de tocar qualquer coisa: sem
+    // `playsInSilentMode` e `shouldPlayInBackground`, o sino do FIM nao toca
+    // no unico caso que importa, que e o celular no silencioso com a tela
+    // apagada. Configurar so na hora de tocar o fim seria tarde: o app ja
+    // esta congelado.
+    //
+    // Nenhuma das duas derruba a sessao se falhar. A sessao ja esta gravada,
+    // e o instante do fim tambem — quem depende do som e o conforto, nao a
+    // corretude (BER-122).
+    await configureSessionAudio().catch(() => {});
+    await playStartSound().catch(() => {});
+    await armEndAlarm(sessao).catch(() => {});
+
     router.replace('/session');
   }, [livroId, modo, begin, router]);
 
@@ -155,7 +173,17 @@ export default function SessionStartScreen() {
           />
         ) : null}
 
-        {semLivro ? (
+          {/* Terceira camada do som (BER-124). Fica aqui, e nao na tela da
+            sessao, porque a BER-123 fecha aquela tela em "so o tempo, o livro
+            e tres botoes": um quarto controla la brigaria com o contrato.
+            Aqui e' antes de comecar, junto das outras escolhas. */}
+        <Chip
+          label="Manter a tela acesa"
+          selected={keepAwake}
+          onPress={() => { void setKeepAwake(!keepAwake); }}
+        />
+
+      {semLivro ? (
           <Button onPress={() => router.push('/(tabs)/catalogo')}>Escolher um livro</Button>
         ) : (
           <Button onPress={comecar} disabled={!modo || !livroId}>Começar a ler</Button>

@@ -25,6 +25,18 @@ jest.mock('../../src/stores/authStore', () => ({ useAuthStore: () => ({ profile:
 
 jest.mock('../../src/api/queries', () => ({ getStudentBooks: jest.fn() }));
 
+const mockConfigurarAudio = jest.fn(() => Promise.resolve());
+const mockTocarInicio = jest.fn(() => Promise.resolve());
+jest.mock('../../src/features/session/audio', () => ({
+  configureSessionAudio: () => mockConfigurarAudio(),
+  playStartSound: () => mockTocarInicio(),
+}));
+
+const mockArmar = jest.fn(() => Promise.resolve('id-1'));
+jest.mock('../../src/features/session/alarm', () => ({
+  armEndAlarm: (...args: unknown[]) => mockArmar(...(args as [])),
+}));
+
 import SessionStartScreen from '../../app/session/start';
 import { useSessionStore } from '../../src/stores/sessionStore';
 import { useReadingStore } from '../../src/stores/readingStore';
@@ -45,7 +57,7 @@ const studentBook: StudentBook = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  useSessionStore.setState({ active: null, lastMode: { kind: 'timed', minutes: 20 }, hydrated: true });
+  useSessionStore.setState({ active: null, lastMode: { kind: 'timed', minutes: 20 }, keepAwake: false, hydrated: true });
   useReadingStore.setState({ currentBook: { studentBook, book } });
   mGetStudentBooks.mockResolvedValue([{ ...studentBook, book }]);
 });
@@ -115,6 +127,44 @@ describe('tela de escolher o tempo', () => {
 
     await waitFor(() => {
       expect(useSessionStore.getState().active).toMatchObject({ mode: { kind: 'timed', minutes: 45 } });
+    });
+  });
+
+  /**
+   * BER-124: o som de inicio, e a rede embaixo dele, nascem JUNTO com a
+   * sessao. Configurar o modo de audio antes de tocar nao e detalhe: sem
+   * `playsInSilentMode` e `shouldPlayInBackground`, o sino do fim nao toca no
+   * caso que importa, que e o celular no silencioso com a tela apagada.
+   */
+  it('ao comecar: configura o audio, toca o inicio e arma o alarme de fim', async () => {
+    const tela = render(<SessionStartScreen />);
+
+    fireEvent.press(tela.getByText('20 min'));
+    fireEvent.press(tela.getByText('Começar a ler'));
+
+    await waitFor(() => {
+      expect(useSessionStore.getState().active).not.toBeNull();
+    });
+
+    expect(mockConfigurarAudio).toHaveBeenCalled();
+    expect(mockTocarInicio).toHaveBeenCalled();
+    expect(mockArmar).toHaveBeenCalledWith(
+      expect.objectContaining({ endsAt: expect.any(String) }),
+    );
+  });
+
+  /**
+   * A preferencia de manter a tela acesa precisa ter uma porta. Sem ela seria
+   * codigo que ninguem alcanca — o mesmo defeito de "conteudo sem destino"
+   * que a guarda de rotas documenta, so que dentro de uma tela.
+   */
+  it('da para ligar "manter a tela acesa", e a escolha fica guardada', async () => {
+    const tela = render(<SessionStartScreen />);
+
+    fireEvent.press(tela.getByText('Manter a tela acesa'));
+
+    await waitFor(() => {
+      expect(useSessionStore.getState().keepAwake).toBe(true);
     });
   });
 });

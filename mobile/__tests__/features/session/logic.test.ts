@@ -1,4 +1,4 @@
-import { startSession, remainingMs, elapsedMs, isFinished, parseCustomMinutes, TIME_PRESETS, formatClock } from '../../../src/features/session/logic';
+import { startSession, remainingMs, elapsedMs, isFinished, parseCustomMinutes, TIME_PRESETS, formatClock, endAlarmAt } from '../../../src/features/session/logic';
 
 describe('startSession', () => {
   it('com tempo definido, grava o fim como instante absoluto', () => {
@@ -128,5 +128,37 @@ describe('formatClock', () => {
    */
   it('nao mostra tempo negativo quando o fim ja passou', () => {
     expect(formatClock(-3 * 60_000)).toBe('00:00');
+  });
+});
+
+describe('endAlarmAt', () => {
+  const inicio = new Date('2026-09-20T22:00:00.000Z');
+
+  it('agenda no MESMO instante gravado como fim da sessao', () => {
+    const sessao = startSession({ mode: { kind: 'timed', minutes: 20 }, bookId: 'l', now: inicio });
+
+    expect(endAlarmAt(sessao, inicio)).toEqual(new Date('2026-09-20T22:20:00.000Z'));
+  });
+
+  /**
+   * Sem tempo definido nao ha instante para agendar. Quem encerra e o leitor,
+   * e um sino tocando sozinho numa sessao aberta seria um fim que ninguem
+   * pediu.
+   */
+  it('nao agenda nada na sessao sem tempo definido', () => {
+    const sessao = startSession({ mode: { kind: 'open' }, bookId: 'l', now: inicio });
+
+    expect(endAlarmAt(sessao, inicio)).toBeNull();
+  });
+
+  /**
+   * Reabrir o app depois do fim nao pode disparar o sino atrasado: a sessao ja
+   * acabou, e o que o leitor precisa e da tela de fim, nao de um alarme sobre
+   * um tempo que passou.
+   */
+  it('nao agenda para instante que ja passou', () => {
+    const sessao = startSession({ mode: { kind: 'timed', minutes: 20 }, bookId: 'l', now: inicio });
+
+    expect(endAlarmAt(sessao, new Date('2026-09-20T22:20:01.000Z'))).toBeNull();
   });
 });
