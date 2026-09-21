@@ -3,7 +3,7 @@ import { useSessionStore } from '../../src/stores/sessionStore';
 
 beforeEach(async () => {
   await AsyncStorage.clear();
-  useSessionStore.setState({ active: null, lastMode: { kind: 'timed', minutes: 20 }, hydrated: false });
+  useSessionStore.setState({ active: null, lastMode: { kind: 'timed', minutes: 20 }, keepAwake: false, hydrated: false });
 });
 
 describe('sessionStore', () => {
@@ -36,7 +36,7 @@ describe('sessionStore', () => {
   it('lembra o ultimo tempo escolhido, inclusive depois de o app morrer', async () => {
     await useSessionStore.getState().begin({ mode: { kind: 'timed', minutes: 30 }, bookId: 'livro-1' });
 
-    useSessionStore.setState({ active: null, lastMode: { kind: 'timed', minutes: 20 }, hydrated: false });
+    useSessionStore.setState({ active: null, lastMode: { kind: 'timed', minutes: 20 }, keepAwake: false, hydrated: false });
     await useSessionStore.getState().hydrate();
 
     expect(useSessionStore.getState().lastMode).toEqual({ kind: 'timed', minutes: 30 });
@@ -48,5 +48,19 @@ describe('sessionStore', () => {
     const estado = useSessionStore.getState();
     expect(estado.active).toBeNull();
     expect(estado.hydrated).toBe(true);
+  });
+
+  /**
+   * BER-124, terceira camada: "manter a tela acesa" e a garantia de quem nao
+   * quer depender de sino nenhum. E preferencia, entao atravessa a morte do
+   * app junto com o resto.
+   */
+  it('lembra a preferencia de manter a tela acesa', async () => {
+    await useSessionStore.getState().setKeepAwake(true);
+
+    useSessionStore.setState({ keepAwake: false, hydrated: false });
+    await useSessionStore.getState().hydrate();
+
+    expect(useSessionStore.getState().keepAwake).toBe(true);
   });
 });

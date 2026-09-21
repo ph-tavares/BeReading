@@ -129,3 +129,24 @@ export function formatClock(ms: number): string {
   return `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
 }
 
+/**
+ * Quando o alarme de fim deve disparar, ou `null` quando nao ha o que agendar.
+ *
+ * E o MESMO instante que a sessao gravou como fim (BER-124): o sino e a
+ * notificacao de rede saem os dois daqui, entao nao existe a possibilidade de
+ * um tocar num horario e o outro noutro.
+ *
+ * Dois casos devolvem `null`: sessao sem tempo definido, porque quem encerra
+ * e o leitor e um sino tocando sozinho seria um fim que ninguem pediu; e
+ * instante que ja passou, porque reabrir o app depois do fim precisa levar a
+ * tela de fim, nao disparar um alarme atrasado.
+ */
+export function endAlarmAt(session: ActiveSession, now: Date = new Date()): Date | null {
+  if (session.endsAt === null) return null;
+
+  const fim = new Date(session.endsAt);
+  if (fim.getTime() <= now.getTime()) return null;
+
+  return fim;
+}
+
