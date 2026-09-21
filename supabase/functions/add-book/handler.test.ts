@@ -9,7 +9,8 @@ const USER_ID = 'user-1';
 function withEnv(url: string) {
   Deno.env.set('SUPABASE_URL', url);
   Deno.env.set('SUPABASE_SERVICE_ROLE_KEY', 'service-role-key-teste');
-  Deno.env.delete('BOOK_INGESTION_ON_ADD');
+  // Os testes de cadastro não disparam a ingestão; os dela ligam explicitamente.
+  Deno.env.set('BOOK_INGESTION_ON_ADD', 'off');
 }
 
 function request(body: unknown, token: string | null = TOKEN): Request {
@@ -132,6 +133,93 @@ Deno.test('add-book: teto de livros cadastrados por leitor', async () => {
     await res.body?.cancel();
     assertEquals(res.status, 429);
     assertEquals(fake.tables.books.length, 50);
+  } finally {
+    await fake.close();
+  }
+});
+
+const EDICAO_1984 = { id: 'ed-1984', isbn: '9788535914849', book_id: 'book-catalogo' };
+const CAPITULOS_1984 = [
+  { id: 'e1', edition_id: 'ed-1984', number: 1, part_label: 'Parte 1', number_in_part: 1, title: null },
+  { id: 'e2', edition_id: 'ed-1984', number: 2, part_label: 'Parte 1', number_in_part: 2, title: null },
+  { id: 'e3', edition_id: 'ed-1984', number: 3, part_label: 'Parte 2', number_in_part: 1, title: null },
+];
+
+Deno.test('add-book: edição já ingerida define os capítulos, com o rótulo que a ponte do quiz lê (BER-59)', async () => {
+  const fake = startFakeSupabase({
+    users: { [TOKEN]: { id: USER_ID } },
+    tables: { books: [], chapters: [], book_editions: [EDICAO_1984], edition_chapters: CAPITULOS_1984 },
+  });
+  withEnv(fake.url);
+  Deno.env.delete('BOOK_INGESTION_ON_ADD');
+  try {
+    const { handler } = await import('./index.ts');
+    const res = await handler(request({ title: '1984', author: 'George Orwell', total_pages: 300, chapter_count: 9, isbn: '9788535914849' }));
+    const json = await res.json();
+    assertEquals(res.status, 201);
+    assertEquals([json.data.chapters, json.data.content], [3, 'edition']);
+    assertEquals(fake.tables.chapters.map((c) => c.title), ['Parte 1 - Capítulo 1', 'Parte 1 - Capítulo 2', 'Parte 2 - Capítulo 1']);
+    // Edição com estrutura não dispara ingestão.
+    assertEquals(fake.calls.some((c) => c.path.startsWith('/functions/v1/ingest-book')), false);
+  } finally {
+    await fake.close();
+  }
+});
+
+async function esperarChamada(fake: ReturnType<typeof startFakeSupabase>, prefixo: string) {
+  for (let i = 0; i < 50; i++) {
+    const call = fake.calls.find((c) => c.path.startsWith(prefixo));
+    if (call) return call;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  return undefined;
+}
+
+Deno.test('add-book: ISBN sem edição dispara a ingestão ligada a este livro (BER-59)', async () => {
+  const fake = startFakeSupabase({ users: { [TOKEN]: { id: USER_ID } }, tables: { books: [], chapters: [], book_editions: [] } });
+  withEnv(fake.url);
+  Deno.env.delete('BOOK_INGESTION_ON_ADD');
+  try {
+    const { handler } = await import('./index.ts');
+    const res = await handler(request(HOBBIT));
+    const json = await res.json();
+    assertEquals(json.data.content, 'searching');
+    const call = await esperarChamada(fake, '/functions/v1/ingest-book');
+    assertEquals(call?.body, { isbn: '9788595081145', book_id: json.data.book.id });
+  } finally {
+    await fake.close();
+  }
+});
+
+Deno.test('add-book: edição existente sem estrutura roda de novo, sem repontar a edição', async () => {
+  const fake = startFakeSupabase({
+    users: { [TOKEN]: { id: USER_ID } },
+    tables: { books: [], chapters: [], book_editions: [{ id: 'ed-x', isbn: '9788595081145', book_id: 'outro' }], edition_chapters: [] },
+  });
+  withEnv(fake.url);
+  Deno.env.delete('BOOK_INGESTION_ON_ADD');
+  try {
+    const { handler } = await import('./index.ts');
+    const res = await handler(request(HOBBIT));
+    const json = await res.json();
+    assertEquals([json.data.chapters, json.data.content], [3, 'searching']);
+    const call = await esperarChamada(fake, '/functions/v1/ingest-book');
+    assertEquals(call?.body, { isbn: '9788595081145', book_id: null });
+  } finally {
+    await fake.close();
+  }
+});
+
+Deno.test('add-book: BOOK_INGESTION_ON_ADD=off não dispara', async () => {
+  const fake = startFakeSupabase({ users: { [TOKEN]: { id: USER_ID } }, tables: { books: [], chapters: [], book_editions: [] } });
+  withEnv(fake.url);
+  try {
+    const { handler } = await import('./index.ts');
+    const res = await handler(request(HOBBIT));
+    const json = await res.json();
+    assertEquals(json.data.content, 'none');
+    await new Promise((r) => setTimeout(r, 50));
+    assertEquals(fake.calls.some((c) => c.path.startsWith('/functions/v1/ingest-book')), false);
   } finally {
     await fake.close();
   }

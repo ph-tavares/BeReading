@@ -132,4 +132,10 @@ describe('groundingCaption', () => {
     expect(groundingCaption({ ...base, fontes: 5, dominios: ['a.com', 'b.com', 'c.com', 'd.com', 'e.com'] }))
       .toBe('Perguntas feitas a partir de fatos conferidos em 5 fontes independentes: a.com, b.com, c.com e mais 2.');
   });
+  it('BER-60: conteudo da web diz que nao foi conferido; sem conteudo, diz que as perguntas sao sobre a leitura', () => {
+    expect(groundingCaption({ fontes: 2, dominios: ['a.com', 'b.com'], fatos: 0, status: 'partial', origem: 'web' }))
+      .toBe('Perguntas feitas a partir de resumos da web, sem conferência: a.com, b.com.');
+    expect(groundingCaption({ fontes: 0, dominios: [], fatos: 0, status: 'partial', origem: 'leitura' }))
+      .toBe('Ainda não temos o conteúdo deste capítulo. As perguntas são sobre a sua leitura.');
+  });
 });

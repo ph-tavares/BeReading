@@ -156,6 +156,11 @@ export interface QuizGrounding {
   dominios: string[];
   fatos: number;
   status: 'confirmed' | 'partial';
+  /**
+   * BER-60: de onde veio, quando não foi do conteúdo conferido. `web`: resumos e resenhas achados
+   * na hora, sem conferência. `leitura`: nada sobre o capítulo; as perguntas são sobre a leitura.
+   */
+  origem?: 'web' | 'leitura';
 }
 
 export interface ChapterQuizStatus {

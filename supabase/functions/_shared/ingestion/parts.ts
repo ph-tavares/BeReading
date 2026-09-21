@@ -68,6 +68,8 @@ export interface ChunkPart {
   end: string | null;
   /** O bloco troca de parte no meio: não dá para dizer a parte de cada afirmação dele. */
   changes: boolean;
+  /** Cabeçalhos de parte no bloco. `end` vem do último, então com algum ele é confiável. */
+  headings: number;
 }
 
 /**
@@ -83,14 +85,14 @@ export function chunkPart(chunk: string, running: string | null): ChunkPart {
     const label = partLabel(linha);
     if (label && label !== headings[headings.length - 1]?.label) headings.push({ label, linha: i });
   });
-  if (headings.length === 0) return { start: running, end: running, changes: false };
+  if (headings.length === 0) return { start: running, end: running, changes: false, headings: 0 };
 
   const last = headings[headings.length - 1].label;
   // Cabeçalho nas primeiras linhas não é troca no meio: o bloco inteiro é da parte nova.
   const comTexto = linhas.findIndex((l) => l.trim() !== '');
   const noComeco = headings.length === 1 && headings[0].linha <= comTexto;
-  if (noComeco) return { start: last, end: last, changes: false };
-  return { start: running, end: last, changes: true };
+  if (noComeco) return { start: last, end: last, changes: false, headings: 1 };
+  return { start: running, end: last, changes: true, headings: headings.length };
 }
 
 /**
@@ -102,4 +104,53 @@ export function chunkPart(chunk: string, running: string | null): ChunkPart {
 export function partStillValid(maxChapterSeen: number | null, chapterInChunk: number | null): boolean {
   if (maxChapterSeen === null || chapterInChunk === null) return true;
   return chapterInChunk >= maxChapterSeen;
+}
+
+/**
+ * Parte de cada capítulo da lista que o bloco declara (defeito 5 da BER-59). Diferente das
+ * afirmações, a lista vem em ordem de leitura, e o recomeço da numeração (8 e depois 1) marca onde
+ * a parte troca. Então dá para separar um bloco que troca de parte no meio, desde que tenha um
+ * cabeçalho só: antes do recomeço é a parte de antes, depois é a do cabeçalho. Sem parte anterior
+ * conhecida (o primeiro bloco, com o título do livro antes de "PART ONE"), tudo é da parte do
+ * cabeçalho. Errar aqui não vira spoiler: a lista só serve à estrutura, e `wholeBookNumbering`
+ * recusa a lista inteira se as partes não fecharem.
+ */
+export function declaredWithParts<T extends { number: number; part: string | null; numberInPart: number | null }>(
+  entries: T[],
+  block: ChunkPart,
+  parte: string | null,
+): T[] {
+  const tag = (e: T, p: string | null): T => (p && !e.part ? { ...e, part: p, numberInPart: e.numberInPart ?? e.number } : e);
+  if (!block.changes) return entries.map((e) => tag(e, parte));
+  if (block.headings !== 1) return entries;
+
+  let atual = block.start ?? block.end;
+  let anterior: number | null = null;
+  return entries.map((e) => {
+    if (anterior !== null && e.number < anterior) atual = block.end;
+    anterior = e.number;
+    return tag(e, atual);
+  });
+}
+
+/**
+ * Parte que o bloco seguinte herda. Bloco com cabeçalho de parte passa a do último cabeçalho, que
+ * é confiável mesmo quando o próprio bloco ficou sem parte por trocar no meio. Antes, esse bloco
+ * passava `null` e, no 1984 do Gutenberg AU (run local de 21/09/2026), a parte não chegou a
+ * nenhum dos blocos: o cabeçalho "PART ONE" vinha depois do título, no meio do primeiro.
+ */
+export function partForNextChunk(block: ChunkPart, parte: string | null): string | null {
+  if (block.headings > 0) return block.end;
+  return parte === null ? null : block.end;
+}
+
+/**
+ * Maior capítulo visto para o bloco seguinte comparar (`partStillValid`). Parte nova recomeça a
+ * contagem: bloco que troca de parte no meio não sabe quais capítulos são de depois do cabeçalho,
+ * então zera (null); bloco que começa com o cabeçalho conta só os capítulos dele.
+ */
+export function nextMaxChapter(block: ChunkPart, maxChapterSeen: number | null, chaptersInBlock: number[]): number | null {
+  if (block.changes) return null;
+  const base = block.headings > 0 ? 0 : maxChapterSeen ?? 0;
+  return Math.max(base, ...chaptersInBlock, 0);
 }

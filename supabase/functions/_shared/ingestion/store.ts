@@ -1,6 +1,8 @@
 // supabase/functions/_shared/ingestion/store.ts
 // Acesso a dados da ingestão (BER-59) atrás de uma interface: os passos e o worker são
 // testados com `MemoryIngestionStore`, sem Postgres; em produção vale `SupabaseIngestionStore`.
+import type { EstimatedChapter } from '../chapter-pages.ts';
+import type { AppBook } from './app-sync.ts';
 import type { DomainPolicy } from './policy.ts';
 import type {
   ChapterRef,
@@ -208,4 +210,13 @@ export interface IngestionStore {
   /** Incrementa `recheck_count` e adia `next_recheck_at` para `nextRecheckAtIso` (BER-59: nunca `null`, senão um run que falhar depois desta chamada perde o capítulo para sempre). */
   markRechecksScheduled(editionId: string, chapterNumbers: number[], nextRecheckAtIso: string): Promise<void>;
   listBookChapters(bookId: string): Promise<{ number: number; title: string | null }[]>;
+
+  // BER-60: o livro do app que a edição alimenta (ver app-sync.ts).
+  /** Livros do app com esse ISBN: o do catálogo e os que leitores cadastraram. */
+  listBookIdsByIsbn(isbn: string): Promise<string[]>;
+  getAppBook(bookId: string): Promise<AppBook | null>;
+  /** Troca os capítulos do livro. Só é chamado para livro de leitor sem capítulo fechado. */
+  replaceAppChapters(bookId: string, chapters: EstimatedChapter[]): Promise<void>;
+  /** Volta para `pending` o quiz dos capítulos que caíram em NO_CONTENT e devolve os capítulos. */
+  requeueNoContentQuizzes(bookIds: string[]): Promise<string[]>;
 }

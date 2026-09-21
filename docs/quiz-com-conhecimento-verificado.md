@@ -18,6 +18,26 @@ fato de capítulo é spoiler por natureza (spec §6.4) e porque "a IA não lê p
 Capítulo sem conhecimento verificado continua exatamente como antes: quiz a partir do texto do
 catálogo, sem a linha de origem.
 
+## Livro cadastrado pelo leitor: nenhum capítulo sem quiz (BER-60)
+
+O `generate-questions` escolhe o conteúdo do capítulo nesta ordem, e sempre gera o quiz:
+
+| Ordem | Conteúdo | O que o leitor vê abaixo do título |
+|---|---|---|
+| 1 | Texto do catálogo e/ou conhecimento verificado (acima) | a origem conferida, ou nada |
+| 2 | Busca do capítulo na web, na hora (Tavily, 1 crédito, cerca de 3 s) | "Perguntas feitas a partir de resumos da web, sem conferência: …" |
+| 3 | Nada achado: perguntas sobre a leitura da pessoa, sem o modelo supor fato do livro | "Ainda não temos o conteúdo deste capítulo. As perguntas são sobre a sua leitura." |
+
+- **Trechos da web não são gravados.** O mesmo pedido à IA devolve um resumo interno do capítulo,
+  com as palavras dela, que vai para `book_contents` e serve ao `evaluate-answer`. `book_contents`
+  não tem policy de leitura: o resumo nunca chega ao app.
+- **Spoiler:** resumos da web falam do livro inteiro. O prompt manda usar só o que for do capítulo
+  e proíbe citar o que vem depois. É instrução, não garantia; por isso o app diz que não foi conferido.
+- **Sem conteúdo (ordem 3), a avaliação não julga fatos:** avalia se a resposta é específica e coerente.
+- **Com ISBN, o cadastro também dispara a ingestão verificada.** Quando o run fecha, o `publish`
+  troca os capítulos do livro do leitor pelos da edição (só se nenhum capítulo foi fechado) e gera
+  de novo os quizzes que tinham ficado em NO_CONTENT (`_shared/ingestion/app-sync.ts`).
+
 ## Como funciona
 
 ```

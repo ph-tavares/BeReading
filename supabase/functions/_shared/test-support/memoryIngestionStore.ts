@@ -2,6 +2,8 @@
 // Store da ingestão em memória (BER-59), com a semântica das tabelas e das funções SQL
 // que os passos usam: índice único dos passos, reivindicação com trava velha, soma de
 // estatística, cascata de conhecimento. Helper de teste — não é código de produção.
+import type { EstimatedChapter } from '../chapter-pages.ts';
+import type { AppBook } from '../ingestion/app-sync.ts';
 import type { DomainPolicy } from '../ingestion/policy.ts';
 import { MAX_RETRIES } from '../ingestion/queue.ts';
 import { MAX_RECHECKS } from '../ingestion/recheck.ts';
@@ -383,5 +385,33 @@ export class MemoryIngestionStore implements IngestionStore {
 
   async listBookChapters(bookId: string) {
     return this.bookChapters.get(bookId) ?? [];
+  }
+
+  // BER-60: livros do app, para o app-sync.
+  appBooks = new Map<string, AppBook & { isbn: string | null }>();
+  appChapters = new Map<string, EstimatedChapter[]>();
+  noContentQuizzes = new Map<string, string[]>();
+  quizzesReabertos: string[] = [];
+
+  async listBookIdsByIsbn(isbn: string) {
+    return [...this.appBooks.values()].filter((b) => b.isbn === isbn).map((b) => b.id);
+  }
+
+  async getAppBook(bookId: string) {
+    const book = this.appBooks.get(bookId);
+    return book ? { ...book } : null;
+  }
+
+  async replaceAppChapters(bookId: string, chapters: EstimatedChapter[]) {
+    this.appChapters.set(bookId, chapters);
+    const book = this.appBooks.get(bookId);
+    if (book) book.chapterCount = chapters.length;
+  }
+
+  async requeueNoContentQuizzes(bookIds: string[]) {
+    const ids = bookIds.flatMap((id) => this.noContentQuizzes.get(id) ?? []);
+    for (const id of bookIds) this.noContentQuizzes.delete(id);
+    this.quizzesReabertos.push(...ids);
+    return ids;
   }
 }

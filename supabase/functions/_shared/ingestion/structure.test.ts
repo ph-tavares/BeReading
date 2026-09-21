@@ -169,3 +169,64 @@ Deno.test('confirmStructure: lista completa refutada por capítulo descrito em l
     cand({ sourceId: 'b', independenceGroup: 'b.com', chapters: vinte4b.slice(0, 23) }),
   ]), null);
 });
+
+// Defeito 5 (BER-59, run local de 21/09/2026): o texto integral do 1984 lido em blocos declara
+// "Chapter 1" em cada parte. As partes têm 8, 10 e 6 capítulos.
+const PARTES_1984 = [8, 10, 6];
+const blocoDaParte = (parte: number, n: number): DeclaredChapter => ({ number: n, part: `Parte ${parte}`, numberInPart: n, title: null });
+const textoIntegral1984 = (): DeclaredChapter[][] =>
+  PARTES_1984.map((qtd, i) => Array.from({ length: qtd }, (_, k) => blocoDaParte(i + 1, k + 1)));
+
+Deno.test('mergeDeclaredKeepingParts: o capítulo 1 de cada parte não vira um só', async () => {
+  const { mergeDeclaredKeepingParts } = await import('./structure.ts');
+  assertEquals(mergeDeclaredKeepingParts(textoIntegral1984()).length, 24);
+  // Sem parte, continua juntando pelo número, e completa o título.
+  assertEquals(mergeDeclaredKeepingParts([[ch(1)], [ch(1, 'A')]]), [ch(1, 'A')]);
+});
+
+Deno.test('wholeBookNumbering: converte parte + número na parte para a numeração do livro inteiro', async () => {
+  const { mergeDeclaredKeepingParts, wholeBookNumbering } = await import('./structure.ts');
+  const lista = wholeBookNumbering(mergeDeclaredKeepingParts(textoIntegral1984()))!;
+  assertEquals(lista.map((c) => c.number), Array.from({ length: 24 }, (_, i) => i + 1));
+  assertEquals([lista[8].part, lista[8].numberInPart], ['Parte 2', 1]);
+  assertEquals([lista[18].part, lista[18].numberInPart], ['Parte 3', 1]);
+});
+
+Deno.test('wholeBookNumbering: na dúvida não converte (parte ou capítulo faltando)', async () => {
+  const { wholeBookNumbering } = await import('./structure.ts');
+  // Só a Parte 2: não dá para saber quantos capítulos vêm antes.
+  assertEquals(wholeBookNumbering([blocoDaParte(2, 1), blocoDaParte(2, 2)]), null);
+  // Parte 1 com buraco no capítulo 3.
+  assertEquals(wholeBookNumbering([blocoDaParte(1, 1), blocoDaParte(1, 2), blocoDaParte(1, 4)]), null);
+  // Sem parte nenhuma, é a lista de sempre.
+  assertEquals(wholeBookNumbering([ch(2), ch(1)]), [ch(1), ch(2)]);
+});
+
+Deno.test('confirmStructure: o texto integral em blocos passa a ser a segunda voz dos 24 capítulos do 1984', async () => {
+  const { mergeDeclaredKeepingParts, wholeBookNumbering } = await import('./structure.ts');
+  const guia = Array.from({ length: 24 }, (_, i) => ch(i + 1));
+  const integral = wholeBookNumbering(mergeDeclaredKeepingParts(textoIntegral1984()))!;
+  const r = confirmStructure([
+    cand({ sourceId: 'historyhit', independenceGroup: 'historyhit.com', weight: 'D', chapters: guia, complete: true }),
+    cand({ sourceId: 'archive', independenceGroup: 'obra', weight: 'A', chapters: integral, complete: false }),
+  ]);
+  assertEquals([r?.basis, r?.chapters.length], ['primary', 24]);
+  assertEquals([r?.chapters[8].part, r?.chapters[8].numberInPart], ['Parte 2', 1]);
+});
+
+Deno.test('chaptersFromClaims: capítulos citados pelo texto integral completam a lista, sem antecipação nem capítulo sem parte', async () => {
+  const { chaptersFromClaims, mergeDeclaredKeepingParts, wholeBookNumbering } = await import('./structure.ts');
+  const ref = (part: string | null, numberInPart: number | null) => ({ number: null, part, numberInPart });
+  const claims = [
+    { chapterRef: ref('Parte 1', 7), forwardReference: false },
+    { chapterRef: ref('Parte 2', 1), forwardReference: false },
+    { chapterRef: ref('Parte 3', 6), forwardReference: true },
+    { chapterRef: ref(null, 4), forwardReference: false },
+  ];
+  assertEquals(chaptersFromClaims(claims).map((c) => [c.part, c.numberInPart]), [['Parte 1', 7], ['Parte 2', 1]]);
+
+  // Lista declarada sem o 7 da Parte 1; as afirmações trazem o 7 e fecham a parte.
+  const declarada = [1, 2, 3, 4, 5, 6, 8].map((n) => blocoDaParte(1, n));
+  assertEquals(wholeBookNumbering(declarada), null);
+  assertEquals(wholeBookNumbering(mergeDeclaredKeepingParts([declarada, chaptersFromClaims(claims)]))?.length, 9);
+});

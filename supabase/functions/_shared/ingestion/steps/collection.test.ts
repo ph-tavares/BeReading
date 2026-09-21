@@ -403,3 +403,12 @@ Deno.test('fetch: extração incompleta não é reaproveitada', async () => {
   assertEquals(outcome.stats?.fontes_reaproveitadas, undefined, 'baixa e extrai de novo');
   assertEquals(outcome.enqueue?.[0].kind, 'extract');
 });
+
+Deno.test('reuseSinceIso: 30 dias, mas nunca antes da correção do defeito 5 (BER-59)', async () => {
+  const { reuseSinceIso, REUSE_MAX_AGE_MS, REUSE_NOT_BEFORE_MS } = await import('./fetch.ts');
+  // Logo depois da correção: as extrações de 17 e 18/09 do 1984 ficam de fora.
+  assertEquals(reuseSinceIso(Date.parse('2026-09-22T00:00:00Z')), new Date(REUSE_NOT_BEFORE_MS).toISOString());
+  // Bem depois: vale a janela de 30 dias.
+  const depois = Date.parse('2026-12-01T00:00:00Z');
+  assertEquals(reuseSinceIso(depois), new Date(depois - REUSE_MAX_AGE_MS).toISOString());
+});

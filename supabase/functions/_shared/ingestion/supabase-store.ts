@@ -2,6 +2,8 @@
 // `IngestionStore` sobre supabase-js com a service key (BER-59). As tabelas não têm policy:
 // só este cliente de servidor lê e escreve. Não tem teste unitário (precisa de Postgres); é
 // exercitado na execução de aceitação (Tarefa 19).
+import type { EstimatedChapter } from '../chapter-pages.ts';
+import type { AppBook } from './app-sync.ts';
 import type { createServiceClient } from '../supabase-client.ts';
 import type { DomainPolicy } from './policy.ts';
 import { HttpStatusError } from './queue.ts';
@@ -485,5 +487,45 @@ export class SupabaseIngestionStore implements IngestionStore {
   async listBookChapters(bookId: string) {
     const result = await this.db.from('chapters').select('number, title').eq('book_id', bookId).order('number');
     return must(result, 'listBookChapters') as { number: number; title: string | null }[];
+  }
+
+  async listBookIdsByIsbn(isbn: string) {
+    return (must(await this.db.from('books').select('id').eq('isbn', isbn), 'listBookIdsByIsbn') as { id: string }[]).map((b) => b.id);
+  }
+
+  async getAppBook(bookId: string): Promise<AppBook | null> {
+    const livros = must(await this.db.from('books').select('id, added_by, total_pages').eq('id', bookId).limit(1), 'getAppBook') as Row[];
+    if (!livros[0]) return null;
+    const capitulos = must(await this.db.from('chapters').select('id').eq('book_id', bookId), 'getAppBook(chapters)') as { id: string }[];
+    const ids = capitulos.map((c) => c.id);
+    const quizzes = ids.length === 0 ? [] : must(
+      await this.db.from('chapter_quiz_status').select('chapter_id').in('chapter_id', ids).limit(1),
+      'getAppBook(chapter_quiz_status)',
+    ) as Row[];
+    return {
+      id: bookId, addedBy: livros[0].added_by ?? null, totalPages: livros[0].total_pages,
+      chapterCount: ids.length, hasClosedChapter: quizzes.length > 0,
+    };
+  }
+
+  async replaceAppChapters(bookId: string, chapters: EstimatedChapter[]) {
+    // Sem capítulo fechado não há quiz, pergunta nem resposta presa a estes capítulos (app-sync.ts).
+    ok(await this.db.from('chapters').delete().eq('book_id', bookId), 'replaceAppChapters(delete)');
+    ok(await this.db.from('chapters').insert(chapters.map((c) => ({ ...c, book_id: bookId }))), 'replaceAppChapters(insert)');
+  }
+
+  async requeueNoContentQuizzes(bookIds: string[]) {
+    const capitulos = must(await this.db.from('chapters').select('id').in('book_id', bookIds), 'requeueNoContentQuizzes(chapters)') as { id: string }[];
+    if (capitulos.length === 0) return [];
+    const reabertos = must(
+      await this.db.from('chapter_quiz_status')
+        .update({ status: 'pending', attempts: 0, error_message: null, last_attempt_at: null })
+        .in('chapter_id', capitulos.map((c) => c.id))
+        .eq('status', 'failed')
+        .like('error_message', 'NO_CONTENT%')
+        .select('chapter_id'),
+      'requeueNoContentQuizzes',
+    ) as { chapter_id: string }[];
+    return reabertos.map((r) => r.chapter_id);
   }
 }

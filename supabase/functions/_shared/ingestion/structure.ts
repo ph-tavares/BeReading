@@ -51,6 +51,77 @@ export function mergeDeclared(lists: DeclaredChapter[][]): DeclaredChapter[] {
   return [...byNumber.values()].sort((a, b) => a.number - b.number);
 }
 
+const withPart = (c: DeclaredChapter) => c.part !== null && c.numberInPart !== null;
+
+/**
+ * Acumula a lista declarada de UMA fonte, bloco a bloco, sem juntar capítulos de partes diferentes
+ * (defeito 5 da BER-59, run local de 21/09/2026). No texto integral do 1984, cada bloco do meio do
+ * livro mostra "Chapter 1" sem o cabeçalho da parte; juntando pelo número, os capítulos 1 a 8 das
+ * três partes viravam um só, e o archive.org declarava 8 capítulos em vez de 24. Aqui a chave é a
+ * parte mais o número dentro dela, quando a parte é conhecida.
+ */
+export function mergeDeclaredKeepingParts(lists: DeclaredChapter[][]): DeclaredChapter[] {
+  const byKey = new Map<string, DeclaredChapter>();
+  for (const list of lists) {
+    for (const chapter of list) {
+      const key = withPart(chapter) ? `p${normalizePart(chapter.part)}:${chapter.numberInPart}` : `n${chapter.number}`;
+      const current = byKey.get(key);
+      byKey.set(key, current ? { ...current, title: current.title ?? chapter.title } : { ...chapter });
+    }
+  }
+  return [...byKey.values()];
+}
+
+/**
+ * A lista da fonte na numeração do livro inteiro, que é a que a estrutura confirma. Com partes, o
+ * número vira a soma dos capítulos das partes anteriores mais o número dentro da parte. Só quando
+ * dá para ter certeza: partes seguidas desde a 1 e, em cada parte, capítulos seguidos desde o 1.
+ * Faltou um pedaço, a conta erraria o número de todos os capítulos seguintes (e número errado é
+ * spoiler: foi assim que a Sala 101 foi parar no capítulo 1), então a lista não serve como
+ * candidata e devolve `null`.
+ *
+ * Só para a estrutura. Onde a fonte numera as próprias afirmações (`sourceNumbersWholeBook`) continua
+ * valendo a numeração crua dela.
+ */
+export function wholeBookNumbering(list: DeclaredChapter[]): DeclaredChapter[] | null {
+  const parted = list.filter(withPart);
+  if (parted.length === 0) return mergeDeclared([list]);
+
+  const byPart = new Map<number, DeclaredChapter[]>();
+  for (const chapter of parted) {
+    const part = Number(normalizePart(chapter.part));
+    if (!Number.isInteger(part) || part < 1) return null;
+    byPart.set(part, [...(byPart.get(part) ?? []), chapter]);
+  }
+  const partNumbers = [...byPart.keys()].sort((a, b) => a - b);
+  if (!partNumbers.every((p, i) => p === i + 1)) return null;
+
+  const result: DeclaredChapter[] = [];
+  for (const part of partNumbers) {
+    const chapters = [...byPart.get(part)!].sort((a, b) => a.numberInPart! - b.numberInPart!);
+    if (!chapters.every((c, i) => c.numberInPart === i + 1)) return null;
+    const offset = result.length;
+    for (const c of chapters) {
+      result.push({ number: offset + c.numberInPart!, part: `Parte ${part}`, numberInPart: c.numberInPart, title: c.title });
+    }
+  }
+  return result;
+}
+
+/**
+ * Capítulos que as afirmações de um texto integral citam, com a parte que o nosso código achou
+ * (defeito 5). O texto integral narra o livro inteiro em ordem, então cada capítulo aparece nas
+ * afirmações, mesmo quando o modelo deixa de pô-lo na lista declarada do bloco: no run local do
+ * 1984 de 21/09/2026, a lista trouxe só 7 dos 8 capítulos da Parte 1 e nenhum da Parte 2, enquanto
+ * as afirmações citavam todos. Só para texto integral: numa resenha, citar um capítulo não diz que
+ * ele existe naquela edição.
+ */
+export function chaptersFromClaims(claims: { chapterRef: DeclaredChapter | { number: number | null; part: string | null; numberInPart: number | null } | null; forwardReference: boolean }[]): DeclaredChapter[] {
+  return claims
+    .filter((c) => !c.forwardReference && c.chapterRef?.part && c.chapterRef.numberInPart !== null)
+    .map((c) => ({ number: c.chapterRef!.numberInPart!, part: c.chapterRef!.part, numberInPart: c.chapterRef!.numberInPart, title: null }));
+}
+
 function isContiguous(chapters: DeclaredChapter[]): boolean {
   return chapters.length > 0 && chapters.every((c, i) => c.number === i + 1);
 }

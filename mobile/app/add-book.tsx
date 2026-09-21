@@ -16,7 +16,7 @@ import { PaywallSheet } from '../src/components/PaywallSheet';
 import { isQuotaExceededError, type QuotaExceeded } from '../src/utils/billing';
 import { Button, Cover, Field, Screen, Text, useToast } from '../src/ui';
 import {
-  EMPTY_FORM, isValidIsbn, normalizeIsbn, prefillFromLookup, validateForm,
+  EMPTY_FORM, contentMessage, isValidIsbn, normalizeIsbn, prefillFromLookup, validateForm,
   type AddBookForm, type FormErrors,
 } from '../src/features/add-book/logic';
 import { color, radius, space } from '../src/theme/tokens';
@@ -71,14 +71,14 @@ export default function AddBookScreen() {
     setEnviando(true);
     let bookId: string | null = null;
     try {
-      const { book, created } = await addBook(payload);
+      const { book, created, content } = await addBook(payload);
       bookId = book.id;
       await startReadingBook(book.id);
       useEntitlementStore.getState().refresh();
       toast.show({
         message: `${book.title} entrou na sua estante.`,
         // Mesmo ISBN de novo devolve o livro que já existia: o do catálogo ou o que o leitor cadastrou.
-        detail: created ? 'Registre a primeira leitura quando quiser.' : book.added_by ? 'Você já tinha cadastrado esse livro.' : 'Ele já estava no catálogo.',
+        detail: created ? contentMessage(content) : book.added_by ? 'Você já tinha cadastrado esse livro.' : 'Ele já estava no catálogo.',
         tone: 'positive',
       });
       router.replace(`/book/${book.id}`);
@@ -172,8 +172,8 @@ export default function AddBookScreen() {
             nao sabe desse livro. */}
         <View style={styles.aviso}>
           <Text variant="caption" tone="secondary">
-            A gente divide as páginas entre os capítulos por igual, então o fim de cada um é aproximado.
-            O quiz de um capítulo depende de termos o conteúdo dele. Quando ainda não temos, a gente avisa, e a sua leitura conta do mesmo jeito.
+            Cada capítulo fecha com um quiz. A gente busca o conteúdo dele na hora e, com o ISBN, também confere os fatos em fontes independentes, o que leva alguns minutos. O quiz sempre diz de onde veio.
+            As páginas de cada capítulo são aproximadas.
           </Text>
         </View>
 

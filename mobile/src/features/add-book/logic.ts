@@ -1,7 +1,7 @@
 // Cadastro de livro fora do catalogo (BER-60): a regra do formulario, fora da
 // tela para o teste exercitar o codigo real. O servidor (add-book) valida de
 // novo; aqui e so para o leitor ver o erro ao lado do campo, antes de enviar.
-import type { AddBookPayload, IsbnLookup } from '../../api/edgeFunctions';
+import type { AddBookContent, AddBookPayload, IsbnLookup } from '../../api/edgeFunctions';
 
 export interface AddBookForm {
   isbn: string;
@@ -18,6 +18,13 @@ export const EMPTY_FORM: AddBookForm = {
 };
 
 /** Os mesmos tetos do servidor (supabase/functions/add-book/book.ts). */
+/** O que dizer depois do cadastro, conforme o que o quiz do livro vai ter (BER-59). */
+export function contentMessage(content: AddBookContent | undefined): string {
+  if (content === 'edition') return 'Os capítulos já vêm da edição, e o quiz usa fatos conferidos.';
+  if (content === 'searching') return 'Cada capítulo fecha com um quiz, e o conteúdo conferido chega em alguns minutos.';
+  return 'Cada capítulo fecha com um quiz feito com o que a gente achar sobre ele.';
+}
+
 export const FORM_LIMITS = { pagesMax: 5000, chaptersMax: 200 } as const;
 
 export type FormErrors = Partial<Record<'isbn' | 'title' | 'author' | 'totalPages' | 'chapterCount', string>>;
@@ -85,6 +92,9 @@ export function prefillFromLookup(form: AddBookForm, lookup: IsbnLookup): AddBoo
     title: form.title.trim() || lookup.title,
     author: form.author.trim() || (lookup.authors[0] ?? ''),
     totalPages: form.totalPages.trim() || (lookup.totalPages ? String(lookup.totalPages) : ''),
+    // Estrutura confirmada pela ingestão (BER-59) vale mais que a contagem digitada: é ela que
+    // liga cada capítulo ao conhecimento verificado.
+    chapterCount: lookup.chapterCount ? String(lookup.chapterCount) : form.chapterCount,
     coverUrl: lookup.coverUrl ?? form.coverUrl,
   };
 }

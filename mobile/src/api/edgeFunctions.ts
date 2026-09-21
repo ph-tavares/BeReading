@@ -300,6 +300,8 @@ export type IsbnLookup =
     authors: string[];
     totalPages: number | null;
     coverUrl: string | null;
+    /** BER-59: capítulos da edição, quando ela já foi ingerida. */
+    chapterCount?: number | null;
   };
 
 export async function lookupBookByIsbn(isbn: string): Promise<IsbnLookup> {
@@ -324,9 +326,24 @@ export interface AddBookPayload {
  *
  * @returns o livro e `created: false` quando o ISBN já estava no catálogo.
  */
-export async function addBook(payload: AddBookPayload): Promise<{ book: Book; created: boolean }> {
+/**
+ * BER-59: o que o quiz do livro vai ter.
+ * - `edition`: a edição já foi ingerida, e os capítulos vêm dela.
+ * - `searching`: a busca do conteúdo começou e leva alguns minutos.
+ * - `none`: sem ISBN (ou com a busca desligada), o quiz fica sem conteúdo.
+ */
+export type AddBookContent = 'edition' | 'searching' | 'none';
+
+export interface AddBookResult {
+  book: Book;
+  created: boolean;
+  /** Ausente quando o livro já existia (`created: false`). */
+  content?: AddBookContent;
+}
+
+export async function addBook(payload: AddBookPayload): Promise<AddBookResult> {
   const { data, error } = await supabase.functions.invoke('add-book', { body: payload });
   if (error) throw error;
   if (data.error) throw new Error(data.error);
-  return data.data as { book: Book; created: boolean };
+  return data.data as AddBookResult;
 }

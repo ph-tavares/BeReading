@@ -68,3 +68,11 @@ Deno.test('buildEvaluationPrompt: uma resposta tentando dar instrução não esc
   assertStringIncludes(partes[1], respostaMaliciosa);
   assert(!partes[0].includes(respostaMaliciosa) && !partes[2].includes(respostaMaliciosa));
 });
+
+// BER-60: capítulo sem conteúdo (livro do leitor, nada na web): a avaliação não julga fatos.
+Deno.test('buildEvaluationPrompt: sem conteúdo do capítulo, não julga se os fatos estão certos (BER-60)', () => {
+  const prompt = buildEvaluationPrompt('O que aconteceu?', 'comprehension', 'Ele foi embora.', '   ');
+  assertStringIncludes(prompt, 'NÃO julgue se os fatos citados estão certos');
+  assertStringIncludes(prompt, '(indisponível)');
+  assert(!prompt.includes('demonstra conhecimento correto'));
+});
