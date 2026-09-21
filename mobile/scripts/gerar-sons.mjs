@@ -14,8 +14,9 @@
 //
 // O desenho de cada som:
 //   início — duas notas subindo, curtas. "Começou", sem susto.
-//   fim    — uma nota só, grave, com cauda longa. "Acabou", sem alarme de
-//            despertador: quem está lendo em silêncio não precisa levar susto.
+//   fim    — três notas graves resolvendo para baixo, ~5 s de som seguido.
+//            "Acabou", sem alarme de despertador: quem está lendo em silêncio
+//            não precisa levar susto, mas precisa ouvir.
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -108,10 +109,21 @@ const inicio = misturar([
   { amostras: nota({ frequencia: 523.25, duracao: 1.1, decaimento: 4.2 }), atrasoSegundos: 0.16 },
 ], 1.35);
 
-// Fim: uma nota só, mais grave e com cauda longa. Fecha, não assusta.
+// Fim: três notas resolvendo para baixo (dó–sol–dó grave), espaçadas, com
+// decaimento lento. Cinco segundos de som SEGUIDO, e não uma batida com cauda
+// inaudível: o teste em aparelho de 21/09 ouviu a versão anterior — 2,6 s de
+// decaimento rápido — como "curto e baixo", e para quem largou o celular e
+// está lendo, isso passa despercebido.
+//
+// O decaimento cai de 1.5 para 0.5: a nota sustenta em vez de sumir. As
+// entradas a cada 1,4 s renovam a energia antes de a anterior morrer, que é o
+// que faz o conjunto soar contínuo. A guarda de duração e de energia no
+// quarto segundo está em __tests__/features/session/sons.test.ts.
 const fim = misturar([
-  { amostras: nota({ frequencia: 261.63, duracao: 2.6, decaimento: 1.5 }), atrasoSegundos: 0 },
-], 2.6);
+  { amostras: nota({ frequencia: 261.63, duracao: 2.2, decaimento: 1.1 }), atrasoSegundos: 0 },
+  { amostras: nota({ frequencia: 196.00, duracao: 2.4, decaimento: 0.9 }), atrasoSegundos: 1.4 },
+  { amostras: nota({ frequencia: 130.81, duracao: 2.6, decaimento: 0.5 }), atrasoSegundos: 2.8 },
+], 5.2);
 
 for (const [nome, amostras] of [['inicio', inicio], ['fim', fim]]) {
   const caminho = join(DESTINO, `${nome}.wav`);
