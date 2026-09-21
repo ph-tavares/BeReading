@@ -87,7 +87,7 @@ describe('Login (spec 7.10)', () => {
 });
 
 describe('Criar conta (spec 7.10)', () => {
-  function preencher(tela: ReturnType<typeof render>, senha = '123456') {
+  function preencher(tela: ReturnType<typeof render>, senha = 'senha123') {
     fireEvent.changeText(tela.getByLabelText('Nome'), 'Ana');
     fireEvent.changeText(tela.getByLabelText('E-mail'), 'ana@exemplo.com');
     fireEvent.changeText(tela.getByLabelText('Senha'), senha);
@@ -96,9 +96,26 @@ describe('Criar conta (spec 7.10)', () => {
   it('diz quanto falta pra senha e segura o botao ate valer', () => {
     const tela = render(<SignupScreen />);
     preencher(tela, 'abc');
-    expect(tela.getByText('Faltam 3 caracteres.')).toBeTruthy();
+    expect(tela.getByText('Faltam 5 caracteres.')).toBeTruthy();
     fireEvent.press(tela.getByRole('button', { name: 'Criar conta' }));
     expect(auth.signUp).not.toHaveBeenCalled();
+  });
+
+  // BER-81: tamanho nao basta. Sem isto, senha longa so de letras passava.
+  it('no tamanho certo mas sem numero, aponta a composicao e segura o botao', () => {
+    const tela = render(<SignupScreen />);
+    preencher(tela, 'senhasenha');
+    expect(tela.getByText('Falta um número.')).toBeTruthy();
+    fireEvent.press(tela.getByRole('button', { name: 'Criar conta' }));
+    expect(auth.signUp).not.toHaveBeenCalled();
+  });
+
+  it('senha recusada pelo servidor vira instrucao em portugues, nao erro generico', async () => {
+    auth.signUp.mockResolvedValue({ data: null, error: { code: 'weak_password' } });
+    const tela = render(<SignupScreen />);
+    preencher(tela);
+    await act(async () => { fireEvent.press(tela.getByRole('button', { name: 'Criar conta' })); });
+    expect(tela.getByText('Senha fraca: use 8 caracteres ou mais, com letras e números.')).toBeTruthy();
   });
 
   it('cadastro novo guarda a senha e vai confirmar o e-mail', async () => {
@@ -106,7 +123,7 @@ describe('Criar conta (spec 7.10)', () => {
     const tela = render(<SignupScreen />);
     preencher(tela);
     await act(async () => { fireEvent.press(tela.getByRole('button', { name: 'Criar conta' })); });
-    expect(mockSetPending).toHaveBeenCalledWith('123456');
+    expect(mockSetPending).toHaveBeenCalledWith('senha123');
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/(auth)/confirm-email', params: { email: 'ana@exemplo.com' } });
   });
 

@@ -1,5 +1,6 @@
 // Criar conta (spec 7.10, F6 Tarefa 4). "Bora começar.", indicador de quanto
-// falta pra senha de 6 e o botao desabilitado ate valer (regra de antes).
+// falta pra senha e o botao desabilitado ate valer. A regra da senha mora em
+// src/features/auth/logic.ts (BER-81: 8 caracteres, com letras e numeros).
 // E-mail ja cadastrado e erro do servidor aparecem na tela, sem Alert.
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
@@ -8,7 +9,7 @@ import { Lock, Mail, User } from 'lucide-react-native';
 import { supabase } from '../../src/lib/supabase';
 import { usePendingAuthStore } from '../../src/stores/pendingAuthStore';
 import { Banner, Button, Field, Glyph, Screen, Text } from '../../src/ui';
-import { canSignup, isEmailAlreadyRegistered, passwordHint } from '../../src/features/auth';
+import { canSignup, isEmailAlreadyRegistered, passwordHint, signupErrorMessage } from '../../src/features/auth';
 import { space } from '../../src/theme/tokens';
 
 export default function SignupScreen() {
@@ -36,7 +37,7 @@ export default function SignupScreen() {
     setLoading(false);
 
     if (error) {
-      setErroGeral('Não deu pra criar sua conta agora. Tenta de novo.');
+      setErroGeral(signupErrorMessage(error));
     } else if (isEmailAlreadyRegistered(data)) {
       setEmailExistente(true);
     } else {
@@ -88,7 +89,7 @@ export default function SignupScreen() {
             autoComplete="new-password"
             returnKeyType="done"
             onSubmitEditing={handleSignup}
-            hint={passwordHint(password.length)}
+            hint={passwordHint(password)}
           />
         </View>
 
