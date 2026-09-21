@@ -417,6 +417,10 @@ verify_jwt = false
 [functions.reading-list]
 verify_jwt = false
 
+# BER-60: o leitor cadastra um livro fora do catálogo.
+[functions.add-book]
+verify_jwt = false
+
 # Cobrança simulada — só liga com o secret BILLING_MODE=mock.
 [functions.billing-mock]
 verify_jwt = false

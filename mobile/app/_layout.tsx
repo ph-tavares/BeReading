@@ -145,6 +145,9 @@ export default function RootLayout() {
             {/* BER-100: a camera do assistente. Tela cheia pelo mesmo motivo do
                 quiz: a tab bar atras de um visor de camera nao faz sentido. */}
             <Stack.Screen name="assistant/scan" options={{ presentation: 'fullScreenModal' }} />
+            {/* BER-60: cadastrar livro fora do catálogo. Folha, como o registro:
+                é um formulário curto que volta para onde o leitor estava. */}
+            <Stack.Screen name="add-book" options={{ presentation: 'modal' }} />
           </Stack>
         </ToastProvider>
       </View>

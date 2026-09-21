@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Search } from 'lucide-react-native';
+import { Plus, Search } from 'lucide-react-native';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useEntitlementStore } from '../../src/stores/entitlementStore';
 import { ProfileErrorState } from '../../src/components/ProfileErrorState';
@@ -13,7 +13,7 @@ import { PaywallSheet } from '../../src/components/PaywallSheet';
 import { getBooks, getStudentBooks } from '../../src/api/queries';
 import { startReadingBook } from '../../src/api/edgeFunctions';
 import { isQuotaExceededError, type QuotaExceeded } from '../../src/utils/billing';
-import { Banner, Chip, EmptyState, Field, Screen, Skeleton, Text, useToast } from '../../src/ui';
+import { Banner, Button, Chip, EmptyState, Field, Screen, Skeleton, Text, useToast } from '../../src/ui';
 import {
   ExploreBookRow, FeaturedBook, exploreState, featuredBook, filterByGenre, genresOf,
 } from '../../src/features/explore';
@@ -142,7 +142,11 @@ export default function CatalogoScreen() {
             <EmptyState
               illustration="none"
               title={search.trim() ? 'Nada com esse nome por aqui.' : 'Nenhum livro nesse gênero ainda.'}
-              description={search.trim() ? 'Tente outro título ou autor.' : 'Escolha outro gênero ou veja todos.'}
+              description={search.trim() ? 'Cadastra o seu livro, ou tenta outro título ou autor.' : 'Escolha outro gênero ou veja todos.'}
+              // BER-60: a busca vazia era um beco sem saída. O termo buscado vai
+              // como título, que é o mais provável de o leitor ter digitado.
+              actionLabel={search.trim() ? 'Cadastrar esse livro' : undefined}
+              onAction={search.trim() ? () => router.push({ pathname: '/add-book', params: { title: search.trim() } }) : undefined}
             />
           ) : linhas.length > 0 ? (
             <View>
@@ -164,6 +168,13 @@ export default function CatalogoScreen() {
           ) : null}
         </>
       )}
+
+      {/* BER-60: o catálogo tem poucos livros; o do leitor quase nunca está aqui. */}
+      {!loading ? (
+        <Button variant="secondary" icon={Plus} onPress={() => router.push('/add-book')} accessibilityLabel="Cadastrar um livro que não está no catálogo">
+          Não achou? Cadastre seu livro
+        </Button>
+      ) : null}
 
       <PaywallSheet quota={paywall} onDismiss={() => setPaywall(null)} />
     </Screen>

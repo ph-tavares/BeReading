@@ -32,6 +32,10 @@ export interface Book {
   total_pages: number;
   genre: string | null;
   created_at: string;
+  /** BER-60: ISBN normalizado, quando o livro veio com um. */
+  isbn?: string | null;
+  /** BER-60: quem cadastrou. `null` = livro do catálogo; senão, só essa pessoa enxerga. */
+  added_by?: string | null;
 }
 
 export interface Chapter {

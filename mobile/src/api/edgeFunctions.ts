@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { PENDING_FEEDBACK } from '../utils/quizAnswers';
 import { parseQuotaExceeded, QuotaExceededError } from '../utils/billing';
 import type { ScanFailure } from '../features/assistant/logic';
-import type { StudentBook } from '../types/database';
+import type { Book, StudentBook } from '../types/database';
 
 export interface RegisterReadingResponse {
   session_created: boolean;
@@ -288,4 +288,45 @@ export async function deleteAccount(): Promise<void> {
   const { data, error } = await supabase.functions.invoke('delete-account');
   if (error) throw error;
   if (data.error) throw new Error(data.error);
+}
+
+/** BER-60 / BER-72: o que a Open Library sabe da edição pelo ISBN. */
+export type IsbnLookup =
+  | { found: false }
+  | {
+    found: true;
+    isbn: string;
+    title: string;
+    authors: string[];
+    totalPages: number | null;
+    coverUrl: string | null;
+  };
+
+export async function lookupBookByIsbn(isbn: string): Promise<IsbnLookup> {
+  const { data, error } = await supabase.functions.invoke('lookup-book-by-isbn', { body: { isbn } });
+  if (error) throw error;
+  if (data.error) throw new Error(data.error);
+  return data.data as IsbnLookup;
+}
+
+export interface AddBookPayload {
+  title: string;
+  author: string;
+  total_pages: number;
+  chapter_count: number;
+  isbn?: string | null;
+  cover_url?: string | null;
+}
+
+/**
+ * BER-60: cadastra um livro fora do catálogo. Não coloca em leitura: a tela chama
+ * `startReadingBook` em seguida, que é onde mora a cota de livros do plano.
+ *
+ * @returns o livro e `created: false` quando o ISBN já estava no catálogo.
+ */
+export async function addBook(payload: AddBookPayload): Promise<{ book: Book; created: boolean }> {
+  const { data, error } = await supabase.functions.invoke('add-book', { body: payload });
+  if (error) throw error;
+  if (data.error) throw new Error(data.error);
+  return data.data as { book: Book; created: boolean };
 }
