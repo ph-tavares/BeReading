@@ -97,12 +97,13 @@ left join answers a on a.question_id = q.id
 where c.book_id = '00000000-0000-0000-0002-000000000002' and c.number in (7, 8, 9)
 group by c.number;
 
--- 2. Apaga as perguntas e devolve o capítulo para a fila de retentativa.
+-- 2. Apaga as perguntas e devolve o capítulo para a fila de retentativa. `attempts = 0` é
+--    obrigatório: o retry-pending-quizzes ignora capítulo com 3 tentativas ou mais.
 delete from questions
 where chapter_id in (select id from chapters where book_id = '00000000-0000-0000-0002-000000000002' and number in (7, 8, 9))
   and not exists (select 1 from answers a where a.question_id = questions.id);
 update chapter_quiz_status
-set status = 'failed', error_message = 'BER-59: gerar de novo com conhecimento verificado'
+set status = 'failed', attempts = 0, error_message = 'BER-59: gerar de novo com conhecimento verificado'
 where chapter_id in (select id from chapters where book_id = '00000000-0000-0000-0002-000000000002' and number in (7, 8, 9));
 
 -- 3. Dispara a retentativa agora (é o mesmo comando do cron retry-pending-quizzes, que roda de hora em hora).
