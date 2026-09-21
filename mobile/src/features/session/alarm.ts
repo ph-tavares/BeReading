@@ -27,12 +27,51 @@ import { endAlarmAt, type ActiveSession } from './logic';
  */
 let armado: string | null = null;
 
+/**
+ * Com o app em primeiro plano o iOS NAO apresenta a notificacao por conta
+ * propria: sem handler, ela chega e o leitor nao ve nem ouve nada. E o
+ * cenario 1 do protocolo da BER-124.
+ *
+ * Fica no escopo do modulo, e nao num efeito de tela, porque precisa valer
+ * antes de a primeira notificacao chegar, venha ela de onde vier.
+ */
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
+/**
+ * Sem permissao concedida, `scheduleNotificationAsync` no iOS **da certo e
+ * nao entrega nada**: devolve um id valido e a notificacao nunca chega. Foi
+ * exatamente o que o teste em aparelho de 21/09 registrou, e como o chamador
+ * engolia erro num catch vazio, nada disso aparecia.
+ *
+ * Pedir so quando ainda nao ha resposta: o iOS mostra o dialogo do sistema
+ * uma unica vez por instalacao, e insistir depois de negado nao reabre nada.
+ */
+async function garantirPermissao(): Promise<boolean> {
+  const atual = await Notifications.getPermissionsAsync();
+  if (atual.granted) return true;
+  if (!atual.canAskAgain) return false;
+
+  const pedido = await Notifications.requestPermissionsAsync();
+  return pedido.granted;
+}
+
 export async function armEndAlarm(
   session: ActiveSession,
   now: Date = new Date(),
 ): Promise<string | null> {
   const quando = endAlarmAt(session, now);
   if (quando === null) return null;
+
+  // Permissao negada nao derruba a sessao: a rede embaixo do sino deixa de
+  // existir, e o fim continua sendo um instante absoluto gravado (BER-122).
+  if (!(await garantirPermissao())) return null;
 
   await disarmEndAlarm();
 

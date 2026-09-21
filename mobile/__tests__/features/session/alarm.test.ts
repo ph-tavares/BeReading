@@ -1,9 +1,15 @@
 const mockSchedule = jest.fn((..._args: unknown[]) => Promise.resolve('id-1'));
 const mockCancel = jest.fn((..._args: unknown[]) => Promise.resolve());
+const mockGetPermissoes = jest.fn(() => Promise.resolve({ granted: false, canAskAgain: true }));
+const mockPedirPermissoes = jest.fn(() => Promise.resolve({ granted: true, canAskAgain: true }));
+const mockDefinirHandler = jest.fn();
 
 jest.mock('expo-notifications', () => ({
   scheduleNotificationAsync: (...args: unknown[]) => mockSchedule(...args),
   cancelScheduledNotificationAsync: (...args: unknown[]) => mockCancel(...args),
+  getPermissionsAsync: () => mockGetPermissoes(),
+  requestPermissionsAsync: () => mockPedirPermissoes(),
+  setNotificationHandler: (...args: unknown[]) => mockDefinirHandler(...args),
   SchedulableTriggerInputTypes: { DATE: 'date' },
 }));
 
@@ -24,6 +30,8 @@ let disarmEndAlarm: typeof import('../../../src/features/session/alarm').disarmE
 beforeEach(() => {
   jest.clearAllMocks();
   mockSchedule.mockResolvedValue('id-1');
+  mockGetPermissoes.mockResolvedValue({ granted: false, canAskAgain: true });
+  mockPedirPermissoes.mockResolvedValue({ granted: true, canAskAgain: true });
   jest.resetModules();
   const modulo = require('../../../src/features/session/alarm');
   armEndAlarm = modulo.armEndAlarm;
@@ -90,5 +98,57 @@ describe('disarmEndAlarm', () => {
     await disarmEndAlarm();
 
     expect(mockCancel).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A camada 2 inteira dependia de uma permissao que o app nunca pedia.
+ *
+ * O teste em aparelho de 21/09 (BER-124) mostrou o agendamento devolvendo id
+ * valido e a notificacao nunca chegando: no iOS, agendar sem permissao
+ * concedida e uma chamada que da certo e nao entrega nada. O erro, quando
+ * havia, morria num catch vazio do chamador.
+ */
+describe('permissao de notificacao', () => {
+  it('pede a permissao antes de agendar, quando ainda nao foi concedida', async () => {
+    const sessao = startSession({ mode: { kind: 'timed', minutes: 20 }, bookId: 'l', now: INICIO });
+
+    await armEndAlarm(sessao, INICIO);
+
+    expect(mockPedirPermissoes).toHaveBeenCalled();
+    expect(mockSchedule).toHaveBeenCalledTimes(1);
+  });
+
+  it('nao pede de novo quando a permissao ja esta concedida', async () => {
+    mockGetPermissoes.mockResolvedValue({ granted: true, canAskAgain: false });
+    const sessao = startSession({ mode: { kind: 'timed', minutes: 20 }, bookId: 'l', now: INICIO });
+
+    await armEndAlarm(sessao, INICIO);
+
+    expect(mockPedirPermissoes).not.toHaveBeenCalled();
+    expect(mockSchedule).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Permissao negada nao derruba a sessao nem vira excecao: a rede embaixo do
+   * sino simplesmente nao existe, e o fim continua sendo um instante absoluto
+   * gravado (BER-122).
+   */
+  it('nao agenda nada quando a permissao e negada', async () => {
+    mockPedirPermissoes.mockResolvedValue({ granted: false, canAskAgain: false });
+    const sessao = startSession({ mode: { kind: 'timed', minutes: 20 }, bookId: 'l', now: INICIO });
+
+    const id = await armEndAlarm(sessao, INICIO);
+
+    expect(id).toBeNull();
+    expect(mockSchedule).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Sem handler, o iOS engole a notificacao quando o app esta em primeiro
+   * plano, que e justamente o cenario 1 do protocolo.
+   */
+  it('configura a apresentacao com o app aberto', async () => {
+    expect(mockDefinirHandler).toHaveBeenCalled();
   });
 });
