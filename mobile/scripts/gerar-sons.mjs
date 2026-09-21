@@ -15,6 +15,7 @@
 // O desenho de cada som:
 //   início — duas notas subindo, curtas. "Começou", sem susto.
 //   fim    — três notas graves resolvendo para baixo, ~5 s de som seguido.
+//   encerrar — o início ao contrário, duas notas descendo: o leitor parou.
 //            "Acabou", sem alarme de despertador: quem está lendo em silêncio
 //            não precisa levar susto, mas precisa ouvir.
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -125,7 +126,14 @@ const fim = misturar([
   { amostras: nota({ frequencia: 130.81, duracao: 2.6, decaimento: 0.5 }), atrasoSegundos: 2.8 },
 ], 5.2);
 
-for (const [nome, amostras] of [['inicio', inicio], ['fim', fim]]) {
+// Encerrar: o início de trás para frente (dó e fá abaixo), curto. "Parou
+// aqui", distinto do fim, que é o tempo acabando sozinho.
+const encerrar = misturar([
+  { amostras: nota({ frequencia: 523.25, duracao: 0.9, decaimento: 4.6 }), atrasoSegundos: 0 },
+  { amostras: nota({ frequencia: 349.23, duracao: 1.0, decaimento: 4.2 }), atrasoSegundos: 0.14 },
+], 1.2);
+
+for (const [nome, amostras] of [['inicio', inicio], ['fim', fim], ['encerrar', encerrar]]) {
   const caminho = join(DESTINO, `${nome}.wav`);
   const wav = paraWav(amostras);
   writeFileSync(caminho, wav);

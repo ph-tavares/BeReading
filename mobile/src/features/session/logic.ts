@@ -20,6 +20,45 @@ export interface ActiveSession {
   endsAt: string | null;
   mode: SessionMode;
   bookId: string;
+  /**
+   * Instante em que o leitor pausou, ISO; `null` ou ausente quando corre
+   * (BER-123). Opcional porque sessao gravada antes da pausa existir nao tem
+   * o campo, e ela tem que continuar abrindo.
+   */
+  pausedAt?: string | null;
+  /** Quanto tempo ja ficou pausado, somado, em ms. Nao conta como leitura. */
+  pausedMs?: number;
+}
+
+/** O relogio parado conta ate o instante da pausa, nunca ate agora. */
+function relogio(session: ActiveSession, now: Date): number {
+  return session.pausedAt ? Date.parse(session.pausedAt) : now.getTime();
+}
+
+export function isPaused(session: ActiveSession): boolean {
+  return Boolean(session.pausedAt);
+}
+
+/** Pausar congela o relogio no instante da pausa. Pausar de novo nao muda nada. */
+export function pauseSession(session: ActiveSession, now: Date = new Date()): ActiveSession {
+  if (isPaused(session)) return session;
+  return { ...session, pausedAt: now.toISOString() };
+}
+
+/**
+ * Retomar empurra o fim previsto pelo tempo que ficou parado. O fim continua
+ * sendo um instante absoluto gravado (regra da BER-122): so muda de lugar, e
+ * o sino e a notificacao passam a apontar para o novo.
+ */
+export function resumeSession(session: ActiveSession, now: Date = new Date()): ActiveSession {
+  if (!session.pausedAt) return session;
+  const parado = Math.max(0, now.getTime() - Date.parse(session.pausedAt));
+  return {
+    ...session,
+    pausedAt: null,
+    pausedMs: (session.pausedMs ?? 0) + parado,
+    endsAt: session.endsAt === null ? null : new Date(Date.parse(session.endsAt) + parado).toISOString(),
+  };
 }
 
 export function startSession({
@@ -50,7 +89,7 @@ export function startSession({
  */
 export function remainingMs(session: ActiveSession, now: Date = new Date()): number | null {
   if (session.endsAt === null) return null;
-  return Date.parse(session.endsAt) - now.getTime();
+  return Date.parse(session.endsAt) - relogio(session, now);
 }
 
 /**
@@ -60,7 +99,7 @@ export function remainingMs(session: ActiveSession, now: Date = new Date()): num
  * resumo do fim.
  */
 export function elapsedMs(session: ActiveSession, now: Date = new Date()): number {
-  return now.getTime() - Date.parse(session.startedAt);
+  return relogio(session, now) - Date.parse(session.startedAt) - (session.pausedMs ?? 0);
 }
 
 /**
@@ -143,6 +182,8 @@ export function formatClock(ms: number): string {
  */
 export function endAlarmAt(session: ActiveSession, now: Date = new Date()): Date | null {
   if (session.endsAt === null) return null;
+  // Pausada, nao ha fim marcado: o sino volta a ser agendado ao retomar.
+  if (isPaused(session)) return null;
 
   const fim = new Date(session.endsAt);
   if (fim.getTime() <= now.getTime()) return null;

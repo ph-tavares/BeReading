@@ -63,4 +63,21 @@ describe('sessionStore', () => {
 
     expect(useSessionStore.getState().keepAwake).toBe(true);
   });
+
+  /**
+   * Encerrar tem de apagar a sessao tambem do aparelho. So navegar deixava a
+   * sessao ativa por tras, e ela voltava na proxima hidratacao.
+   */
+  it('encerrar tira a sessao da memoria e do aparelho, e guarda o ultimo tempo', async () => {
+    await useSessionStore.getState().begin({ mode: { kind: 'timed', minutes: 30 }, bookId: 'livro-1' });
+    await useSessionStore.getState().end();
+
+    expect(useSessionStore.getState().active).toBeNull();
+
+    useSessionStore.setState({ active: null, hydrated: false });
+    await useSessionStore.getState().hydrate();
+
+    expect(useSessionStore.getState().active).toBeNull();
+    expect(useSessionStore.getState().lastMode).toEqual({ kind: 'timed', minutes: 30 });
+  });
 });

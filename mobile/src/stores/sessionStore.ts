@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { startSession, type ActiveSession, type SessionMode } from '../features/session/logic';
+import { pauseSession, resumeSession, startSession, type ActiveSession, type SessionMode } from '../features/session/logic';
 
 /**
  * A sessao ativa vive no aparelho, nao no servidor.
@@ -23,6 +23,7 @@ interface Persistido {
   active: ActiveSession | null;
   lastMode: SessionMode;
   keepAwake: boolean;
+  showTimer?: boolean;
 }
 
 interface SessionState {
@@ -36,11 +37,21 @@ interface SessionState {
    * app junto com o resto.
    */
   keepAwake: boolean;
+  /**
+   * Cronometro na tela ou tela calma (BER-123, spec S17). O padrao mostra: a
+   * tela calma e escolha de quem prefere que a leitura nao pareca trabalho.
+   */
+  showTimer: boolean;
   /** Se `hydrate` ja rodou. A tela nao decide nada antes disso. */
   hydrated: boolean;
   hydrate: () => Promise<void>;
   begin: (params: { mode: SessionMode; bookId: string; now?: Date }) => Promise<ActiveSession>;
   setKeepAwake: (valor: boolean) => Promise<void>;
+  setShowTimer: (valor: boolean) => Promise<void>;
+  pause: () => Promise<ActiveSession | null>;
+  resume: () => Promise<ActiveSession | null>;
+  /** Encerra a sessao ativa: some da memoria e do aparelho. */
+  end: () => Promise<void>;
 }
 
 async function gravar(dados: Persistido): Promise<void> {
@@ -51,6 +62,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   active: null,
   lastMode: MODO_PADRAO,
   keepAwake: false,
+  showTimer: true,
   hydrated: false,
 
   hydrate: async () => {
@@ -66,19 +78,48 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       // `?? false` e nao `!`: quem gravou antes da BER-124 nao tem o campo, e
       // undefined nao pode virar "ligado" sem a pessoa ter pedido.
       keepAwake: dados.keepAwake ?? false,
+      showTimer: dados.showTimer ?? true,
       hydrated: true,
     });
   },
 
   begin: async ({ mode, bookId, now }) => {
     const sessao = startSession({ mode, bookId, now });
-    await gravar({ active: sessao, lastMode: mode, keepAwake: get().keepAwake });
+    await gravar({ active: sessao, lastMode: mode, keepAwake: get().keepAwake, showTimer: get().showTimer });
     set({ active: sessao, lastMode: mode });
     return sessao;
   },
 
   setKeepAwake: async (valor) => {
     set({ keepAwake: valor });
-    await gravar({ active: get().active, lastMode: get().lastMode, keepAwake: valor });
+    await gravar({ active: get().active, lastMode: get().lastMode, keepAwake: valor, showTimer: get().showTimer });
+  },
+
+  setShowTimer: async (valor) => {
+    set({ showTimer: valor });
+    await gravar({ active: get().active, lastMode: get().lastMode, keepAwake: get().keepAwake, showTimer: valor });
+  },
+
+  pause: async () => {
+    const atual = get().active;
+    if (!atual) return null;
+    const pausada = pauseSession(atual);
+    set({ active: pausada });
+    await gravar({ active: pausada, lastMode: get().lastMode, keepAwake: get().keepAwake, showTimer: get().showTimer });
+    return pausada;
+  },
+
+  resume: async () => {
+    const atual = get().active;
+    if (!atual) return null;
+    const retomada = resumeSession(atual);
+    set({ active: retomada });
+    await gravar({ active: retomada, lastMode: get().lastMode, keepAwake: get().keepAwake, showTimer: get().showTimer });
+    return retomada;
+  },
+
+  end: async () => {
+    set({ active: null });
+    await gravar({ active: null, lastMode: get().lastMode, keepAwake: get().keepAwake, showTimer: get().showTimer });
   },
 }));
