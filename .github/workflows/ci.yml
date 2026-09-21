@@ -79,6 +79,7 @@ jobs:
             billing-mock/index.ts \
             ingest-book/index.ts \
             process-ingestion/index.ts \
+            scan-page/index.ts \
             _shared/ingestion/supabase-store.ts
 
       - name: Testes

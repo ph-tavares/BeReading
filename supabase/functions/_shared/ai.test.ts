@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import { AIOutOfCreditsError, callAI, outOfCredits } from './ai.ts';
+import { AIHttpError, AIImageUnsupportedError, AIOutOfCreditsError, callAI, imageUnsupported, outOfCredits } from './ai.ts';
 
 function urlOf(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
@@ -176,4 +176,118 @@ Deno.test('callAI: cabeçalho de autenticação vem da secret, com Bearer quando
     Deno.env.delete('ANTHROPIC_AUTH_HEADER');
     Deno.env.delete('ANTHROPIC_BASE_URL');
   }
+});
+
+// BER-100: a foto da página. O bloco da imagem vai antes do texto nos dois provedores.
+Deno.test('callAI (anthropic): imagem vira bloco base64 antes do texto', async () => {
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+  Deno.env.set('ANTHROPIC_API_KEY', 'k');
+  let sent: Record<string, unknown> = {};
+  await withFetch((_url, body) => {
+    sent = body;
+    return Response.json({ content: [{ text: 'ok' }], usage: { input_tokens: 1600, output_tokens: 700 } });
+  }, () => callAI({
+    prompt: 'transcreva a página',
+    maxTokens: 900,
+    image: { base64: 'QUJD', mediaType: 'image/jpeg' },
+  }));
+
+  const mensagens = sent.messages as { role: string; content: unknown }[];
+  assertEquals(mensagens[0].content, [
+    { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'QUJD' } },
+    { type: 'text', text: 'transcreva a página' },
+  ]);
+});
+
+Deno.test('callAI (anthropic): sem imagem, content continua sendo a string de sempre', async () => {
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+  Deno.env.set('ANTHROPIC_API_KEY', 'k');
+  let sent: Record<string, unknown> = {};
+  await withFetch((_url, body) => {
+    sent = body;
+    return Response.json({ content: [{ text: 'ok' }] });
+  }, () => callAI({ prompt: 'p', maxTokens: 10 }));
+
+  const mensagens = sent.messages as { role: string; content: unknown }[];
+  assertEquals(mensagens[0].content, 'p');
+});
+
+Deno.test('callAI (openai): imagem vira image_url com data URI, antes do texto', async () => {
+  Deno.env.set('AI_PROVIDER', 'openai');
+  Deno.env.set('AI_API_KEY', 'k');
+  let sent: Record<string, unknown> = {};
+  await withFetch((_url, body) => {
+    sent = body;
+    return Response.json({ choices: [{ message: { content: 'ok' } }] });
+  }, () => callAI({ prompt: 'p', maxTokens: 10, image: { base64: 'QUJD', mediaType: 'image/png' } }));
+
+  const mensagens = sent.messages as { role: string; content: unknown }[];
+  assertEquals(mensagens[0].content, [
+    { type: 'image_url', image_url: { url: 'data:image/png;base64,QUJD' } },
+    { type: 'text', text: 'p' },
+  ]);
+});
+
+// Falha fechada, item 4 dos critérios da BER-100: nunca silenciosamente.
+Deno.test('callAI: provedor sem caminho de imagem recusa antes de chamar a rede', async () => {
+  Deno.env.set('AI_PROVIDER', 'provedor-novo-sem-visao');
+  Deno.env.set('AI_API_KEY', 'k');
+  let chamou = false;
+  await withFetch(() => {
+    chamou = true;
+    return Response.json({});
+  }, () => assertRejects(
+    () => callAI({ prompt: 'p', maxTokens: 10, image: { base64: 'QUJD', mediaType: 'image/jpeg' } }),
+    AIImageUnsupportedError,
+  ));
+  assertEquals(chamou, false, 'a chamada não pode sair quando já se sabe que não funciona');
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+});
+
+Deno.test('callAI: media type fora da lista recusa antes de chamar a rede', async () => {
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+  Deno.env.set('ANTHROPIC_API_KEY', 'k');
+  await assertRejects(
+    () => callAI({ prompt: 'p', maxTokens: 10, image: { base64: 'QUJD', mediaType: 'application/pdf' } }),
+    AIImageUnsupportedError,
+    'application/pdf',
+  );
+});
+
+Deno.test('imageUnsupported: reconhece a recusa dos dois provedores, e só ela', () => {
+  assertEquals(imageUnsupported(400, '{"error":{"message":"This model does not support image input"}}'), true);
+  assertEquals(imageUnsupported(400, '{"error":{"message":"Image content blocks are not supported by this model"}}'), true);
+  assertEquals(
+    imageUnsupported(400, '{"error":{"message":"Invalid content type. image_url is only supported by certain models."}}'),
+    true,
+  );
+  assertEquals(imageUnsupported(400, '{"error":{"message":"max_tokens is too large"}}'), false);
+  assertEquals(imageUnsupported(500, 'does not support image'), false, 'erro do servidor não é problema de configuração');
+});
+
+Deno.test('callAI: modelo sem visão vira AIImageUnsupportedError, não AIHttpError', async () => {
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+  Deno.env.set('ANTHROPIC_API_KEY', 'k');
+  Deno.env.set('ANTHROPIC_MODEL', 'modelo-so-de-texto');
+  try {
+    await withFetch(
+      () => new Response('{"error":{"message":"This model does not support image input"}}', { status: 400 }),
+      () => assertRejects(
+        () => callAI({ prompt: 'p', maxTokens: 10, image: { base64: 'QUJD', mediaType: 'image/jpeg' } }),
+        AIImageUnsupportedError,
+        'modelo-so-de-texto',
+      ),
+    );
+  } finally {
+    Deno.env.delete('ANTHROPIC_MODEL');
+  }
+});
+
+Deno.test('callAI: a mesma mensagem numa chamada sem imagem continua sendo erro de HTTP', async () => {
+  Deno.env.set('AI_PROVIDER', 'anthropic');
+  Deno.env.set('ANTHROPIC_API_KEY', 'k');
+  await withFetch(
+    () => new Response('{"error":{"message":"This model does not support image input"}}', { status: 400 }),
+    () => assertRejects(() => callAI({ prompt: 'p', maxTokens: 10 }), AIHttpError, 'Anthropic API error 400'),
+  );
 });
