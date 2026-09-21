@@ -72,9 +72,14 @@ describe('Button', () => {
     expect(getByRole('button').props.accessibilityLabel).toBe('Registrar leitura');
   });
 
-  it('o primario pinta com o acento e escreve com a tinta escura', () => {
+  // BER-120: acao primaria e' LEITURA, entao pinta com o jade. O ambar ficou
+  // com a camada de jogo (XP, nivel, sequencia) — ver DESIGN.md secao 1. Este
+  // teste e' o que impede o botao de voltar pro ambar por descuido de merge.
+  it('o primario pinta com o jade de leitura, nao com o ambar de jogo', () => {
     const { getByRole } = render(<Button onPress={jest.fn()}>Ir</Button>);
-    expect(StyleSheet.flatten(getByRole('button').props.style).backgroundColor).toBe(color.accent);
+    const fundo = StyleSheet.flatten(getByRole('button').props.style).backgroundColor;
+    expect(fundo).toBe(color.brand);
+    expect(fundo).not.toBe(color.accent);
   });
 
   it('o destrutivo usa o token de erro, nao o acento', () => {
@@ -115,11 +120,11 @@ describe('Button', () => {
     expect(getByText(color.text3)).toBeTruthy();
   });
 
-  it('o icone do primario usa a tinta escura sobre o acento', () => {
+  it('o icone do primario usa a tinta escura sobre o jade', () => {
     const { getByText } = render(
       <Button icon={IconSpy} onPress={jest.fn()}>Registrar</Button>,
     );
-    expect(getByText(color.accentInk)).toBeTruthy();
+    expect(getByText(color.brandInk)).toBeTruthy();
   });
 });
 

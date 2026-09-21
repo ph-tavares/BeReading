@@ -266,12 +266,25 @@ export async function getReadingSessions(userId: string): Promise<ReadingSession
   return data ?? [];
 }
 
+/**
+ * Capítulos com pergunta que este usuário ainda não respondeu.
+ *
+ * BER-93: os dois filtros de `answers` abaixo parecem redundantes e não são.
+ * No PostgREST, `answers.<coluna>` filtra as linhas do EMBED; `answers` sem
+ * coluna filtra as linhas do PAI. Só o segundo descarta a pergunta respondida —
+ * com `.is('answers.id', null)` no lugar dele, toda pergunta voltava com o
+ * embed vazio e todo capítulo alcançado virava pendente.
+ *
+ * O `.eq('answers.user_id', ...)` restringe o embed a este usuário antes disso,
+ * e é ele que garante a resposta certa para conta de professor, que pela RLS
+ * (`answers_teacher_read`) enxerga resposta de aluno.
+ */
 export async function getPendingQuizChapterIds(userId: string): Promise<string[]> {
   const { data, error } = await supabase
     .from('questions')
     .select('chapter_id, answers!left(id, user_id)')
     .eq('answers.user_id', userId)
-    .is('answers.id', null);
+    .is('answers', null);
   if (error) throw error;
   return [...new Set((data ?? []).map((r: any) => r.chapter_id as string))];
 }

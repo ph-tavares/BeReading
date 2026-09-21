@@ -1,4 +1,5 @@
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { View } from 'react-native';
 import { TabBar } from '../../src/ui/TabBar';
 import { AssistantBubble } from '../../src/features/assistant';
@@ -21,7 +22,10 @@ export default function TabsLayout() {
           // borda superior, com insets reais — ver src/ui/TabBar.tsx.
           tabBarStyle: { backgroundColor: 'transparent', borderTopWidth: 0, elevation: 0, shadowOpacity: 0 },
         }}
-        tabBar={(props) => <TabBar {...props} />}
+        // O destino do botão central mora aqui, e não dentro do TabBar: o
+        // design system não importa `expo-router` (ver o cabeçalho de
+        // src/ui/TabBar.tsx e o CI vermelho que produziu essa regra).
+        tabBar={(props) => <TabBar {...props} onPressRegistrar={() => router.push('/register-reading')} />}
       >
         {/* Nomes de arquivo de rota (index, livros, catalogo, perfil) não mudam:
             deep link depende deles. O rótulo visível sai daqui: o TabBar lê

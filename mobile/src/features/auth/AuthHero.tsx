@@ -1,5 +1,7 @@
 // Topo do login (spec 7.10): estante de lombadas na paleta das capas, o
-// marcador e o wordmark em Newsreader. Sem mascote: a marca e o livro.
+// marcador e o wordmark. O wordmark era Newsreader ate a BER-120 e hoje sai
+// em Unbounded — ele nao cita familia, usa `variant="display"`, entao a troca
+// de tipografia chegou aqui sozinha.
 import { StyleSheet, View } from 'react-native';
 import { Glyph, Text } from '../../ui';
 import { COVER_PALETTE_COLORS, color, space } from '../../theme/tokens';

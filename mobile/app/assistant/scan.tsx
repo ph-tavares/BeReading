@@ -148,7 +148,11 @@ export default function AssistantScanScreen() {
 
           <View style={styles.transcricao}>
             <Text variant="caption" tone="tertiary">O que eu li na sua foto</Text>
-            <Text variant="reading" tone="secondary">{estado.scan.page_text}</Text>
+            {/* Era `reading`, a serifa italica da camada do livro. A BER-120 tirou
+                a variante junto com a serifa, com a justificativa de que nenhuma
+                tela a usava, e era verdade: esta aqui nasceu em paralelo. `body`
+                e a mais proxima do que ela era (16/22 contra 17/27). */}
+            <Text variant="body" tone="secondary">{estado.scan.page_text}</Text>
           </View>
 
           <Text variant="subhead">Sobre o que você quer falar?</Text>

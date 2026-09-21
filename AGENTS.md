@@ -111,7 +111,11 @@ Na prática:
 
 2. **O cliente pode mentir; valide no servidor.** `streaks`, `student_badges` e
    `answers` são **somente leitura** pela RLS (BER-28) — quem escreve são as
-   Edge Functions com `service_role`. `student_books` também é somente leitura
+   Edge Functions com `service_role`. `reading_sessions` entrou na mesma lista
+   pela BER-87: com a policy `FOR ALL` antiga dava para gravar sessão sem passar
+   pelo `register-reading-session`, e daí inflar XP e medalha (`pages_read`,
+   BER-68) e destravar quiz de capítulo não lido (BER-48).
+   `student_books` também é somente leitura
    para o cliente desde a BER-58: a migration `20260915120000_ber61_subscriptions.sql`
    removeu as policies de "comecei a ler", porque com elas o limite de livros do
    plano gratuito seria só visual (verificado em produção em 2026-09-15: só resta
