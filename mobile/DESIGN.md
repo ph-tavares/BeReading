@@ -241,6 +241,14 @@ estado "erro" descrito, por exemplo, ainda entra incompleto.
   o ícone é fixo por nome de rota, porque é ativo de marca e não configuração de tela. Fundo
   `color.surface1` com divisória `color.line` no topo, altura derivada de tokens mais o inset
   inferior real.
+- **AssistantBubble** (BER-100): abre a câmera do assistente de leitura. Canto inferior
+  **esquerdo**, acima da TabBar mais o inset inferior, sobre o conteúdo, e segue o leitor pelas
+  quatro abas — é uma ação contínua, não pertence a nenhuma tela. Some quando não há livro em
+  leitura, porque aí não há página para fotografar. Distingue-se do botão central de registrar
+  leitura por três eixos ao mesmo tempo: lado (esquerda, não centro), tratamento (superfície
+  `floating`, não preenchimento) e cor (o Glyph em `color.accent`, não `color.brand`). O toque não
+  intercepta a faixa ao lado dela: a âncora é `pointerEvents="box-none"`, senão a largura toda
+  acima da barra viraria área morta sobre o conteúdo.
 
 ## 6. Motion
 

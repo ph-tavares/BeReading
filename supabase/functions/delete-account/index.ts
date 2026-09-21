@@ -17,6 +17,12 @@ const USER_OWNED_TABLES = [
   'streaks',
   'student_books',
   'reading_sessions',
+  // BER-100: a conversa com o assistente guarda a transcrição das páginas que o
+  // leitor fotografou. Mensagem antes da conversa, e as duas antes de `profiles`.
+  // Cada uma tem `user_id` próprio justamente para sair por aqui, sem depender do
+  // cascade — que continua existindo como segunda rede.
+  'assistant_messages',
+  'assistant_conversations',
   // BER-61: a assinatura referencia `profiles` — sai antes dele.
   'subscriptions',
   'profiles',

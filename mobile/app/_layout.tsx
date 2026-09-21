@@ -139,6 +139,9 @@ export default function RootLayout() {
                 F4): mesma apresentação do quiz, por ser a tela de conquista que
                 antecede ele. */}
             <Stack.Screen name="chapter-complete" options={{ presentation: 'fullScreenModal' }} />
+            {/* BER-100: a camera do assistente. Tela cheia pelo mesmo motivo do
+                quiz: a tab bar atras de um visor de camera nao faz sentido. */}
+            <Stack.Screen name="assistant/scan" options={{ presentation: 'fullScreenModal' }} />
           </Stack>
         </ToastProvider>
       </View>
