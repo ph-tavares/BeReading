@@ -57,6 +57,19 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "82039f0e-aa51-479e-8413-7086e1214662"
+      }
+    },
+    "owner": "ph-tavares",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/82039f0e-aa51-479e-8413-7086e1214662"
     }
   }
 }

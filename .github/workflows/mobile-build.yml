@@ -7,7 +7,10 @@ name: Mobile Build
 # alguém decidir que é hora.
 #
 # Fica inerte até `EXPO_TOKEN` ser configurado nos secrets do repositório —
-# sem ele, o passo de build falha na autenticação, sem custo.
+# sem ele, o passo de build falha na autenticação, sem custo. Verificado em
+# 21/09/2026 com `gh secret list`: o secret AINDA NÃO existe, então este
+# workflow nunca rodou. O primeiro build Android da BER-51 foi disparado da
+# máquina, com `eas build` local.
 
 on:
   workflow_dispatch:
@@ -21,14 +24,17 @@ on:
           - preview
           - production
       platform:
+        # Default `android` desde a BER-51: é a única plataforma com credencial
+        # configurada. Com `all` e sem conta Apple, o passo iOS falha em modo
+        # não-interativo e derruba o job inteiro — build gasto por nada.
         description: "Plataforma"
         required: true
-        default: all
+        default: android
         type: choice
         options:
-          - all
-          - ios
           - android
+          - ios
+          - all
 
 jobs:
   build:
