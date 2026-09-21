@@ -1,5 +1,6 @@
 import {
   MAX_IMAGE_EDGE, resizeTarget, scanChipLabel, scanFailureLine, scanInviteLine,
+  showsDeepenInvite,
 } from '../../../src/features/assistant/logic';
 
 describe('resizeTarget', () => {
@@ -80,5 +81,32 @@ describe('scanInviteLine', () => {
   it('cita o livro quando ele e conhecido', () => {
     expect(scanInviteLine('1984')).toBe('Travou em alguma página de 1984?');
     expect(scanInviteLine(null)).toBe('Travou em alguma página?');
+  });
+});
+
+describe('showsDeepenInvite (BER-101)', () => {
+  const fala = (role: 'reader' | 'assistant', kind?: 'direct' | 'invite' | 'refusal' | 'unknown') =>
+    ({ id: 'x', role, text: 'oi', kind });
+
+  it('aparece depois de uma resposta direta', () => {
+    expect(showsDeepenInvite(fala('assistant', 'direct'))).toBe(true);
+  });
+
+  // Nao ha o que aprofundar depois de uma recusa ou de um "nao sei": oferecer seria
+  // prometer o que o assistente acabou de dizer que nao faz.
+  it('nao aparece depois de recusa nem de "nao sei"', () => {
+    expect(showsDeepenInvite(fala('assistant', 'refusal'))).toBe(false);
+    expect(showsDeepenInvite(fala('assistant', 'unknown'))).toBe(false);
+  });
+
+  // Depois de um convite a pensar, a bola esta com o leitor. Empurrar "quer que eu
+  // aprofunde?" atropelaria a pergunta que o assistente acabou de fazer a ele.
+  it('nao aparece depois de um convite a pensar', () => {
+    expect(showsDeepenInvite(fala('assistant', 'invite'))).toBe(false);
+  });
+
+  it('nao aparece na fala do leitor nem numa conversa vazia', () => {
+    expect(showsDeepenInvite(fala('reader'))).toBe(false);
+    expect(showsDeepenInvite(undefined)).toBe(false);
   });
 });

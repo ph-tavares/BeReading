@@ -35,7 +35,8 @@ Pré-requisitos: Node ≥ 20, app **Expo Go** no celular (iOS/Android), celular 
 Funções: `generate-questions`, `evaluate-answer`, `register-reading-session`, `award-badges`,
 `retry-pending-quizzes`, `delete-account`, `lookup-book-by-isbn`, `check-chapter-completion` (stub),
 `get-entitlement`, `reading-list`, `billing-mock`, `ingest-book`, `process-ingestion`,
-`scan-page` (BER-100 — a foto da página do assistente de leitura).
+`scan-page` (BER-100 — a foto da página do assistente de leitura),
+`ask-assistant` (BER-101 — a resposta à pergunta do leitor).
 
 A IA do quiz é **configurável por secret** (sem mudar código):
 

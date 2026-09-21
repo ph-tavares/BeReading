@@ -55,9 +55,14 @@ jest.mock('../../src/lib/supabase', () => ({
 }));
 
 const mockScanPage = jest.fn();
+const mockAskAssistant = jest.fn();
 jest.mock('../../src/api/edgeFunctions', () => {
   const real = jest.requireActual('../../src/api/edgeFunctions');
-  return { ...real, scanPage: (...args: unknown[]) => mockScanPage(...args) };
+  return {
+    ...real,
+    scanPage: (...args: unknown[]) => mockScanPage(...args),
+    askAssistant: (...args: unknown[]) => mockAskAssistant(...args),
+  };
 });
 
 import AssistantScanScreen from '../../app/assistant/scan';
@@ -81,6 +86,11 @@ beforeEach(() => {
   mockTirarFoto.mockResolvedValue({ uri: 'file:///foto.jpg', width: 3024, height: 4032 });
   mockSalvar.mockResolvedValue({ base64: 'QUJD', uri: 'file:///menor.jpg' });
   mockScanPage.mockResolvedValue(SCAN);
+  mockAskAssistant.mockResolvedValue({
+    conversation_id: 'conv-1',
+    kind: 'direct',
+    answer: 'É sustentar duas ideias contrárias ao mesmo tempo.',
+  });
 });
 
 describe('tela da foto', () => {
@@ -178,5 +188,89 @@ describe('tela da foto', () => {
       bookId: undefined,
       bookTitle: undefined,
     });
+  });
+});
+
+describe('a conversa (BER-101)', () => {
+  /** Fotografa e espera a tela das sugestoes, que e de onde a conversa comeca. */
+  async function ateAsSugestoes() {
+    const tela = render(<AssistantScanScreen />);
+    fireEvent.press(tela.getByLabelText('Fotografar a página'));
+    await waitFor(() => expect(tela.getByText('Sobre o que você quer falar?')).toBeTruthy());
+    return tela;
+  }
+
+  it('tocar numa sugestao manda a pergunta e mostra a resposta', async () => {
+    const { getByLabelText, getByText } = await ateAsSugestoes();
+
+    fireEvent.press(getByLabelText('o que é duplipensar'));
+
+    await waitFor(() => expect(getByText('É sustentar duas ideias contrárias ao mesmo tempo.')).toBeTruthy());
+    expect(mockAskAssistant).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      question: 'o que é duplipensar',
+      // A sugestao nasceu da foto; o campo de texto e 'typed'.
+      sourceKind: 'photo',
+    });
+    // A fala do leitor fica na conversa, acima da resposta.
+    expect(getByText('o que é duplipensar')).toBeTruthy();
+  });
+
+  it('digitar e enviar manda a pergunta como typed', async () => {
+    const { getByLabelText, getByText } = await ateAsSugestoes();
+
+    fireEvent.changeText(getByLabelText('Ou pergunta do seu jeito'), 'quem é O\'Brien');
+    fireEvent.press(getByLabelText('Enviar pergunta'));
+
+    await waitFor(() => expect(getByText('É sustentar duas ideias contrárias ao mesmo tempo.')).toBeTruthy());
+    expect(mockAskAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({ question: 'quem é O\'Brien', sourceKind: 'typed' }),
+    );
+  });
+
+  // O convite a aprofundar e da interface: o prompt manda o modelo nao oferecer.
+  it('o convite a aprofundar aparece depois de resposta direta, e some depois de recusa', async () => {
+    const { getByLabelText, getByText, queryByText } = await ateAsSugestoes();
+
+    fireEvent.press(getByLabelText('o que é duplipensar'));
+    await waitFor(() => expect(getByText('Quer que eu aprofunde?')).toBeTruthy());
+
+    mockAskAssistant.mockResolvedValue({
+      conversation_id: 'conv-1',
+      kind: 'refusal',
+      answer: 'Isso eu não faço: adiantaria o que você ainda não leu.',
+    });
+    fireEvent.changeText(getByLabelText('Sua mensagem'), 'me resume o capítulo');
+    fireEvent.press(getByLabelText('Enviar pergunta'));
+
+    await waitFor(() => expect(getByText('Isso eu não faço: adiantaria o que você ainda não leu.')).toBeTruthy());
+    expect(queryByText('Quer que eu aprofunde?')).toBeNull();
+  });
+
+  // O servidor so grava as duas mensagens juntas: a tela precisa espelhar isso.
+  it('pergunta que falha sai da conversa e volta pro campo', async () => {
+    const { getByLabelText, getByText, queryAllByTestId } = await ateAsSugestoes();
+
+    mockAskAssistant.mockRejectedValue(new ScanPageError('offline'));
+    fireEvent.changeText(getByLabelText('Ou pergunta do seu jeito'), 'quem é O\'Brien');
+    fireEvent.press(getByLabelText('Enviar pergunta'));
+
+    await waitFor(() => expect(getByText(/sem internet/i)).toBeTruthy());
+    // A fala nao fica pendurada na conversa sem resposta. O alvo e a bolha, e nao o
+    // texto: ele volta para o campo de digitacao, e `queryByText` nao separa os dois.
+    expect(queryAllByTestId('fala-do-leitor')).toEqual([]);
+    // ...e o que ele digitou volta, para nao ter que redigitar.
+    expect(getByLabelText('Ou pergunta do seu jeito').props.value).toBe('quem é O\'Brien');
+  });
+
+  it('a transcricao e as sugestoes dao lugar a conversa depois da primeira pergunta', async () => {
+    const { getByLabelText, getByText, queryByText } = await ateAsSugestoes();
+    expect(getByText('O que eu li na sua foto')).toBeTruthy();
+
+    fireEvent.press(getByLabelText('o que é duplipensar'));
+    await waitFor(() => expect(getByText('É sustentar duas ideias contrárias ao mesmo tempo.')).toBeTruthy());
+
+    expect(queryByText('O que eu li na sua foto')).toBeNull();
+    expect(queryByText('Sobre o que você quer falar?')).toBeNull();
   });
 });

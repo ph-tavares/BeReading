@@ -236,6 +236,50 @@ export async function scanPage(input: {
   return data.data as ScanPageResult;
 }
 
+/** BER-101: o que o assistente fez com a pergunta. O mesmo tipo que a function devolve. */
+export type AnswerKind = 'direct' | 'invite' | 'refusal' | 'unknown';
+
+export interface AskAssistantResult {
+  conversation_id: string;
+  kind: AnswerKind;
+  answer: string;
+}
+
+/**
+ * BER-101: manda a pergunta do leitor e recebe a resposta curta.
+ *
+ * Reaproveita o `ScanPageError`: do ponto de vista da tela, "não consegui ler sua
+ * foto" e "não consegui responder agora" são a mesma classe de falha, com falas
+ * diferentes. Um erro só evita dois caminhos de tratamento que nunca divergem.
+ *
+ * @throws ScanPageError com o código da falha.
+ */
+export async function askAssistant(input: {
+  conversationId: string;
+  question: string;
+  /** De onde veio: a sugestão que a foto gerou, ou o campo de texto. */
+  sourceKind: 'photo' | 'typed';
+}): Promise<AskAssistantResult> {
+  const { data, error } = await supabase.functions.invoke('ask-assistant', {
+    body: {
+      conversation_id: input.conversationId,
+      question: input.question,
+      source_kind: input.sourceKind,
+    },
+  });
+
+  if (error) {
+    const { status, body } = await readHttpError(error);
+    if (status === undefined) throw new ScanPageError('offline');
+    const codigo = (body as { error?: unknown } | null)?.error;
+    if (codigo === 'ai_unavailable') throw new ScanPageError('ai_unavailable');
+    if (status === 500) throw new ScanPageError('scan_failed');
+    throw new ScanPageError('unknown');
+  }
+  if (!data?.data) throw new ScanPageError('unknown');
+  return data.data as AskAssistantResult;
+}
+
 /**
  * BER-62: apaga o dado do leitor e a conta de login. Auto-serviço — o dono é
  * sempre quem está logado, nunca um id passado por fora.
