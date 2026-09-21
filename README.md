@@ -45,6 +45,10 @@ A IA do quiz é **configurável por secret** (sem mudar código):
 | OpenAI | `AI_API_KEY`, `AI_MODEL` (default `gpt-4o-mini`) |
 | Anthropic | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` (default `claude-haiku-4-5`) |
 
+Para **desenvolver a ingestão de conteúdo (BER-59) sem gastar crédito de API**, há um runner local
+que chama a IA pelo Claude Code: [`docs/ingestao-local.md`](docs/ingestao-local.md). Produção
+continua na credencial de API.
+
 Os secrets das functions continuam sendo definidos à mão (o deploy automático não mexe neles):
 
 ```bash
