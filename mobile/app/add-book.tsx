@@ -77,7 +77,8 @@ export default function AddBookScreen() {
       useEntitlementStore.getState().refresh();
       toast.show({
         message: `${book.title} entrou na sua estante.`,
-        detail: created ? 'Registre a primeira leitura quando quiser.' : 'Ele já estava no catálogo.',
+        // Mesmo ISBN de novo devolve o livro que já existia: o do catálogo ou o que o leitor cadastrou.
+        detail: created ? 'Registre a primeira leitura quando quiser.' : book.added_by ? 'Você já tinha cadastrado esse livro.' : 'Ele já estava no catálogo.',
         tone: 'positive',
       });
       router.replace(`/book/${book.id}`);
