@@ -249,3 +249,41 @@ Deno.test('reading-list: ação inválida devolve 400; sem Authorization devolve
     await fake.close();
   }
 });
+
+Deno.test('reading-list: livro cadastrado por outro leitor não começa — 404 (BER-60)', async () => {
+  const fake = startFakeSupabase({
+    users: { [TOKEN]: { id: USER_ID } },
+    tables: { books: [...BOOKS, { id: 'book-alheio', added_by: 'user-2' }], student_books: [] },
+  });
+  withEnv(fake.url);
+
+  try {
+    const { handler } = await import('./index.ts');
+    const res = await handler(request({ action: 'start', book_id: 'book-alheio' }));
+    await res.body?.cancel();
+
+    assertEquals(res.status, 404);
+    assertEquals(fake.tables.student_books.length, 0);
+  } finally {
+    await fake.close();
+  }
+});
+
+Deno.test('reading-list: livro que o próprio leitor cadastrou começa normalmente (BER-60)', async () => {
+  const fake = startFakeSupabase({
+    users: { [TOKEN]: { id: USER_ID } },
+    tables: { books: [{ id: 'book-meu', added_by: USER_ID }], student_books: [] },
+  });
+  withEnv(fake.url);
+
+  try {
+    const { handler } = await import('./index.ts');
+    const res = await handler(request({ action: 'start', book_id: 'book-meu' }));
+    await res.body?.cancel();
+
+    assertEquals(res.status, 200);
+    assertEquals(fake.tables.student_books.length, 1);
+  } finally {
+    await fake.close();
+  }
+});

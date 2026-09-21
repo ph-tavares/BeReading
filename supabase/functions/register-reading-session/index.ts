@@ -72,11 +72,13 @@ export async function handler(req: Request): Promise<Response> {
   // 1. Validar que o livro existe e que end_page <= total_pages
   const { data: book, error: bookError } = await supabase
     .from('books')
-    .select('total_pages')
+    .select('total_pages, added_by')
     .eq('id', book_id)
     .single();
 
-  if (bookError || !book) {
+  // BER-60: livro cadastrado por outro leitor não existe para quem não o cadastrou
+  // (a service_role passa por cima da RLS de `books`).
+  if (bookError || !book || (book.added_by && book.added_by !== user_id)) {
     return new Response(JSON.stringify({ error: 'Book not found' }), {
       status: 404,
       headers: { 'Content-Type': 'application/json' },

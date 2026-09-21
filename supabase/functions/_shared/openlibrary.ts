@@ -66,3 +66,15 @@ export function parseOpenLibraryEdition(json: Record<string, unknown>): BookMeta
 
   return { title, authors, publisher, publishYear, totalPages, coverUrl };
 }
+
+/**
+ * BER-60: chave do primeiro autor (`/authors/OL…A`) quando a edição só traz `authors`
+ * por referência, que é o caso da maioria (inclusive edições brasileiras). Quem chama
+ * resolve o nome com uma segunda requisição; sem isso o formulário de cadastro vinha
+ * com o autor em branco.
+ */
+export function firstAuthorKey(json: Record<string, unknown>): string | null {
+  const authors = Array.isArray(json.authors) ? (json.authors as unknown[]) : [];
+  const key = (authors[0] as { key?: unknown } | undefined)?.key;
+  return typeof key === 'string' && /^\/authors\/OL\d+A$/.test(key) ? key : null;
+}

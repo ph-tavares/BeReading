@@ -36,7 +36,8 @@ Funções: `generate-questions`, `evaluate-answer`, `register-reading-session`, 
 `retry-pending-quizzes`, `delete-account`, `lookup-book-by-isbn`, `check-chapter-completion` (stub),
 `get-entitlement`, `reading-list`, `billing-mock`, `ingest-book`, `process-ingestion`,
 `scan-page` (BER-100 — a foto da página do assistente de leitura),
-`ask-assistant` (BER-101 — a resposta à pergunta do leitor).
+`ask-assistant` (BER-101 — a resposta à pergunta do leitor),
+`add-book` (BER-60 — o leitor cadastra um livro fora do catálogo).
 
 A IA do quiz é **configurável por secret** (sem mudar código):
 

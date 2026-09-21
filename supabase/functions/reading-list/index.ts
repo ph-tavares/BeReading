@@ -78,8 +78,11 @@ export async function handler(req: Request): Promise<Response> {
     return json({ data: { book_id, status: existing.status, current_page: existing.current_page }, error: null });
   }
 
-  const { data: books } = await supabase.from('books').select('id').eq('id', book_id).limit(1);
-  if (!books || books.length === 0) return json({ error: 'Book not found' }, 404);
+  // BER-60: livro cadastrado por outro leitor não existe para quem não o cadastrou.
+  // A service_role passa por cima da RLS de `books`, então a regra é repetida aqui.
+  const { data: books } = await supabase.from('books').select('id, added_by').eq('id', book_id).limit(1);
+  const book = books?.[0] as { added_by: string | null } | undefined;
+  if (!book || (book.added_by && book.added_by !== user_id)) return json({ error: 'Book not found' }, 404);
 
   const entitlement = await loadEntitlement(supabase, user_id);
   const quota = canStartBook({

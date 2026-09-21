@@ -1,12 +1,23 @@
 // supabase/functions/lookup-book-by-isbn/index.ts
 // BER-72: dado o ISBN que o leitor informa ao cadastrar um livro fora do catálogo,
 // devolve metadado bibliográfico (título, autor, editora, total de páginas) via
-// Open Library. Não escreve em `books` — isso é fluxo da BER-60, ainda bloqueada
-// pela decisão da BER-59. Esta function é só o lookup, consumível quando aquele
-// fluxo existir.
+// Open Library. Não escreve em `books`: quem grava é o `add-book` (BER-60), com o
+// que o leitor conferiu no formulário que este lookup preenche.
 import { createServiceClient } from '../_shared/supabase-client.ts';
 import { authErrorResponse, resolveUserId } from '../_shared/auth.ts';
-import { isValidIsbnFormat, normalizeIsbn, parseOpenLibraryEdition } from '../_shared/openlibrary.ts';
+import { firstAuthorKey, isValidIsbnFormat, normalizeIsbn, parseOpenLibraryEdition } from '../_shared/openlibrary.ts';
+
+/** Nome do autor pela chave da Open Library. Falhar aqui só deixa o autor em branco. */
+async function resolveAuthorName(key: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://openlibrary.org${key}.json`);
+    if (!res.ok) return null;
+    const author = await res.json();
+    return typeof author?.name === 'string' && author.name.trim() ? author.name.trim() : null;
+  } catch {
+    return null;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -84,6 +95,14 @@ Deno.serve(async (req) => {
 
   const json = await response.json();
   const metadata = parseOpenLibraryEdition(json);
+
+  // BER-60: a maioria das edições só traz o autor por chave; sem esta segunda
+  // chamada o formulário de cadastro chegava com o autor em branco.
+  if (metadata.authors.length === 0) {
+    const key = firstAuthorKey(json);
+    const name = key ? await resolveAuthorName(key) : null;
+    if (name) metadata.authors = [name];
+  }
 
   return new Response(JSON.stringify({
     data: { found: true, isbn, ...metadata },

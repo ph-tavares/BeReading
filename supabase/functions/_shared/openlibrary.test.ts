@@ -104,3 +104,10 @@ Deno.test('parseOpenLibraryEdition: campos ausentes viram null/vazio, não erro'
   assertEquals(result.totalPages, null);
   assertEquals(result.coverUrl, null);
 });
+
+Deno.test('firstAuthorKey: devolve a chave do primeiro autor e recusa chave fora do formato', async () => {
+  const { firstAuthorKey } = await import('./openlibrary.ts');
+  assertEquals(firstAuthorKey({ authors: [{ key: '/authors/OL9307036A' }, { key: '/authors/OL1A' }] }), '/authors/OL9307036A');
+  assertEquals(firstAuthorKey({ authors: [{ key: 'https://evil.example/x' }] }), null);
+  assertEquals(firstAuthorKey({}), null);
+});
