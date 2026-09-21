@@ -16,7 +16,7 @@ export default function TabsLayout() {
       // O destino do botão central mora aqui, e não dentro do TabBar: o
       // design system não importa `expo-router` (ver o cabeçalho de
       // src/ui/TabBar.tsx e o CI vermelho que produziu essa regra).
-      tabBar={(props) => <TabBar {...props} onPressRegistrar={() => router.push('/register-reading')} />}
+      tabBar={(props) => <TabBar {...props} onPressSessao={() => router.push('/session/start')} />}
     >
       {/* Nomes de arquivo de rota (index, livros, catalogo, perfil) não mudam:
           deep link depende deles. O rótulo visível sai daqui: o TabBar lê

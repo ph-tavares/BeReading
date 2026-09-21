@@ -228,12 +228,18 @@ estado "erro" descrito, por exemplo, ainda entra incompleto.
   role atrás da barra. Variação por `scroll` (rolável ou fixa) e por `tabBar` (telas fora das abas
   não reservam o espaço de baixo). Não é estado: é a única forma de uma tela conhecer a borda do
   aparelho. Nenhuma tela lê `useSafeAreaInsets` por conta própria.
-- **TabBar**: as quatro abas (Hoje, Estante, Explorar, Você) **mais um botão central de registrar
-  leitura** (BER-120), sem entalhe em SVG. O botão saiu na F3, com a justificativa de que a ação
-  viveria no contexto de cada tela — e isso deixou `app/register-reading.tsx` sem nenhum caminho no
-  app inteiro, com a suíte verde (o defeito que `__tests__/guards/rotas.test.ts` documenta). Ele
-  volta **somando**: o botão dentro do bloco do livro na Hoje continua. São dois caminhos para a
-  ação central do produto, não um frágil. O central tem 56pt, sobe metade para fora da barra e usa
+- **TabBar**: as quatro abas (Hoje, Estante, Explorar, Você) **mais um botão central que começa a
+  leitura** (BER-120, destino trocado na BER-122), sem entalhe em SVG. O botão saiu na F3, com a
+  justificativa de que a ação viveria no contexto de cada tela — e isso deixou
+  `app/register-reading.tsx` sem nenhum caminho no app inteiro, com a suíte verde (o defeito que
+  `__tests__/guards/rotas.test.ts` documenta). Ele voltou **somando**, com o botão da Hoje ao lado.
+
+  **Na BER-122 ele deixou de abrir o registro e passou a abrir `session/start`.** A ação central do
+  produto deixou de ser registrar o passado e passou a ser começar a ler agora (decisão S9 da spec
+  da sessão de leitura), e o botão mais visível do app segue a ação mais importante. **Registrar
+  leitura continua alcançável pelo botão secundário da Hoje, e isso não é opcional**: depois desta
+  troca, ele é o único caminho do app inteiro para `register-reading`. A guarda de rotas reprova o
+  PR de quem tirar os dois. O central tem 56pt, sobe metade para fora da barra e usa
   `color.brand`; `accessibilityRole="button"`, não `tab`, para o leitor de tela continuar ouvindo
   quatro abas e não cinco. Estados por aba:
   selected (`Tone` `primary` no ícone e no rótulo, que saem do mesmo tom, nunca de duas fontes) e

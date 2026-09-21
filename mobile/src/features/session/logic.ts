@@ -111,3 +111,21 @@ export function parseCustomMinutes(texto: string): number | null {
   return minutos;
 }
 
+/**
+ * O relogio da tela, em `MM:SS`.
+ *
+ * Passa de 60 minutos sem reiniciar (`75:00`, nao `15:00`): a sessao sem
+ * tempo definido sobe indefinidamente, e virar a contagem esconderia uma hora
+ * inteira de leitura.
+ *
+ * Tempo negativo vira `00:00`. Ele acontece de verdade — a sessao terminou
+ * enquanto o app estava congelado e a tela abre depois do instante gravado —
+ * e mostrar "-03:12" seria vazar a conta interna para o leitor.
+ */
+export function formatClock(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const minutos = Math.floor(total / 60);
+  const segundos = total % 60;
+  return `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
+}
+

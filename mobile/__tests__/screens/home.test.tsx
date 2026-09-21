@@ -196,6 +196,44 @@ describe('Hoje: os quatro estados', () => {
     expect(mockPush).toHaveBeenCalledWith('/register-reading');
   });
 
+  /**
+   * BER-122, decisao S9 da spec: "Ler agora" e a acao PRIMARIA da Hoje, e
+   * registrar leitura passa a ser a secundaria, para quem leu sem abrir o app.
+   * A mudanca e de acao principal do produto: de registrar o passado para
+   * comecar o presente.
+   */
+  it('"Ler agora" e a acao primaria e leva para a escolha de tempo', async () => {
+    const b = book();
+    mGetStudentBooks.mockResolvedValueOnce([entry({ current_page: 84 }, b)]);
+    mGetBookWithChapters.mockResolvedValueOnce({ ...b, chapters: [chapter({ number: 1, end_page: 112 })] });
+    semAssunto();
+
+    const { findByText, getByText } = render(<HomeScreen />);
+    await findByText('Lendo agora');
+
+    fireEvent.press(getByText('Ler agora'));
+    expect(mockPush).toHaveBeenCalledWith('/session/start');
+  });
+
+  /**
+   * O botao secundario NAO e opcional: depois que o botao central da TabBar
+   * passou a abrir a sessao (ADR 0014), ele e o unico caminho do app inteiro
+   * para register-reading. A guarda de rotas ja reprova a tela orfa, mas ela
+   * nao diz QUAL botao a alcanca; este teste diz.
+   */
+  it('registrar leitura continua alcancavel, como secundaria', async () => {
+    const b = book();
+    mGetStudentBooks.mockResolvedValueOnce([entry({ current_page: 84 }, b)]);
+    mGetBookWithChapters.mockResolvedValueOnce({ ...b, chapters: [chapter({ number: 1, end_page: 112 })] });
+    semAssunto();
+
+    const { findByText, getByText } = render(<HomeScreen />);
+    await findByText('Lendo agora');
+
+    fireEvent.press(getByText('Registrar leitura'));
+    expect(mockPush).toHaveBeenCalledWith('/register-reading');
+  });
+
   it('erro: mostra banner e mantem o que ja tinha carregado', async () => {
     const b = book();
     mGetStudentBooks.mockResolvedValueOnce([entry({ current_page: 84 }, b)]);

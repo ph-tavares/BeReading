@@ -1,4 +1,4 @@
-import { startSession, remainingMs, elapsedMs, isFinished, parseCustomMinutes, TIME_PRESETS } from '../../../src/features/session/logic';
+import { startSession, remainingMs, elapsedMs, isFinished, parseCustomMinutes, TIME_PRESETS, formatClock } from '../../../src/features/session/logic';
 
 describe('startSession', () => {
   it('com tempo definido, grava o fim como instante absoluto', () => {
@@ -107,5 +107,26 @@ describe('parseCustomMinutes', () => {
   it('recusa acima do teto de guarda', () => {
     expect(parseCustomMinutes(String(TIME_PRESETS.maxCustomMinutes))).toBe(TIME_PRESETS.maxCustomMinutes);
     expect(parseCustomMinutes(String(TIME_PRESETS.maxCustomMinutes + 1))).toBeNull();
+  });
+});
+
+describe('formatClock', () => {
+  it('mostra minutos e segundos, com zero a esquerda', () => {
+    expect(formatClock(20 * 60_000)).toBe('20:00');
+    expect(formatClock(9 * 60_000 + 5_000)).toBe('09:05');
+    expect(formatClock(0)).toBe('00:00');
+  });
+
+  it('passa de uma hora sem reiniciar a contagem de minutos', () => {
+    expect(formatClock(75 * 60_000)).toBe('75:00');
+  });
+
+  /**
+   * Tempo negativo acontece de verdade: a sessao terminou enquanto o app
+   * estava congelado, e a tela abre depois do instante gravado. Mostrar
+   * "-03:12" seria vazar a conta interna para o leitor.
+   */
+  it('nao mostra tempo negativo quando o fim ja passou', () => {
+    expect(formatClock(-3 * 60_000)).toBe('00:00');
   });
 });
