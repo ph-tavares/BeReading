@@ -30,6 +30,8 @@ export interface StepContext {
   notify: (context: string, message: string) => Promise<void>;
   /** CPU gasta pelo processo até agora, em ms; null quando o runtime não expõe (BER-59). */
   cpuMs: () => number | null;
+  /** Dispara a geração do quiz do capítulo do app (BER-60). Ausente em teste e no runner local. */
+  generateQuiz?: (chapterId: string) => Promise<void>;
 }
 
 export interface StepOutcome {

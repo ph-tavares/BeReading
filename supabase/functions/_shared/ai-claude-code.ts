@@ -11,7 +11,7 @@
 // ambiente sem navegador, `CLAUDE_CODE_OAUTH_TOKEN` (de `claude setup-token`) no ambiente do
 // processo — o mesmo mecanismo que o agente do Schools Out usa. Nada disso passa por este arquivo:
 // quem autentica é o CLI.
-import type { AIRequest, AIResult } from './ai.ts';
+import { type AIRequest, AIOutOfCreditsError, type AIResult } from './ai.ts';
 import { HttpStatusError, PermanentStepError } from './ingestion/queue.ts';
 
 export interface SpawnResult {
@@ -67,6 +67,13 @@ export interface ClaudeCodeOptions {
   timeoutMs?: number;
 }
 
+/**
+ * Limite de uso da assinatura do Claude Code (BER-59, run local de 21/09/2026). Quando estourou, o
+ * CLI saiu com `api_error` e o passo gastou 3 das 4 tentativas. Não é defeito do passo: é pausa até
+ * o limite reiniciar, a mesma situação do saldo esgotado na API (spec §11, item 41).
+ */
+const USAGE_LIMIT = /usage limit|limit reached|rate[_ ]?limit|resets? (?:at|in)/i;
+
 export function claudeCodeAI(spawn: SpawnClaude = spawnClaudeCli, options: ClaudeCodeOptions = {}): (req: AIRequest) => Promise<AIResult> {
   return async (req: AIRequest): Promise<AIResult> => {
     const res = await spawn(ARGS, req.prompt, options.timeoutMs ?? req.timeoutMs);
@@ -76,6 +83,7 @@ export function claudeCodeAI(spawn: SpawnClaude = spawnClaudeCli, options: Claud
       // e queda de rede aparecem assim, e matar o passo na primeira falha jogaria fora o run
       // inteiro — o estrago que o saldo esgotado causou na API (spec §11, item 41).
       const motivo = res.stderr.trim() || res.stdout.trim() || 'sem saída';
+      if (USAGE_LIMIT.test(motivo)) throw new AIOutOfCreditsError(`Claude Code: limite de uso da assinatura (${motivo.slice(0, 120)})`);
       throw new HttpStatusError(503, `claude CLI saiu com código ${res.code}: ${motivo}`);
     }
 
@@ -94,6 +102,10 @@ export function claudeCodeAI(spawn: SpawnClaude = spawnClaudeCli, options: Claud
     const statusApi = data.api_error_status;
     if (statusApi === 401 || statusApi === 403) {
       throw new HttpStatusError(503, `credencial do Claude Code inválida ou expirada (HTTP ${statusApi}): renove com \`claude setup-token\` e exporte CLAUDE_CODE_OAUTH_TOKEN`);
+    }
+
+    if (statusApi === 429 || (data.is_error === true && USAGE_LIMIT.test(String(data.result ?? '')))) {
+      throw new AIOutOfCreditsError(`Claude Code: limite de uso da assinatura (${String(data.result ?? '').slice(0, 120)})`);
     }
 
     if (data.is_error === true || data.subtype !== 'success') {

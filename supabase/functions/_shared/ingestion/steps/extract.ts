@@ -4,8 +4,8 @@
 // texto bruto é apagado assim que o último bloco termina — ou se o teto de custo chegar.
 import { aiUsageDelta, exceededLimit } from '../budget.ts';
 import { buildExtractionPrompt, EXTRACTION_MAX_TOKENS, parseExtraction, splitIntoChunks } from '../extraction.ts';
-import { chunkPart, partFromSource, partStillValid } from '../parts.ts';
-import { mergeDeclared } from '../structure.ts';
+import { chunkPart, declaredWithParts, nextMaxChapter, partForNextChunk, partFromSource, partStillValid } from '../parts.ts';
+import { mergeDeclaredKeepingParts } from '../structure.ts';
 import type { ChapterRef } from '../types.ts';
 import { AI_STEP_TIMEOUT_MS, parseAIResponse, type StepExecutor } from './context.ts';
 
@@ -61,7 +61,10 @@ export const runExtractStep: StepExecutor = async (step, run, ctx) => {
   const maiorCapituloVisto = (step.payload.maxChapter as number | undefined) ?? null;
   const capitulosDoBloco = parsed.claims.map((c) => c.chapterRef?.numberInPart ?? c.chapterRef?.number ?? null).filter((n): n is number => n !== null);
   const menorDoBloco = capitulosDoBloco.length > 0 ? Math.min(...capitulosDoBloco) : null;
-  const heranca = parteDoBloco.changes || !partStillValid(maiorCapituloVisto, menorDoBloco) ? null : parteDoBloco.start;
+  // Com cabeçalho de parte no bloco, a parte vem dele, e o maior capítulo visto é o da parte
+  // anterior: comparar os dois fazia "PART TWO" no topo do bloco perder a parte (capítulo 1 < 8).
+  const recuouSemCabecalho = parteDoBloco.headings === 0 && !partStillValid(maiorCapituloVisto, menorDoBloco);
+  const heranca = parteDoBloco.changes || recuouSemCabecalho ? null : parteDoBloco.start;
   const parte = parteDaFonte ?? heranca;
   const comParte = parsed.claims.map((claim) => {
     if (!parte || !claim.chapterRef || claim.chapterRef.part) return claim;
@@ -74,8 +77,11 @@ export const runExtractStep: StepExecutor = async (step, run, ctx) => {
   await ctx.store.deleteClaimsForChunk(sourceId, index);
   await ctx.store.insertClaims(comParte.map((claim) => ({ runId: run.id, sourceId, chunkIndex: index, ...claim })));
   if (parsed.structure.length > 0) {
+    // A lista declarada ganha a mesma parte das afirmações (defeito 5): sem isso, "capítulo 1" de
+    // cada parte do texto integral se juntava num só. O número cru da fonte fica como veio.
+    const declarada = declaredWithParts(parsed.structure, parteDoBloco, parte);
     await ctx.store.updateSource(sourceId, {
-      declaredStructure: mergeDeclared([source.declaredStructure ?? [], parsed.structure]),
+      declaredStructure: mergeDeclaredKeepingParts([source.declaredStructure ?? [], declarada]),
       // Um bloco com o sumário inteiro basta para a fonte contar como lista completa (spec §11, item 24).
       declaredStructureComplete: (source.declaredStructureComplete ?? false) || (parsed.structureComplete && parsed.structure.length > 0),
     });
@@ -88,7 +94,7 @@ export const runExtractStep: StepExecutor = async (step, run, ctx) => {
   return {
     enqueue: isLast
       ? []
-      : [{ kind: 'extract', subject: `${sourceId}#${index + 1}`, payload: { previousChapter: lastChapter, previousPart: parte === null ? null : parteDoBloco.end, maxChapter: Math.max(maiorCapituloVisto ?? 0, ...capitulosDoBloco, 0) } }],
+      : [{ kind: 'extract', subject: `${sourceId}#${index + 1}`, payload: { previousChapter: lastChapter, previousPart: partForNextChunk(parteDoBloco, parte), maxChapter: nextMaxChapter(parteDoBloco, maiorCapituloVisto, capitulosDoBloco) } }],
     payload: { afirmacoes: parsed.claims.length, descartadas: parsed.rejected.length, ...(parte ? { parte } : {}) },
   };
 };

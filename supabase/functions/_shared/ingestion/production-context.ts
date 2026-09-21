@@ -5,6 +5,7 @@
 import process from 'node:process';
 import { callAI } from '../ai.ts';
 import { notifyOps } from '../ops-alert.ts';
+import { internalCallHeaders } from '../keys.ts';
 import { createServiceClient } from '../supabase-client.ts';
 import { PermanentStepError } from './queue.ts';
 import type { RobotsRules } from './robots.ts';
@@ -45,6 +46,16 @@ export function buildProductionContext(): StepContext {
       return robots.get(origin)!;
     },
     notify: notifyOps,
+    generateQuiz: async (chapterId) => {
+      const url = Deno.env.get('SUPABASE_URL');
+      if (!url) return;
+      const res = await fetch(`${url}/functions/v1/generate-questions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...internalCallHeaders((name) => Deno.env.get(name)) },
+        body: JSON.stringify({ chapter_id: chapterId }),
+      });
+      await res.body?.cancel();
+    },
     cpuMs: () => {
       // `process.cpuUsage` vem da compatibilidade com Node do Deno; se o Edge Runtime não
       // expuser, o worker fica só com o orçamento de relógio (BER-59).

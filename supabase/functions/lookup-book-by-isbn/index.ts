@@ -7,6 +7,15 @@ import { createServiceClient } from '../_shared/supabase-client.ts';
 import { authErrorResponse, resolveUserId } from '../_shared/auth.ts';
 import { firstAuthorKey, isValidIsbnFormat, normalizeIsbn, parseOpenLibraryEdition } from '../_shared/openlibrary.ts';
 
+/** Capítulos da edição já ingerida com esse ISBN, ou null. Falhar aqui só deixa o campo vazio. */
+async function knownChapterCount(supabase: ReturnType<typeof createServiceClient>, isbn: string): Promise<number | null> {
+  const { data: edicoes } = await supabase.from('book_editions').select('id').eq('isbn', isbn).limit(1);
+  const edicao = (edicoes ?? [])[0] as { id: string } | undefined;
+  if (!edicao) return null;
+  const { count } = await supabase.from('edition_chapters').select('id', { count: 'exact', head: true }).eq('edition_id', edicao.id);
+  return count && count > 0 ? count : null;
+}
+
 /** Nome do autor pela chave da Open Library. Falhar aqui só deixa o autor em branco. */
 async function resolveAuthorName(key: string): Promise<string | null> {
   try {
@@ -104,8 +113,12 @@ Deno.serve(async (req) => {
     if (name) metadata.authors = [name];
   }
 
+  // BER-59/60: edição já ingerida tem a estrutura confirmada; o formulário já vem com o número de
+  // capítulos certo, e o `add-book` cria os capítulos iguais aos da edição.
+  const chapterCount = await knownChapterCount(supabase, isbn);
+
   return new Response(JSON.stringify({
-    data: { found: true, isbn, ...metadata },
+    data: { found: true, isbn, ...metadata, chapterCount },
     error: null,
   }), { headers: { 'Content-Type': 'application/json' } });
 });

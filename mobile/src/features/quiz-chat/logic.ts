@@ -83,10 +83,15 @@ const DOMINIOS_VISIVEIS = 3;
  * o conteúdo: "a IA não lê por você" (docs/product.md) vale também para o que o quiz sabe.
  */
 export function groundingCaption(grounding: QuizGrounding | null | undefined): string | null {
+  if (grounding?.origem === 'leitura') {
+    return 'Ainda não temos o conteúdo deste capítulo. As perguntas são sobre a sua leitura.';
+  }
   if (!grounding || grounding.fontes < 1) return null;
   const nomes = grounding.dominios.slice(0, DOMINIOS_VISIVEIS);
   const resto = grounding.dominios.length - nomes.length;
   const lista = resto > 0 ? `${nomes.join(', ')} e mais ${resto}` : nomes.join(', ');
+  // BER-60: o leitor precisa saber que isto não foi conferido, ao contrário do conhecimento verificado.
+  if (grounding.origem === 'web') return `Perguntas feitas a partir de resumos da web, sem conferência: ${lista}.`;
   const fontes = grounding.fontes === 1 ? '1 fonte' : `${grounding.fontes} fontes independentes`;
   return `Perguntas feitas a partir de fatos conferidos em ${fontes}${lista ? `: ${lista}` : ''}.`;
 }

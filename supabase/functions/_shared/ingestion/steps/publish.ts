@@ -3,6 +3,7 @@
 // confirmado e sem limite atingido; `partial` e `failed` avisam a operação. A diferença entre
 // a estrutura confirmada e a que o app usa vai para o run: é o insumo da reconciliação do
 // piloto no próximo ciclo (spec §9).
+import { type AppSyncReport, syncAppBooks } from '../app-sync.ts';
 import { principalLooksTruncated } from '../full-text.ts';
 import { normalizeTitle } from '../locate.ts';
 import type { EditionChapter, RunStatus } from '../types.ts';
@@ -35,6 +36,7 @@ export const runPublishStep: StepExecutor = async (_step, run, ctx) => {
     await ctx.notify('ingestion', `run ${run.id}: ${textosDescartados} texto bruto de fonte ainda estava guardado ao fechar e foi apagado`);
   }
 
+  let appSync: AppSyncReport | null = null;
   const finish = async (status: RunStatus, reason: string | null, divergence: unknown = null) => {
     await ctx.store.updateRun(run.id, {
       status,
@@ -45,7 +47,13 @@ export const runPublishStep: StepExecutor = async (_step, run, ctx) => {
     if (status !== 'succeeded') {
       await ctx.notify('ingestion', `run ${run.id} (ISBN ${edition.isbn}) terminou ${status}${reason ? `: ${reason}` : ''}`);
     }
-    return { payload: { status, motivo: reason, ...(textosDescartados > 0 ? { textos_descartados: textosDescartados } : {}) } };
+    return {
+      payload: {
+        status, motivo: reason,
+        ...(textosDescartados > 0 ? { textos_descartados: textosDescartados } : {}),
+        ...(appSync ? { app: appSync } : {}),
+      },
+    };
   };
 
   // Conferência das cópias do texto integral (BER-59, spec §11 item 39): a segunda cópia não é
@@ -71,6 +79,14 @@ export const runPublishStep: StepExecutor = async (_step, run, ctx) => {
 
   const chapters = await ctx.store.listEditionChapters(edition.id);
   if (chapters.length === 0) return finish('partial', run.statusReason ?? 'estrutura_nao_confirmada');
+
+  // BER-60: o livro do app passa a usar o que o run publicou (capítulos da edição, quiz sem
+  // conteúdo gerado de novo). Falhar aqui não desfaz o conhecimento publicado: avisa e segue.
+  try {
+    appSync = await syncAppBooks(ctx, edition, chapters);
+  } catch (err) {
+    await ctx.notify('ingestion', `run ${run.id}: falha ao atualizar o livro do app: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   const scope = recheck ?? chapters.map((c) => c.number);
   // `recheckChapters: []` não é "todos os capítulos" (vazio faria `Math.max` virar `-Infinity`

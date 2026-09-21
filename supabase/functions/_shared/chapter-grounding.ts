@@ -89,6 +89,25 @@ function must<T>(result: { data: T | null; error: { message: string } | null }, 
 }
 
 /**
+ * Edição ingerida do livro do app: a ligada pelo `book_id`, ou, sem ela, a do mesmo ISBN (BER-60).
+ * `book_editions.book_id` guarda um livro só, e o mesmo ISBN pode ser cadastrado por vários
+ * leitores (cada um tem o seu livro, privado). Sem o ISBN, só o primeiro aproveitaria a ingestão.
+ */
+export async function editionForBook(db: Db, bookId: string): Promise<{ id: string } | null> {
+  const ligada = must(
+    await db.from('book_editions').select('id').eq('book_id', bookId).order('created_at', { ascending: false }).limit(1),
+    'book_editions',
+  ) as { id: string }[];
+  if (ligada[0]) return ligada[0];
+
+  const livro = must(await db.from('books').select('isbn').eq('id', bookId).limit(1), 'books') as { isbn: string | null }[];
+  const isbn = livro[0]?.isbn;
+  if (!isbn) return null;
+  const peloIsbn = must(await db.from('book_editions').select('id').eq('isbn', isbn).limit(1), 'book_editions(isbn)') as { id: string }[];
+  return peloIsbn[0] ?? null;
+}
+
+/**
  * Conhecimento verificado do capítulo do app, ou null. Consultas simples, uma tabela por vez: é
  * caminho do quiz, e a leitura precisa ser fácil de conferir contra o banco.
  */
@@ -96,11 +115,7 @@ export async function loadChapterGrounding(
   db: Db,
   chapter: { bookId: string; number: number; title: string | null },
 ): Promise<ChapterGrounding | null> {
-  const edicoes = must(
-    await db.from('book_editions').select('id').eq('book_id', chapter.bookId).order('created_at', { ascending: false }).limit(1),
-    'book_editions',
-  ) as { id: string }[];
-  const edicao = edicoes[0];
+  const edicao = await editionForBook(db, chapter.bookId);
   if (!edicao) return null;
 
   const capitulosDaEdicao = (must(

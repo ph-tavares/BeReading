@@ -1,5 +1,6 @@
 import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import { chunkPart, partFromSource, partLabel, partStillValid } from './parts.ts';
+import { chunkPart, declaredWithParts, nextMaxChapter, partForNextChunk, partFromSource, partLabel, partStillValid } from './parts.ts';
+import type { DeclaredChapter } from './types.ts';
 
 Deno.test('partLabel: reconhece as formas que as fontes usam', () => {
   assertEquals(partLabel('PARTE 2'), 'Parte 2');
@@ -44,4 +45,38 @@ Deno.test('partStillValid: numeração que recua invalida a parte herdada', () =
   assertEquals(partStillValid(3, 3), true, 'o mesmo capítulo continua no bloco seguinte');
   assertEquals(partStillValid(null, 2), true, 'primeiro bloco da fonte');
   assertEquals(partStillValid(5, null), true, 'bloco sem capítulo não diz nada');
+});
+
+// Defeito 5 (BER-59, run local de 21/09/2026): no texto do 1984 do Gutenberg AU o título do livro
+// vem antes de "PART ONE", então o cabeçalho cai no meio do primeiro bloco e nenhum bloco ganhava parte.
+const cap = (number: number): DeclaredChapter => ({ number, part: null, numberInPart: null, title: null });
+
+Deno.test('partForNextChunk: bloco com cabeçalho passa a parte do cabeçalho, mesmo sem parte própria', () => {
+  const primeiro = chunkPart(['1984', 'George Orwell', '', 'PART ONE', '', 'Chapter 1', 'It was a bright cold day.'].join('\n'), null);
+  assertEquals([primeiro.start, primeiro.changes, primeiro.headings], [null, true, 1]);
+  assertEquals(partForNextChunk(primeiro, null), 'Parte 1');
+  // Sem cabeçalho, continua como era: parte invalidada não passa adiante.
+  assertEquals(partForNextChunk(chunkPart('texto corrido', 'Parte 1'), null), null);
+  assertEquals(partForNextChunk(chunkPart('texto corrido', 'Parte 1'), 'Parte 1'), 'Parte 1');
+});
+
+Deno.test('declaredWithParts: separa pela volta da numeração num bloco que troca de parte', () => {
+  const troca = chunkPart(['fim do capítulo 8', '', 'PART TWO', '', 'Chapter 1'].join('\n'), 'Parte 1');
+  const r = declaredWithParts([cap(8), cap(1)], troca, null);
+  assertEquals(r.map((c) => [c.part, c.numberInPart]), [['Parte 1', 8], ['Parte 2', 1]]);
+});
+
+Deno.test('declaredWithParts: sem parte anterior conhecida, é a do cabeçalho; dois cabeçalhos no bloco, não marca', () => {
+  const primeiro = chunkPart(['1984', '', 'PART ONE', '', 'Chapter 1'].join('\n'), null);
+  assertEquals(declaredWithParts([cap(1)], primeiro, null).map((c) => c.part), ['Parte 1']);
+  const dois = chunkPart(['x', 'PART ONE', 'y', 'PART TWO', 'z'].join('\n'), null);
+  assertEquals(declaredWithParts([cap(1), cap(1)], dois, null).map((c) => c.part), [null, null]);
+  // Bloco sem troca: a parte do bloco, se houver.
+  assertEquals(declaredWithParts([cap(3)], chunkPart('texto', 'Parte 1'), 'Parte 1').map((c) => c.part), ['Parte 1']);
+});
+
+Deno.test('nextMaxChapter: parte nova recomeça a contagem', () => {
+  assertEquals(nextMaxChapter(chunkPart('texto', 'Parte 1'), 7, [8]), 8);
+  assertEquals(nextMaxChapter(chunkPart('PART TWO\n\nChapter 1', 'Parte 1'), 8, [1]), 1, 'cabeçalho no topo: só os deste bloco');
+  assertEquals(nextMaxChapter(chunkPart('fim\nPART TWO\nChapter 1', 'Parte 1'), 8, [8, 1]), null, 'troca no meio: não se sabe');
 });

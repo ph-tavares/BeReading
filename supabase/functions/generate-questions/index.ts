@@ -2,11 +2,12 @@
 import { createServiceClient } from '../_shared/supabase-client.ts';
 import { assertInternalCaller, authErrorResponse } from '../_shared/auth.ts';
 import { internalCallerKeys } from '../_shared/keys.ts';
-import { parseQuestions } from '../_shared/ai-json.ts';
+import { extractJson, type ParsedQuestion, type ParseResult, parseQuestions } from '../_shared/ai-json.ts';
 // BER-35: o prompt vive em módulo próprio para que o teste exercite o código real.
 // BER-65: sem `grade` — o público é leitor adulto, não turma do fundamental.
-import { buildQuestionPrompt } from './prompt.ts';
-import { buildNoContentMessage, hasUsableContent } from '../_shared/content.ts';
+import { buildQuestionPrompt, buildReadingQuestionPrompt, buildWebQuestionPrompt, INTERNAL_SUMMARY_MAX_CHARS } from './prompt.ts';
+import { buildChapterWebQuery, searchChapterOnWeb, type WebChapterContent } from '../_shared/chapter-web-content.ts';
+import { hasUsableContent } from '../_shared/content.ts';
 import { buildClaimableFilter, isClaimable } from './claim.ts';
 import { notifyOps } from '../_shared/ops-alert.ts';
 import { callAI } from '../_shared/ai.ts';
@@ -27,6 +28,20 @@ function inProgressResponse(): Response {
 // capítulo mitiga o custo de gerar de novo, mas não a qualidade de uma geração
 // só. 0.4 mantém formato e tom consistentes sem virar sempre a mesma pergunta.
 const QUESTION_TEMPERATURE = 0.4;
+
+/**
+ * Perguntas (e, no modo `web`, o resumo interno) da resposta da IA. O resumo é descartado se vier
+ * vazio ou maior que o pedido: resumo longo demais é sinal de texto copiado dos trechos.
+ */
+export function parseQuizResponse(raw: string, withSummary: boolean): { questions: ParseResult<ParsedQuestion>; summary: string | null } {
+  if (!withSummary) return { questions: parseQuestions(raw), summary: null };
+  const obj = extractJson(raw, 'object') as { resumo?: unknown; perguntas?: unknown };
+  const resumo = typeof obj.resumo === 'string' ? obj.resumo.trim() : '';
+  return {
+    questions: parseQuestions(JSON.stringify(Array.isArray(obj.perguntas) ? obj.perguntas : [])),
+    summary: resumo && resumo.length <= INTERNAL_SUMMARY_MAX_CHARS * 1.2 ? resumo : null,
+  };
+}
 
 // BER-49: exportada para que o teste de handler chame o código real, não uma
 // cópia — o mesmo raciocínio da BER-35 para a lógica pura.
@@ -147,45 +162,48 @@ export async function handler(req: Request): Promise<Response> {
   }
   const contentText = [catalogText.trim(), grounding ? groundingText(grounding) : ''].filter(Boolean).join('\n\n');
 
-  // BER-66: sem conteúdo, o prompt saía com "Conteúdo: " em branco e a IA gerava as
-  // 4 perguntas a partir só do título — o capítulo virava `generated`, o custo de IA
-  // era gasto e nada era registrado. Falha silenciosa que passa por sucesso.
-  // A chamada de IA agora nem acontece.
-  // Conhecimento verificado já traz o mínimo próprio (MIN_GROUNDING_FACTS): basta um dos dois.
+  // De onde sai o quiz, do mais confiável ao menos (BER-60). Nenhum capítulo fica sem quiz:
+  // - `conteudo`: texto do catálogo e/ou conhecimento verificado (BER-59), como sempre foi;
+  // - `web`: sem os dois, uma busca do capítulo na web (resumos e resenhas, não verificados);
+  // - `leitura`: nem a web ajudou; perguntas sobre a leitura da pessoa, sem afirmar fato do livro.
+  // Antes, sem conteúdo o capítulo caía em NO_CONTENT (BER-66) e o livro cadastrado pelo leitor
+  // não tinha quiz em capítulo nenhum. O que o BER-66 proibia (inventar perguntas a partir do
+  // título) continua proibido: o prompt de `leitura` não deixa o modelo supor nada do capítulo.
+  const chapterTitle = chapter.title ?? `Capítulo ${chapter.number}`;
+  let web: WebChapterContent | null = null;
   if (!hasUsableContent(catalogText) && !grounding) {
-    const message = buildNoContentMessage(catalogText);
-    console.error(`[generate-questions] ${message} — capítulo ${chapter_id}`);
-
-    await supabase.from('chapter_quiz_status').upsert({
-      chapter_id,
-      status: 'failed',
-      attempts,
-      error_message: message,
-      last_attempt_at: new Date().toISOString(),
-    }, { onConflict: 'chapter_id' });
-
-    return new Response(JSON.stringify({ error: message }), {
-      status: 422,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const tavilyKey = Deno.env.get('TAVILY_API_KEY');
+    if (tavilyKey) {
+      try {
+        web = await searchChapterOnWeb(
+          buildChapterWebQuery({ title: bookTitle, author }, { number: chapter.number, title: chapter.title }),
+          tavilyKey,
+        );
+      } catch (err) {
+        // Falha da busca não derruba o quiz: cai nas perguntas sobre a leitura.
+        console.error(`[generate-questions] busca na web falhou para o capítulo ${chapter_id}: ${err}`);
+      }
+    }
   }
+  const modo: 'conteudo' | 'web' | 'leitura' = hasUsableContent(catalogText) || grounding ? 'conteudo' : web ? 'web' : 'leitura';
 
-  const prompt = buildQuestionPrompt(
-    bookTitle, author, chapter.number,
-    chapter.title ?? `Capítulo ${chapter.number}`,
-    contentText, QUESTION_COUNT
-  );
+  const prompt = modo === 'conteudo'
+    ? buildQuestionPrompt(bookTitle, author, chapter.number, chapterTitle, contentText, QUESTION_COUNT)
+    : modo === 'web'
+    ? buildWebQuestionPrompt(bookTitle, author, chapter.number, chapterTitle, web!.text, QUESTION_COUNT)
+    : buildReadingQuestionPrompt(bookTitle, author, chapter.number, chapterTitle, QUESTION_COUNT);
 
   try {
     const { text: rawResponse } = await callAI({
       prompt,
-      maxTokens: 1024,
+      // O modo `web` devolve também o resumo interno.
+      maxTokens: modo === 'web' ? 2048 : 1024,
       temperature: QUESTION_TEMPERATURE,
     });
     // BER-38: uma pergunta com `type` fora do CHECK do banco derrubava o INSERT do
     // lote inteiro — as 4 perdidas e o capítulo marcado como `failed`. Agora as
     // inválidas são descartadas individualmente.
-    const { valid: questions, rejected } = parseQuestions(rawResponse);
+    const { questions: { valid: questions, rejected }, summary } = parseQuizResponse(rawResponse, modo === 'web');
 
     if (rejected.length > 0) {
       console.warn(
@@ -231,6 +249,14 @@ export async function handler(req: Request): Promise<Response> {
       throw new Error(`Failed to insert questions: ${insertError.message}`);
     }
 
+    // Modo `web`: o resumo com as palavras da IA vira o conteúdo do capítulo, para o
+    // evaluate-answer ter com o que corrigir. `book_contents` não tem policy de leitura: o
+    // resumo nunca chega ao app. Falhar aqui não desfaz o quiz, só deixa a avaliação sem ele.
+    if (modo === 'web' && summary) {
+      const { error: summaryError } = await supabase.from('book_contents').insert({ chapter_id, content_text: summary });
+      if (summaryError) console.error(`[generate-questions] resumo interno não gravado (${chapter_id}): ${summaryError.message}`);
+    }
+
     // Marcar como gerado. `grounding` diz ao app de onde veio o conteúdo (BER-59): null quando
     // o quiz saiu só do texto do catálogo.
     await supabase.from('chapter_quiz_status').upsert({
@@ -238,7 +264,11 @@ export async function handler(req: Request): Promise<Response> {
       status: 'generated',
       attempts,
       last_attempt_at: new Date().toISOString(),
-      grounding: grounding ? groundingSummary(grounding) : null,
+      grounding: modo === 'web'
+        ? { fontes: web!.domains.length, dominios: web!.domains, fatos: 0, status: 'partial', origem: 'web' }
+        : modo === 'leitura'
+        ? { fontes: 0, dominios: [], fatos: 0, status: 'partial', origem: 'leitura' }
+        : grounding ? groundingSummary(grounding) : null,
     }, { onConflict: 'chapter_id' });
 
     return new Response(JSON.stringify({

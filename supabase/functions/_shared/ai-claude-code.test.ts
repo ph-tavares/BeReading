@@ -2,6 +2,7 @@
 // BER-59: testes do adaptador que roda a IA pelo Claude Code CLI no desenvolvimento local.
 // O subprocess é dublado em todos eles — nenhum teste chama o `claude` de verdade.
 import { assert, assertEquals, assertRejects, assertStringIncludes } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { AIOutOfCreditsError } from './ai.ts';
 import { claudeCodeAI, type SpawnClaude, type SpawnResult } from './ai-claude-code.ts';
 import { isTransientError, PermanentStepError } from './ingestion/queue.ts';
 
@@ -115,14 +116,28 @@ Deno.test('claudeCodeAI: is_error do CLI vira falha, não resposta vazia', async
 });
 
 Deno.test('claudeCodeAI: código de saída diferente de zero é transitório e entra na retentativa (BER-59)', async () => {
-  const ai = claudeCodeAI(spawnFake({ code: 1, stdout: '', stderr: 'rate limit' }));
+  const ai = claudeCodeAI(spawnFake({ code: 1, stdout: '', stderr: 'getaddrinfo ENOTFOUND api.anthropic.com' }));
 
   const err = await assertRejects(() => ai({ prompt: 'oi', maxTokens: 100 }));
 
-  // Limite de uso da assinatura passa; matar o passo na primeira falha perderia o run inteiro,
-  // que foi exatamente o estrago do saldo esgotado na API (spec §11, item 41).
+  // Queda de rede passa; matar o passo na primeira falha perderia o run inteiro, que foi
+  // exatamente o estrago do saldo esgotado na API (spec §11, item 41).
   assertEquals(isTransientError(err), true);
-  assertStringIncludes((err as Error).message, 'rate limit');
+  assertStringIncludes((err as Error).message, 'ENOTFOUND');
+});
+
+Deno.test('claudeCodeAI: limite de uso da assinatura é pausa sem gastar tentativa, como saldo esgotado (BER-59)', async () => {
+  // Run local de 21/09/2026: o limite estourou e o passo gastou 3 das 4 tentativas.
+  const peloCodigo = claudeCodeAI(spawnFake({ code: 1, stdout: '', stderr: 'Claude AI usage limit reached|1790020800' }));
+  const peloJson = claudeCodeAI(spawnFake({
+    stdout: JSON.stringify({ ...RESPOSTA_REAL, is_error: true, api_error_status: 429, result: 'API Error: 429 rate_limit_error' }),
+  }));
+
+  for (const ai of [peloCodigo, peloJson]) {
+    const err = await assertRejects(() => ai({ prompt: 'oi', maxTokens: 100 }));
+    assert(err instanceof AIOutOfCreditsError, 'o worker só devolve a tentativa para AIOutOfCreditsError');
+    assertStringIncludes((err as Error).message, 'limite de uso');
+  }
 });
 
 Deno.test('claudeCodeAI: credencial expirada é pausa, não morte do passo (BER-59)', async () => {

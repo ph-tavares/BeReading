@@ -18,6 +18,18 @@ import type { StepContext, StepExecutor, StepOutcome } from './context.ts';
  */
 export const REUSE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * Extração feita antes disto não é reaproveitada (defeito 5 da BER-59): ela guardou a lista de
+ * capítulos do texto integral sem as partes, e reaproveitá-la traria de volta a estrutura de 8
+ * capítulos no lugar de 24 — em produção, as extrações do 1984 de 17 e 18/09 valeriam até 18/10.
+ */
+export const REUSE_NOT_BEFORE_MS = Date.parse('2026-09-21T20:20:00.000Z');
+
+/** Instante mais antigo de uma extração reaproveitável. */
+export function reuseSinceIso(nowMs: number): string {
+  return new Date(Math.max(nowMs - REUSE_MAX_AGE_MS, REUSE_NOT_BEFORE_MS)).toISOString();
+}
+
 const GENERIC_PUBLISHER_WORDS = /\b(editora|editorial|livros|grupo|publishing|publishers|books|ltda)\b/g;
 
 /** Domínio parece o site oficial da editora? (ex.: Companhia das Letras → companhiadasletras.com.br) */
@@ -70,7 +82,7 @@ export const runFetchStep: StepExecutor = async (step, run, ctx) => {
     editionId: run.editionId,
     workKey: edition.workKey,
     url: step.subject,
-    sinceIso: new Date(ctx.now() - REUSE_MAX_AGE_MS).toISOString(),
+    sinceIso: reuseSinceIso(ctx.now()),
   });
   const extracaoCompleta = jaExtraida !== null && !(await ctx.store.hasUnfinishedExtraction(jaExtraida.id));
   if (jaExtraida && extracaoCompleta && await ctx.store.countClaimsForSource(jaExtraida.id) > 0) {

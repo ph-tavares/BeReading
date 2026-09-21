@@ -8,7 +8,7 @@ import { assignIndependenceGroups, looksFullText } from '../independence.ts';
 import { locateChapter } from '../locate.ts';
 import { reliableSources, sourceNumbersWholeBook } from '../numbering.ts';
 import { buildChapterQuery } from '../queries.ts';
-import { bestStructureGuess, confirmStructure } from '../structure.ts';
+import { bestStructureGuess, chaptersFromClaims, confirmStructure, mergeDeclaredKeepingParts, wholeBookNumbering } from '../structure.ts';
 import type { StepExecutor } from './context.ts';
 
 /** Capítulo com menos grupos independentes que isto ganha uma busca própria. */
@@ -24,10 +24,18 @@ export const runStructureStep: StepExecutor = async (step, run, ctx) => {
   const groups = assignIndependenceGroups(accepted.map((s) => ({ id: s.id, domain: s.registrableDomain, fingerprint: s.contentFingerprint, fullText: looksFullText(s) })));
   for (const source of accepted) await ctx.store.updateSource(source.id, { independenceGroup: groups.get(source.id)! });
 
+  const claims = await ctx.store.listClaimsForRun(run.id);
   const candidates = accepted
-    .filter((s) => (s.declaredStructure?.length ?? 0) > 0)
-    .map((s) => ({
-      sourceId: s.id, independenceGroup: groups.get(s.id)!, weight: s.weight!, tiedToIsbn: s.tiedToIsbn, chapters: s.declaredStructure!,
+    // Numeração do livro inteiro (defeito 5): a lista crua de um texto integral lido em blocos tem
+    // "capítulo 1" em cada parte. Lista que não dá para converter com certeza não é candidata. No
+    // texto integral, os capítulos citados pelas afirmações completam a lista declarada.
+    .map((s) => {
+      const doTexto = looksFullText(s) ? chaptersFromClaims(claims.filter((c) => c.sourceId === s.id)) : [];
+      return { s, chapters: wholeBookNumbering(mergeDeclaredKeepingParts([s.declaredStructure ?? [], doTexto])) };
+    })
+    .filter((x): x is { s: typeof x.s; chapters: NonNullable<typeof x.chapters> } => (x.chapters?.length ?? 0) > 0)
+    .map(({ s, chapters }) => ({
+      sourceId: s.id, independenceGroup: groups.get(s.id)!, weight: s.weight!, tiedToIsbn: s.tiedToIsbn, chapters,
       // Só a própria extração diz se a fonte lista todos os capítulos. Peso A não basta: no teste
       // de 1984 (BER-59), a página do Gutenberg AU tinha parte do livro e declarou 9 capítulos,
       // virando uma segunda estrutura completa que rivalizava com a de 24 e derrubava as duas.
@@ -63,7 +71,6 @@ export const runStructureStep: StepExecutor = async (step, run, ctx) => {
   }
 
   const chapters = await ctx.store.replaceEditionChapters(edition.id, confirmed.chapters, confirmed.confidence);
-  const claims = await ctx.store.listClaimsForRun(run.id);
   // Cada fonte tem sua convenção de numeração; sem saber a dela, número solto em obra com partes
   // fica sem capítulo (BER-59).
   const numbersWholeBook = new Map(accepted.map((s) => [s.id, sourceNumbersWholeBook(s.declaredStructure, chapters)]));

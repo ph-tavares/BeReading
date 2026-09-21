@@ -55,3 +55,21 @@ describe('add-book: formulario (BER-60)', () => {
     expect(prefillFromLookup(PREENCHIDO, { found: false })).toBe(PREENCHIDO);
   });
 });
+
+describe('add-book: conteudo do quiz (BER-59)', () => {
+  const { contentMessage } = jest.requireActual('../../../src/features/add-book/logic');
+
+  it('a estrutura da edicao ja ingerida preenche os capitulos, mesmo com numero digitado', () => {
+    const lookup = {
+      found: true as const, isbn: '9788535914849', title: '1984', authors: [], totalPages: 416, coverUrl: null, chapterCount: 24,
+    };
+    expect(prefillFromLookup({ ...EMPTY_FORM, chapterCount: '9' }, lookup).chapterCount).toBe('24');
+    expect(prefillFromLookup({ ...EMPTY_FORM, chapterCount: '9' }, { ...lookup, chapterCount: null }).chapterCount).toBe('9');
+  });
+
+  it('diz ao leitor o que esperar do quiz', () => {
+    expect(contentMessage('edition')).toMatch(/fatos conferidos/);
+    expect(contentMessage('searching')).toMatch(/alguns minutos/);
+    expect(contentMessage('none')).toMatch(/quiz/);
+  });
+});

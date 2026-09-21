@@ -7,15 +7,21 @@
 // mora a cota de livros simultâneos do plano gratuito (BER-58). Assim a cota tem
 // um lugar só.
 //
-// Conteúdo de capítulo: livro novo não tem `book_contents`, então o quiz cai no
-// estado honesto de "sem conteúdo" (BER-66) — a não ser que a ingestão por ISBN
-// (BER-59) confirme fatos do capítulo. O disparo dela daqui é opcional e desligado
-// por padrão (secret BOOK_INGESTION_ON_ADD=on): cada run gasta IA e busca por
-// dezenas de minutos, e ninguém decidiu ainda pagar isso por cadastro.
+// Conteúdo de capítulo: livro novo não tem `book_contents`. Com ISBN, o cadastro dispara a
+// ingestão (BER-59), que busca e confirma os fatos de cada capítulo em fontes independentes;
+// quando o run fecha, o `publish` ajusta os capítulos deste livro à estrutura da edição e gera
+// de novo o quiz que tinha ficado sem conteúdo (`_shared/ingestion/app-sync.ts`). Até lá, e
+// sem ISBN, o quiz cai no estado honesto de "sem conteúdo" (BER-66).
+//
+// A ingestão liga por padrão. O custo tem teto por run (US$ 3) e por dia (10 runs novos, cota
+// do Tavily) em `_shared/ingestion/budget.ts`; para desligar só o disparo do cadastro,
+// BOOK_INGESTION_ON_ADD=off, e para desligar a ingestão inteira, INGESTION_ENABLED=false.
 import { createServiceClient } from '../_shared/supabase-client.ts';
 import { authErrorResponse, resolveUserId } from '../_shared/auth.ts';
 import { dispatchBackground } from '../_shared/background.ts';
 import { internalCallHeaders } from '../_shared/keys.ts';
+import { ingestionDisabled } from '../_shared/ingestion/kill-switch.ts';
+import { appChapterTitle } from '../_shared/ingestion/app-sync.ts';
 import { estimateChapters, findVisibleByIsbn, LIMITS, parseAddBookInput } from './book.ts';
 
 function json(body: unknown, status = 200): Response {
@@ -86,7 +92,13 @@ export async function handler(req: Request): Promise<Response> {
   }
   const book = created as { id: string };
 
-  const chapters = estimateChapters(input.totalPages, input.chapterCount)
+  // Edição já ingerida (outro leitor cadastrou o mesmo ISBN, ou o time rodou a ingestão): os
+  // capítulos nascem iguais aos dela, e o quiz usa o conhecimento desde o primeiro capítulo.
+  const edicao = input.isbn ? await editionStructure(supabase, input.isbn) : null;
+  const daEdicao = edicao && edicao.chapters.length > 0 && edicao.chapters.length <= input.totalPages;
+  const chapters = (daEdicao
+    ? estimateChapters(input.totalPages, edicao.chapters.length).map((c, i) => ({ ...c, title: appChapterTitle(edicao.chapters[i]) }))
+    : estimateChapters(input.totalPages, input.chapterCount))
     .map((c) => ({ ...c, book_id: book.id }));
   const { error: chaptersError } = await supabase.from('chapters').insert(chapters);
   if (chaptersError) {
@@ -96,37 +108,70 @@ export async function handler(req: Request): Promise<Response> {
     return json({ error: 'Failed to add book' }, 500);
   }
 
-  if (input.isbn) await maybeStartIngestion(supabase, input.isbn, book.id);
+  // Edição que existe sem estrutura (runs anteriores não confirmaram) roda de novo, sem `book_id`:
+  // ela pode servir a outro livro, e o `publish` acha este pelo ISBN. O `ingest-book` recusa com
+  // 409 se já houver run em andamento.
+  const ingestao = input.isbn && !daEdicao ? startIngestion(input.isbn, edicao ? null : book.id) : false;
 
-  return json({ data: { book: created, created: true }, error: null }, 201);
+  return json({
+    data: {
+      book: created,
+      created: true,
+      chapters: chapters.length,
+      // Para o app dizer ao leitor o que esperar do quiz.
+      content: daEdicao ? 'edition' : ingestao ? 'searching' : 'none',
+    },
+    error: null,
+  }, 201);
+}
+
+interface EditionStructure {
+  chapters: { id: string; number: number; partLabel: string | null; numberInPart: number | null; title: string | null }[];
+}
+
+/** Estrutura da edição já ingerida com esse ISBN, ou null se a edição ainda não existe. */
+async function editionStructure(
+  supabase: ReturnType<typeof createServiceClient>,
+  isbn: string,
+): Promise<EditionStructure | null> {
+  const { data: edicoes } = await supabase.from('book_editions').select('id').eq('isbn', isbn).limit(1);
+  const edicao = (edicoes ?? [])[0] as { id: string } | undefined;
+  if (!edicao) return null;
+  const { data } = await supabase
+    .from('edition_chapters')
+    .select('id, number, part_label, number_in_part, title')
+    .eq('edition_id', edicao.id)
+    .order('number');
+  const rows = (data ?? []) as { id: string; number: number; part_label: string | null; number_in_part: number | null; title: string | null }[];
+  return { chapters: rows.map((r) => ({ id: r.id, number: r.number, partLabel: r.part_label, numberInPart: r.number_in_part, title: r.title })) };
 }
 
 /**
- * Dispara a ingestão por ISBN (BER-59), quando ligada. Só para edição que ainda não
- * existe: o `ingest-book` repontaria uma edição já ingerida (ligada a outro livro,
- * por exemplo o do catálogo) para este livro novo.
+ * Dispara a ingestão por ISBN (BER-59). `bookId` só para edição nova: numa edição que já existe, o
+ * `ingest-book` a repontaria para este livro, tirando-a do livro a que ela já serve; o livro novo
+ * usa o conhecimento dela pelo ISBN (`chapter-grounding.ts`).
  */
-async function maybeStartIngestion(
-  supabase: ReturnType<typeof createServiceClient>,
-  isbn: string,
-  bookId: string,
-): Promise<void> {
-  if (Deno.env.get('BOOK_INGESTION_ON_ADD') !== 'on') return;
+function startIngestion(isbn: string, bookId: string | null): boolean {
+  if (Deno.env.get('BOOK_INGESTION_ON_ADD')?.trim().toLowerCase() === 'off') return false;
+  if (ingestionDisabled(Deno.env.get('INGESTION_ENABLED'))) return false;
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  if (!supabaseUrl) return;
+  if (!supabaseUrl) return false;
 
-  const { data: editions } = await supabase.from('book_editions').select('id').eq('isbn', isbn).limit(1);
-  if ((editions ?? []).length > 0) return;
-
-  dispatchBackground('ingest-book', () =>
-    fetch(`${supabaseUrl}/functions/v1/ingest-book`, {
+  dispatchBackground('ingest-book', async () => {
+    const res = await fetch(`${supabaseUrl}/functions/v1/ingest-book`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...internalCallHeaders((name) => Deno.env.get(name)),
       },
       body: JSON.stringify({ isbn, book_id: bookId }),
-    }));
+    });
+    // 429 (limite diário de runs) e 503 (ingestão desligada) não são falha do cadastro, mas têm
+    // de aparecer no log: é o motivo de um livro ficar sem conteúdo.
+    if (!res.ok) console.error(`[add-book] ingest-book devolveu ${res.status} para o ISBN ${isbn}`);
+    await res.body?.cancel();
+  });
+  return true;
 }
 
 // BER-49: só sobe o listener quando este arquivo é o entrypoint (deploy real).
