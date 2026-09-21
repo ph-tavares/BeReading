@@ -129,7 +129,7 @@ const ICON_SIZE = 22;
  * Lado do botão central. Maior que MIN_TOUCH de propósito: ele é a ação mais
  * usada do app e compete com quatro abas do mesmo tamanho ao redor.
  */
-const FAB_SIZE = 56;
+export const FAB_SIZE = 56;
 
 function PlusIcon() {
   return (
@@ -154,22 +154,23 @@ export const TAB_BAR_HEIGHT =
 
 interface Props extends BottomTabBarProps {
   /**
-   * O que o botão central faz. `session/start` é rota de stack, não aba,
-   * então quem monta a barra resolve o destino — ver app/(tabs)/_layout.tsx.
+   * O que o botão central faz. Desde a ADR 0016 ele abre o menu de ações
+   * (sessão ou registro); quem monta a barra resolve o que abrir — ver
+   * app/(tabs)/_layout.tsx.
    */
-  onPressSessao: () => void;
+  onPressCentral: () => void;
 }
 
-export function TabBar({ state, navigation, descriptors, onPressSessao }: Props) {
+export function TabBar({ state, navigation, descriptors, onPressCentral }: Props) {
   const insets = useSafeAreaInsets();
   const activeName = state.routes[state.index]?.name;
 
-  const aoComecarSessao = () => {
+  const aoTocarCentral = () => {
     // Haptic médio, o da ação primária, contra o leve das abas.
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     }
-    onPressSessao();
+    onPressCentral();
   };
 
   return (
@@ -213,8 +214,8 @@ export function TabBar({ state, navigation, descriptors, onPressSessao }: Props)
             key="fab"
             testID="fab-sessao"
             accessibilityRole="button"
-            accessibilityLabel="Ler agora"
-            onPress={aoComecarSessao}
+            accessibilityLabel="Ler ou registrar leitura"
+            onPress={aoTocarCentral}
             style={styles.fab}
           >
             <PlusIcon />
