@@ -1,7 +1,40 @@
 const mockSetAudioMode = jest.fn(() => Promise.resolve());
 const mockPlay = jest.fn();
 const mockSeekTo = jest.fn(() => Promise.resolve());
-const mockCreatePlayer = jest.fn(() => ({ play: mockPlay, seekTo: mockSeekTo, remove: jest.fn() }));
+
+type Ouvinte = (estado: { isLoaded: boolean }) => void;
+
+/**
+ * Fake do `AudioPlayer` do expo-audio.
+ *
+ * Em aparelho o player NASCE descarregado: `createAudioPlayer` devolve na
+ * hora e o carregamento termina depois, anunciado por `playbackStatusUpdate`.
+ * Foi o que o teste em iPhone mostrou em 21/09 (BER-124): no instante do
+ * `play()` o log trouxe `isLoaded: false` e `duration: 0`, e o som de inicio
+ * simplesmente nao saia. O fake antigo nascia pronto e por isso a suite
+ * inteira passava com o defeito em pe.
+ */
+function criarFakePlayer({ carregado = true }: { carregado?: boolean } = {}) {
+  const ouvintes: Ouvinte[] = [];
+  return {
+    isLoaded: carregado,
+    play: mockPlay,
+    seekTo: mockSeekTo,
+    remove: jest.fn(),
+    addListener: jest.fn((_evento: string, ouvinte: Ouvinte) => {
+      ouvintes.push(ouvinte);
+      return { remove: jest.fn() };
+    }),
+    /** So para o teste: simula o carregamento terminando no aparelho. */
+    terminarCarregamento(this: { isLoaded: boolean }) {
+      this.isLoaded = true;
+      ouvintes.forEach((o) => o({ isLoaded: true }));
+    },
+  };
+}
+
+let proximoPlayer: () => ReturnType<typeof criarFakePlayer>;
+const mockCreatePlayer = jest.fn(() => proximoPlayer());
 
 jest.mock('expo-audio', () => ({
   setAudioModeAsync: (...args: unknown[]) => mockSetAudioMode(...(args as [])),
@@ -18,6 +51,7 @@ let audio: typeof import('../../../src/features/session/audio');
 beforeEach(() => {
   jest.clearAllMocks();
   jest.resetModules();
+  proximoPlayer = () => criarFakePlayer();
   audio = require('../../../src/features/session/audio');
 });
 
@@ -44,6 +78,60 @@ describe('configureSessionAudio', () => {
         interruptionMode: 'doNotMix',
       }),
     );
+  });
+});
+
+describe('o player do som', () => {
+  /**
+   * O defeito que o aparelho achou: `play()` num player que ainda nao
+   * carregou nao toca nada. Com o app aberto o som de fim ate saia, porque a
+   * tela continuava montada e o carregamento terminava a tempo; o de inicio
+   * nunca saia, porque `router.replace` desmontava a tela em seguida.
+   */
+  it('espera o player carregar antes de chamar play', async () => {
+    const player = criarFakePlayer({ carregado: false });
+    proximoPlayer = () => player;
+
+    const tocando = audio.playStartSound();
+    await Promise.resolve();
+
+    expect(mockPlay).not.toHaveBeenCalled();
+
+    player.terminarCarregamento();
+    await tocando;
+
+    expect(mockPlay).toHaveBeenCalled();
+  });
+
+  /**
+   * Um player por som, criado uma vez. Criar a cada disparo deixava o objeto
+   * sem nenhuma referencia viva assim que `tocar` retornava — e o que nao tem
+   * referencia o coletor leva, no meio da reproducao.
+   */
+  it('reaproveita o mesmo player entre disparos', async () => {
+    await audio.playStartSound();
+    await audio.playStartSound();
+
+    expect(mockCreatePlayer).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Reaproveitar o player exige voltar ao inicio: o segundo disparo comecaria
+   * parado no fim do arquivo, e o leitor ouviria silencio.
+   */
+  it('volta ao inicio do som antes de tocar de novo', async () => {
+    await audio.playStartSound();
+    await audio.playStartSound();
+
+    expect(mockSeekTo).toHaveBeenCalledWith(0);
+  });
+
+  /** Sons diferentes nao podem dividir o mesmo player. */
+  it('usa um player por som', async () => {
+    await audio.playStartSound();
+    await audio.playEndSound();
+
+    expect(mockCreatePlayer).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -6,7 +6,7 @@
 // por IA ja e risco de licenca aberto desde 20/09/2026. Escolher o som de
 // verdade e pendencia do time (spec §11); quando acontecer, troque os dois
 // arquivos e registre a licenca, se vier de fora.
-import { setAudioModeAsync, createAudioPlayer } from 'expo-audio';
+import { setAudioModeAsync, createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { disarmEndAlarm } from './alarm';
 
 const INICIO = require('../../../assets/audio/inicio.wav');
@@ -38,13 +38,89 @@ export async function configureSessionAudio(): Promise<void> {
   });
 }
 
-async function tocar(fonte: number): Promise<void> {
-  const player = createAudioPlayer(fonte);
+/**
+ * Um player por som, criado na primeira vez e guardado aqui.
+ *
+ * Criar um player a cada disparo foi metade do defeito que o teste em
+ * aparelho achou em 21/09 (BER-124): o objeto ficava sem nenhuma referencia
+ * viva assim que `tocar` retornava, e o que nao tem referencia o coletor
+ * leva — no meio da reproducao, ou antes dela comecar.
+ *
+ * A chave e o NOME do som, e nao o valor que o require do .wav devolve: esse
+ * valor e um detalhe do bundler (no Metro cada asset vira um numero distinto,
+ * mas nada no contrato promete isso), e depender dele fazia os dois sons
+ * dividirem um player so.
+ */
+type Som = 'inicio' | 'fim';
+
+const players = new Map<Som, AudioPlayer>();
+
+function obter(nome: Som, fonte: number): AudioPlayer {
+  const existente = players.get(nome);
+  if (existente) return existente;
+
+  const novo = createAudioPlayer(fonte);
+  players.set(nome, novo);
+  return novo;
+}
+
+/**
+ * Teto da espera pelo carregamento. Existe para o sino nao ficar pendurado
+ * para sempre num player que nunca carrega (arquivo corrompido, disco
+ * ocupado): se estourar, tenta tocar assim mesmo, porque um som que talvez
+ * saia e melhor que uma promessa que nunca resolve. A corretude da sessao nao
+ * depende disto — o fim e um instante absoluto gravado (BER-122).
+ */
+const ESPERA_CARREGAR_MS = 3000;
+
+/**
+ * A outra metade do defeito. `createAudioPlayer` devolve na hora, mas o
+ * carregamento e assincrono: o log do iPhone mostrou `isLoaded: false` e
+ * `duration: 0` no instante em que o codigo antigo chamava `play()`. Chamar
+ * `play()` ali nao toca nada.
+ *
+ * Com o app aberto o som de FIM ate saia, porque a tela continuava montada e
+ * o carregamento terminava a tempo; o de INICIO nunca saia, porque
+ * `router.replace` desmontava a tela logo em seguida.
+ */
+function aguardarCarregar(player: AudioPlayer): Promise<void> {
+  if (player.isLoaded) return Promise.resolve();
+
+  return new Promise<void>((resolve) => {
+    let encerrado = false;
+    let inscricao: { remove: () => void } | null = null;
+    let relogio: ReturnType<typeof setTimeout> | null = null;
+
+    const terminar = () => {
+      if (encerrado) return;
+      encerrado = true;
+      if (relogio !== null) clearTimeout(relogio);
+      inscricao?.remove();
+      resolve();
+    };
+
+    inscricao = player.addListener('playbackStatusUpdate', (estado) => {
+      if (estado.isLoaded) terminar();
+    });
+    relogio = setTimeout(terminar, ESPERA_CARREGAR_MS);
+
+    // O carregamento pode ter terminado entre a leitura de `isLoaded` la em
+    // cima e a inscricao: nesse caso o evento ja passou e ninguem mais avisa.
+    if (player.isLoaded) terminar();
+  });
+}
+
+async function tocar(nome: Som, fonte: number): Promise<void> {
+  const player = obter(nome, fonte);
+  await aguardarCarregar(player);
+  // O player e reaproveitado, entao o disparo anterior o deixou parado no fim
+  // do arquivo. Sem voltar ao inicio, o segundo som e silencio.
+  await player.seekTo(0);
   player.play();
 }
 
 export async function playStartSound(): Promise<void> {
-  await tocar(INICIO);
+  await tocar('inicio', INICIO);
 }
 
 /**
@@ -56,6 +132,6 @@ export async function playStartSound(): Promise<void> {
  * alguem toca o som e esquece de cancelar.
  */
 export async function playEndSound(): Promise<void> {
-  await tocar(FIM);
+  await tocar('fim', FIM);
   await disarmEndAlarm();
 }
