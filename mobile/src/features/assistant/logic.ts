@@ -77,3 +77,34 @@ export function scanInviteLine(bookTitle: string | null): string {
     ? `Travou em alguma página de ${bookTitle}?`
     : 'Travou em alguma página?';
 }
+
+/** Uma fala da conversa (BER-101). `pendente` e a pergunta que ainda espera resposta. */
+export interface ConversationTurn {
+  id: string;
+  role: 'reader' | 'assistant';
+  text: string;
+  /** So nas falas do assistente: o que ele fez com a pergunta. */
+  kind?: 'direct' | 'invite' | 'refusal' | 'unknown';
+}
+
+/**
+ * O convite a aprofundar e da INTERFACE, nao do modelo: o prompt manda ele nao
+ * oferecer. Assim a frase e sempre a mesma, testavel, e na voz do produto.
+ */
+export const DEEPEN_LABEL = 'Quer que eu aprofunde?';
+
+/** O que o toque no convite manda como pergunta. */
+export const DEEPEN_QUESTION = 'me explica isso com mais detalhe';
+
+/**
+ * O convite aparece depois de uma resposta?
+ *
+ * Nao aparece depois de recusa nem de "nao sei": nos dois casos nao ha o que
+ * aprofundar, e oferecer seria prometer o que o assistente acabou de dizer que
+ * nao faz. Tambem nao aparece depois de um convite a pensar — ali a bola esta com
+ * o leitor, e empurrar "quer que eu aprofunde?" atropelaria a pergunta que o
+ * assistente acabou de fazer a ele.
+ */
+export function showsDeepenInvite(turn: ConversationTurn | undefined): boolean {
+  return turn?.role === 'assistant' && turn.kind === 'direct';
+}

@@ -9,22 +9,25 @@
 // expo-image-manipulator e vai em base64 na chamada; nem o app nem o servidor
 // gravam a imagem (spec, secao 4.1).
 //
-// Tocar numa sugestao ainda nao responde nada: quem recebe a pergunta e manda a
-// resposta e a `ask-assistant`, da BER-101. Por isso as sugestoes aparecem aqui
-// como o que sao nesta entrega, uma lista do que da pra perguntar, e nao como
-// botao que nao faz nada.
+// BER-101: as sugestoes viram botoes e a conversa acontece aqui mesmo, no
+// artboard `5. A conversa`. A tela tem tres fases: camera, sugestoes (com a
+// transcricao da foto) e conversa. A mesma rota, porque a folha sobe sobre o
+// mesmo fundo escuro da camera e a conversa continua de onde a foto parou.
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
-import { X } from 'lucide-react-native';
-import { Button, Glyph, IconButton, Text } from '../../src/ui';
+import { ArrowUp, X } from 'lucide-react-native';
+import { Button, Field, Glyph, IconButton, Text } from '../../src/ui';
 import {
-  resizeTarget, scanChipLabel, scanFailureLine, type ScanFailure,
+  AssistantTurn, DEEPEN_LABEL, DEEPEN_QUESTION, resizeTarget, scanChipLabel, scanFailureLine,
+  showsDeepenInvite, type ConversationTurn, type ScanFailure,
 } from '../../src/features/assistant';
-import { scanPage, ScanPageError, type ScanPageResult } from '../../src/api/edgeFunctions';
+import {
+  askAssistant, scanPage, ScanPageError, type ScanPageResult,
+} from '../../src/api/edgeFunctions';
 import { color, radius, space } from '../../src/theme/tokens';
 
 /**
@@ -37,7 +40,7 @@ const MEDIA_TYPE = 'image/jpeg';
 type Estado =
   | { fase: 'camera' }
   | { fase: 'enviando' }
-  | { fase: 'resultado'; scan: ScanPageResult }
+  | { fase: 'conversa'; scan: ScanPageResult; falas: ConversationTurn[] }
   | { fase: 'erro'; falha: ScanFailure };
 
 export default function AssistantScanScreen() {
@@ -46,6 +49,9 @@ export default function AssistantScanScreen() {
   const { bookId, bookTitle } = useLocalSearchParams<{ bookId?: string; bookTitle?: string }>();
   const [permissao, pedirPermissao] = useCameraPermissions();
   const [estado, setEstado] = useState<Estado>({ fase: 'camera' });
+  const [rascunho, setRascunho] = useState('');
+  const [enviandoPergunta, setEnviandoPergunta] = useState(false);
+  const [falhaDaPergunta, setFalhaDaPergunta] = useState<ScanFailure | null>(null);
   const camera = useRef<CameraView>(null);
 
   const fechar = useCallback(() => {
@@ -75,11 +81,53 @@ export default function AssistantScanScreen() {
         bookId,
         bookTitle,
       });
-      setEstado({ fase: 'resultado', scan });
+      setEstado({ fase: 'conversa', scan, falas: [] });
     } catch (err) {
       setEstado({ fase: 'erro', falha: err instanceof ScanPageError ? err.code : 'unknown' });
     }
   }, [bookId, bookTitle]);
+
+  // A pergunta entra otimista: o leitor ve a fala dele na hora, e a resposta chega
+  // embaixo. Se a chamada falhar, a fala sai da lista e o texto volta pro campo —
+  // e o que espelha o servidor, que so grava as duas mensagens juntas, depois de a
+  // resposta existir.
+  const perguntar = useCallback(async (texto: string, origem: 'photo' | 'typed') => {
+    if (estado.fase !== 'conversa' || enviandoPergunta) return;
+    const pergunta = texto.trim();
+    if (!pergunta) return;
+
+    const falaDoLeitor: ConversationTurn = { id: `leitor-${Date.now()}`, role: 'reader', text: pergunta };
+    setEstado({ ...estado, falas: [...estado.falas, falaDoLeitor] });
+    setRascunho('');
+    setFalhaDaPergunta(null);
+    setEnviandoPergunta(true);
+
+    try {
+      const resposta = await askAssistant({
+        conversationId: estado.scan.conversation_id,
+        question: pergunta,
+        sourceKind: origem,
+      });
+      setEstado((anterior) => anterior.fase !== 'conversa' ? anterior : {
+        ...anterior,
+        falas: [...anterior.falas, {
+          id: `assistente-${Date.now()}`,
+          role: 'assistant',
+          text: resposta.answer,
+          kind: resposta.kind,
+        }],
+      });
+    } catch (err) {
+      setEstado((anterior) => anterior.fase !== 'conversa' ? anterior : {
+        ...anterior,
+        falas: anterior.falas.filter((fala) => fala.id !== falaDoLeitor.id),
+      });
+      setRascunho(pergunta);
+      setFalhaDaPergunta(err instanceof ScanPageError ? err.code : 'unknown');
+    } finally {
+      setEnviandoPergunta(false);
+    }
+  }, [estado, enviandoPergunta]);
 
   const cabecalho = (
     <View style={[styles.topo, { paddingTop: insets.top + space.md }]}>
@@ -123,18 +171,18 @@ export default function AssistantScanScreen() {
     );
   }
 
-  if (estado.fase === 'resultado') {
+  if (estado.fase === 'conversa') {
     const chip = scanChipLabel(
       estado.scan.book?.title ?? estado.scan.book_title_text,
       estado.scan.detected_page,
     );
+    const comecou = estado.falas.length > 0;
+    const ultima = estado.falas[estado.falas.length - 1];
+
     return (
       <View style={styles.fundo}>
         {cabecalho}
-        <ScrollView
-          style={styles.folha}
-          contentContainerStyle={[styles.folhaConteudo, { paddingBottom: insets.bottom + space.xxl }]}
-        >
+        <ScrollView style={styles.folha} contentContainerStyle={styles.folhaConteudo}>
           <View style={styles.identidade}>
             <Glyph size={22} />
             <Text variant="label">Assistente</Text>
@@ -146,26 +194,88 @@ export default function AssistantScanScreen() {
             ) : null}
           </View>
 
-          <View style={styles.transcricao}>
-            <Text variant="caption" tone="tertiary">O que eu li na sua foto</Text>
-            {/* Era `reading`, a serifa italica da camada do livro. A BER-120 tirou
-                a variante junto com a serifa, com a justificativa de que nenhuma
-                tela a usava, e era verdade: esta aqui nasceu em paralelo. `body`
-                e a mais proxima do que ela era (16/22 contra 17/27). */}
-            <Text variant="body" tone="secondary">{estado.scan.page_text}</Text>
-          </View>
-
-          <Text variant="subhead">Sobre o que você quer falar?</Text>
-          <View style={styles.sugestoes}>
-            {estado.scan.suggestions.map((sugestao) => (
-              <View key={sugestao} style={styles.sugestao}>
-                <Text variant="body">{sugestao}</Text>
+          {/* Antes da primeira pergunta: o que ele leu na foto e o que da pra perguntar.
+              Depois dela, a conversa toma a tela: o artboard 5 mostra so a conversa. */}
+          {comecou ? null : (
+            <>
+              <View style={styles.transcricao}>
+                <Text variant="caption" tone="tertiary">O que eu li na sua foto</Text>
+                {/* Era `reading`, a serifa italica da camada do livro. A BER-120 tirou
+                    a variante junto com a serifa, com a justificativa de que nenhuma
+                    tela a usava, e era verdade: esta aqui nasceu em paralelo. `body`
+                    e a mais proxima do que ela era (16/22 contra 17/27). */}
+                <Text variant="body" tone="secondary">{estado.scan.page_text}</Text>
               </View>
-            ))}
-          </View>
+
+              <Text variant="subhead">Sobre o que você quer falar?</Text>
+              <View style={styles.sugestoes}>
+                {estado.scan.suggestions.map((sugestao) => (
+                  <Pressable
+                    key={sugestao}
+                    accessibilityRole="button"
+                    accessibilityLabel={sugestao}
+                    disabled={enviandoPergunta}
+                    onPress={() => { void perguntar(sugestao, 'photo'); }}
+                    style={({ pressed }) => [styles.sugestao, pressed ? styles.sugestaoPressionada : null]}
+                  >
+                    <Text variant="body">{sugestao}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
+
+          {estado.falas.map((fala, i) => (
+            <AssistantTurn
+              key={fala.id}
+              turn={fala}
+              pendente={enviandoPergunta && i === estado.falas.length - 1}
+            />
+          ))}
+
+          {enviandoPergunta ? <ActivityIndicator color={color.accent} /> : null}
+
+          {/* O convite a aprofundar e da interface: o prompt manda o modelo nao oferecer,
+              para a frase ser sempre a mesma e na voz do produto. */}
+          {!enviandoPergunta && showsDeepenInvite(ultima) ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={DEEPEN_LABEL}
+              onPress={() => { void perguntar(DEEPEN_QUESTION, 'typed'); }}
+              style={({ pressed }) => [styles.aprofundar, pressed ? styles.sugestaoPressionada : null]}
+            >
+              <Text variant="callout" tone="accent">{DEEPEN_LABEL}</Text>
+            </Pressable>
+          ) : null}
+
+          {falhaDaPergunta ? (
+            <Text variant="callout" tone="danger">{scanFailureLine(falhaDaPergunta)}</Text>
+          ) : null}
 
           <Button variant="ghost" onPress={fechar}>Fechar e voltar pro livro</Button>
         </ScrollView>
+
+        <View style={[styles.composer, { paddingBottom: insets.bottom + space.md }]}>
+          {/* O Field traz o rotulo visivel por contrato (DESIGN.md secao 5), entao o
+              botao alinha pela base para ficar na linha do campo, e nao do rotulo. */}
+          <View style={styles.flex}>
+            <Field
+              label={comecou ? 'Sua mensagem' : 'Ou pergunta do seu jeito'}
+              placeholder={comecou ? 'Pergunta o que quiser' : 'Ou pergunta do seu jeito'}
+              value={rascunho}
+              onChangeText={setRascunho}
+              onSubmitEditing={() => { void perguntar(rascunho, 'typed'); }}
+              returnKeyType="send"
+              editable={!enviandoPergunta}
+            />
+          </View>
+          <IconButton
+            icon={ArrowUp}
+            accessibilityLabel="Enviar pergunta"
+            disabled={enviandoPergunta || rascunho.trim().length === 0}
+            onPress={() => { void perguntar(rascunho, 'typed'); }}
+          />
+        </View>
       </View>
     );
   }
@@ -297,6 +407,25 @@ const styles = StyleSheet.create({
     padding: space.lg,
     gap: space.xs,
   },
+  composer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: space.md,
+    paddingHorizontal: space.gutter,
+    paddingTop: space.md,
+    borderTopWidth: 1,
+    borderTopColor: color.line,
+    backgroundColor: color.surface1,
+  },
+  aprofundar: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: color.line2,
+    borderRadius: radius.pill,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+  },
+  sugestaoPressionada: { backgroundColor: color.surface3 },
   sugestoes: { gap: space.sm },
   sugestao: {
     backgroundColor: color.surface2,
