@@ -23,10 +23,15 @@ jest.mock('expo-haptics', () => ({
 const mockProfile = { user_id: 'u1', display_name: 'Guilherme' };
 jest.mock('../../src/stores/authStore', () => ({ useAuthStore: () => ({ profile: mockProfile }) }));
 
+jest.mock('../../src/api/queries', () => ({ getStudentBooks: jest.fn() }));
+
 import SessionStartScreen from '../../app/session/start';
 import { useSessionStore } from '../../src/stores/sessionStore';
 import { useReadingStore } from '../../src/stores/readingStore';
+import { getStudentBooks } from '../../src/api/queries';
 import type { Book, StudentBook } from '../../src/types/database';
+
+const mGetStudentBooks = getStudentBooks as jest.Mock;
 
 const book: Book = {
   id: 'b1', title: 'O Guia do Mochileiro das Galáxias', author: 'Douglas Adams',
@@ -42,6 +47,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   useSessionStore.setState({ active: null, lastMode: { kind: 'timed', minutes: 20 }, hydrated: true });
   useReadingStore.setState({ currentBook: { studentBook, book } });
+  mGetStudentBooks.mockResolvedValue([{ ...studentBook, book }]);
 });
 
 describe('tela de escolher o tempo', () => {
@@ -58,5 +64,57 @@ describe('tela de escolher o tempo', () => {
       });
     });
     expect(mockReplace).toHaveBeenCalledWith('/session');
+  });
+
+  /**
+   * Criterio de aceite da BER-122: "quem nunca leu nada no app consegue
+   * comecar uma sessao (o fluxo nao depende de ter livro na estante)".
+   *
+   * Interpretacao adotada, e declarada no PR: a tela nao pode dar em nada.
+   * Sem livro, ela oferece escolher um — e NAO deixa a sessao comecar sem
+   * livro, porque o fim da sessao pergunta ate que pagina se foi, e pagina
+   * sem livro nao registra nada.
+   */
+  it('sem livro na estante, oferece escolher um em vez de travar', async () => {
+    useReadingStore.setState({ currentBook: null });
+    mGetStudentBooks.mockResolvedValue([]);
+
+    const tela = render(<SessionStartScreen />);
+
+    const escolher = await tela.findByText('Escolher um livro');
+    fireEvent.press(escolher);
+
+    expect(mockPush).toHaveBeenCalledWith('/(tabs)/catalogo');
+    expect(tela.queryByText('Começar a ler')).toBeNull();
+  });
+
+  it('o livro atual vem selecionado e da para trocar', async () => {
+    const outro: Book = { ...book, id: 'b2', title: 'Coraline', author: 'Neil Gaiman' };
+    mGetStudentBooks.mockResolvedValue([
+      { ...studentBook, book },
+      { ...studentBook, id: 'sb-b2', book_id: 'b2', book: outro },
+    ]);
+
+    const tela = render(<SessionStartScreen />);
+
+    fireEvent.press(await tela.findByText('Trocar'));
+    fireEvent.press(await tela.findByText('Coraline'));
+    fireEvent.press(tela.getByText('Começar a ler'));
+
+    await waitFor(() => {
+      expect(useSessionStore.getState().active).toMatchObject({ bookId: 'b2' });
+    });
+  });
+
+  it('aceita tempo personalizado e recusa o que nao for minuto valido', async () => {
+    const tela = render(<SessionStartScreen />);
+
+    fireEvent.press(tela.getByText('Outro'));
+    fireEvent.changeText(tela.getByPlaceholderText('minutos'), '45');
+    fireEvent.press(tela.getByText('Começar a ler'));
+
+    await waitFor(() => {
+      expect(useSessionStore.getState().active).toMatchObject({ mode: { kind: 'timed', minutes: 45 } });
+    });
   });
 });
