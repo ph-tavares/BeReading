@@ -139,6 +139,19 @@ export default function RootLayout() {
                 F4): mesma apresentação do quiz, por ser a tela de conquista que
                 antecede ele. */}
             <Stack.Screen name="chapter-complete" options={{ presentation: 'fullScreenModal' }} />
+            {/* Sessão de leitura (BER-122). A escolha do tempo é folha, como o
+                registro; a sessão correndo é tela cheia porque a promessa do
+                produto é literalmente "enquanto ela dura, essa tela é a única
+                coisa aberta", e tab bar atrás contradiria isso. */}
+            <Stack.Screen
+              name="session/start"
+              options={{
+                presentation: 'formSheet',
+                sheetAllowedDetents: [0.7, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen name="session/index" options={{ presentation: 'fullScreenModal' }} />
             {/* BER-100: a camera do assistente. Tela cheia pelo mesmo motivo do
                 quiz: a tab bar atras de um visor de camera nao faz sentido. */}
             <Stack.Screen name="assistant/scan" options={{ presentation: 'fullScreenModal' }} />

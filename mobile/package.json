@@ -18,14 +18,17 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.100.1",
     "expo": "^57.0.0",
+    "expo-audio": "~57.0.5",
     "expo-camera": "~57.0.5",
     "expo-constants": "~57.0.19",
     "expo-font": "~57.0.4",
     "expo-haptics": "~57.0.3",
     "expo-image": "~57.0.5",
     "expo-image-manipulator": "~57.0.19",
+    "expo-keep-awake": "~57.0.2",
     "expo-linear-gradient": "~57.0.2",
     "expo-linking": "~57.0.10",
+    "expo-notifications": "~57.0.20",
     "expo-router": "~57.0.22",
     "expo-secure-store": "~57.0.4",
     "expo-splash-screen": "~57.0.9",
@@ -71,7 +74,9 @@
           ]
         },
         "moduleNameMapper": {
-          "^expo-secure-store$": "<rootDir>/__mocks__/expo-secure-store.ts"
+          "^expo-secure-store$": "<rootDir>/__mocks__/expo-secure-store.ts",
+          "\\.(wav|mp3|m4a|png|jpg|webp)$": "<rootDir>/__mocks__/asset.ts",
+          "^@react-native-async-storage/async-storage$": "<rootDir>/node_modules/@react-native-async-storage/async-storage/jest/async-storage-mock.js"
         }
       },
       {
@@ -86,7 +91,10 @@
         ],
         "setupFilesAfterEnv": [
           "<rootDir>/jest.setup.ui.js"
-        ]
+        ],
+        "moduleNameMapper": {
+          "^@react-native-async-storage/async-storage$": "<rootDir>/node_modules/@react-native-async-storage/async-storage/jest/async-storage-mock.js"
+        }
       }
     ]
   },
