@@ -205,7 +205,19 @@ export default function HomeScreen() {
         goal={meta}
         onPress={() => router.push(`/book/${atual.book.id}`)}
       />
-      <Button icon={BookOpen} onPress={() => router.push('/register-reading')}>
+      {/* BER-122 (decisao S9 da spec, ADR 0014): "Ler agora" e a acao
+          primaria, e registrar leitura desce a secundaria. A mudanca e de
+          acao principal do produto: de registrar o passado para comecar o
+          presente.
+
+          O secundario NAO e opcional: desde que o botao central da TabBar
+          passou a abrir a sessao, ele e o unico caminho do app inteiro para
+          register-reading. Tirar daqui deixa a tela orfa, que e exatamente o
+          defeito da F3 que a __tests__/guards/rotas.test.ts documenta. */}
+      <Button icon={BookOpen} onPress={() => router.push('/session/start')}>
+        Ler agora
+      </Button>
+      <Button variant="secondary" onPress={() => router.push('/register-reading')}>
         Registrar leitura
       </Button>
 

@@ -1,4 +1,4 @@
-// A barra de navegação: quatro abas e um botão central de registrar leitura.
+// A barra de navegação: quatro abas e um botão central que começa a leitura.
 //
 // O botão saiu na F3 (decisão D5 da spec, "a ação vai para o contexto de cada
 // tela") e isso deixou `app/register-reading.tsx` sem NENHUM caminho no app
@@ -154,22 +154,22 @@ export const TAB_BAR_HEIGHT =
 
 interface Props extends BottomTabBarProps {
   /**
-   * O que o botão central faz. `register-reading` é rota de stack, não aba,
+   * O que o botão central faz. `session/start` é rota de stack, não aba,
    * então quem monta a barra resolve o destino — ver app/(tabs)/_layout.tsx.
    */
-  onPressRegistrar: () => void;
+  onPressSessao: () => void;
 }
 
-export function TabBar({ state, navigation, descriptors, onPressRegistrar }: Props) {
+export function TabBar({ state, navigation, descriptors, onPressSessao }: Props) {
   const insets = useSafeAreaInsets();
   const activeName = state.routes[state.index]?.name;
 
-  const aoRegistrar = () => {
+  const aoComecarSessao = () => {
     // Haptic médio, o da ação primária, contra o leve das abas.
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     }
-    onPressRegistrar();
+    onPressSessao();
   };
 
   return (
@@ -211,10 +211,10 @@ export function TabBar({ state, navigation, descriptors, onPressRegistrar }: Pro
         const central = indice === 2 ? (
           <Pressable
             key="fab"
-            testID="fab-registrar"
+            testID="fab-sessao"
             accessibilityRole="button"
-            accessibilityLabel="Registrar leitura"
-            onPress={aoRegistrar}
+            accessibilityLabel="Ler agora"
+            onPress={aoComecarSessao}
             style={styles.fab}
           >
             <PlusIcon />
