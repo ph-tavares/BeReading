@@ -23,6 +23,24 @@ function tituloProporcional(width: number): number {
   return TITLE_SIZE.sm + inclinacao * (width - WIDTH.sm);
 }
 
+/**
+ * Largura media de um caractere da fonte de titulo, em fracao do corpo. A
+ * heading e larga: 0.62 e o que faz "Mochileiro" caber inteiro sem folga
+ * demais nas palavras curtas.
+ */
+const LARGURA_MEDIA_CARACTERE = 0.62;
+
+/**
+ * O corpo do titulo nunca passa do que a palavra mais longa aguenta numa
+ * linha. Sem isso o RN quebra no meio da palavra ("Coralin/e",
+ * "Mochileir/o") quando o titulo tem uma palavra comprida numa capa estreita.
+ */
+function tituloQueCabe(titulo: string, corpo: number, larguraUtil: number): number {
+  const maiorPalavra = titulo.split(/\s+/).reduce((maior, p) => Math.max(maior, p.length), 0);
+  if (maiorPalavra === 0) return corpo;
+  return Math.min(corpo, larguraUtil / (maiorPalavra * LARGURA_MEDIA_CARACTERE));
+}
+
 interface Props {
   book: Pick<Book, 'id' | 'title' | 'author' | 'cover_url'>;
   size?: Size;
@@ -42,8 +60,10 @@ interface Props {
 export function Cover({ book, size = 'md', width: widthProp, style }: Props) {
   const width = widthProp ?? WIDTH[size];
   const height = Math.round(width * 1.5);
-  const titleSize = widthProp !== undefined ? tituloProporcional(widthProp) : TITLE_SIZE[size];
-  const showText = titleSize > 0;
+  const padding = size === 'xs' ? space.xs : space.md - 1;
+  const corpoBase = widthProp !== undefined ? tituloProporcional(widthProp) : TITLE_SIZE[size];
+  const showText = corpoBase > 0;
+  const titleSize = showText ? tituloQueCabe(book.title, corpoBase, width - padding * 2) : 0;
 
   return (
     <View
@@ -56,7 +76,7 @@ export function Cover({ book, size = 'md', width: widthProp, style }: Props) {
         testID="cover-generated"
         style={[
           styles.generated,
-          { width, height, backgroundColor: coverColorFor(book.id), padding: size === 'xs' ? space.xs : space.md - 1 },
+          { width, height, backgroundColor: coverColorFor(book.id), padding },
         ]}
       >
         {/* Lombada: duas linhas finas dao a leitura de objeto sem desenhar nada. */}
@@ -69,7 +89,7 @@ export function Cover({ book, size = 'md', width: widthProp, style }: Props) {
             >
               {book.title}
             </Text>
-            <Text numberOfLines={1} style={[styles.author, { fontSize: Math.max(7, titleSize * 0.52) }]}>
+            <Text numberOfLines={1} style={[styles.author, { fontSize: Math.max(7, corpoBase * 0.52) }]}>
               {book.author}
             </Text>
           </>

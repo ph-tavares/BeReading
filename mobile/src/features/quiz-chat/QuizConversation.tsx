@@ -60,6 +60,11 @@ export function QuizConversation({
           // A mensagem nova entra embaixo: a conversa acompanha, e o teclado
           // nunca cobre o que acabou de chegar.
           onContentSizeChange={() => rolagem.current?.scrollToEnd({ animated: true })}
+          // O teclado abrindo encolhe a lista (o KAV empurra o rodape) sem
+          // mudar o conteudo, entao o onContentSizeChange nao dispara e a
+          // pergunta nova ficava escondida atras do teclado. Ao mudar a altura
+          // visivel, volta para o fim.
+          onLayout={() => rolagem.current?.scrollToEnd({ animated: true })}
         >
           {mensagens.map((m) => (
             <ChatBubble key={m.id} message={m} />

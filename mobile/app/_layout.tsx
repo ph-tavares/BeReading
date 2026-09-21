@@ -121,16 +121,13 @@ export default function RootLayout() {
       <View style={{ flex: 1, backgroundColor: color.bg }}>
         <ToastProvider>
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.bg } }}>
-            {/* Sheet de registrar leitura (spec S6/S7.2): meia tela por padrão,
-                arrastável até tela cheia, com grabber visível. */}
-            <Stack.Screen
-              name="register-reading"
-              options={{
-                presentation: 'formSheet',
-                sheetAllowedDetents: [0.7, 1],
-                sheetGrabberVisible: true,
-              }}
-            />
+            {/* Sheet de registrar leitura (spec S6/S7.2). Era `formSheet` com
+                detents [0.7, 1], e no iPhone (SDK 57, react-native-screens
+                4.26) o sheet com detent media o layout errado: cabeçalho
+                sobreposto aos chips, título cortado na borda esquerda. O
+                `modal` é o page sheet nativo do iOS: continua folha, fecha
+                arrastando, e o layout sai certo. Perde a meia altura. */}
+            <Stack.Screen name="register-reading" options={{ presentation: 'modal' }} />
             {/* Quiz e resumo viram modal de tela cheia: é uma conversa, não faz
                 sentido a tab bar aparecer atrás. */}
             <Stack.Screen name="quiz/[chapterId]" options={{ presentation: 'fullScreenModal' }} />
@@ -143,14 +140,7 @@ export default function RootLayout() {
                 registro; a sessão correndo é tela cheia porque a promessa do
                 produto é literalmente "enquanto ela dura, essa tela é a única
                 coisa aberta", e tab bar atrás contradiria isso. */}
-            <Stack.Screen
-              name="session/start"
-              options={{
-                presentation: 'formSheet',
-                sheetAllowedDetents: [0.7, 1],
-                sheetGrabberVisible: true,
-              }}
-            />
+            <Stack.Screen name="session/start" options={{ presentation: 'modal' }} />
             <Stack.Screen name="session/index" options={{ presentation: 'fullScreenModal' }} />
             {/* BER-100: a camera do assistente. Tela cheia pelo mesmo motivo do
                 quiz: a tab bar atras de um visor de camera nao faz sentido. */}

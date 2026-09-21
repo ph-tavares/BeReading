@@ -4,11 +4,11 @@
 // quebrava em aparelho com notch de altura diferente.
 import { RefreshControl, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, X } from 'lucide-react-native';
 import { Text } from './Text';
 import { IconButton } from './IconButton';
 import { TAB_BAR_HEIGHT } from './TabBar';
-import { color, space } from '../theme/tokens';
+import { color, radius, space } from '../theme/tokens';
 
 type Edge = 'top' | 'bottom';
 
@@ -17,6 +17,14 @@ interface Props {
   subtitle?: string;
   /** Presente = mostra o botao de voltar. */
   onBack?: () => void;
+  /**
+   * Presente = a tela e folha: ganha a alca no topo (avisa que arrasta para
+   * baixo) e o X no canto. Arrastar sozinho nao se descobre, e sem o X o
+   * leitor achava que nao tinha como sair.
+   */
+  onClose?: () => void;
+  /** O X continua na tela e so nao age (ex.: durante um envio). */
+  closeDisabled?: boolean;
   headerRight?: React.ReactNode;
   /** Default true: a maioria das telas rola. */
   scroll?: boolean;
@@ -33,6 +41,8 @@ export function Screen({
   title,
   subtitle,
   onBack,
+  onClose,
+  closeDisabled = false,
   headerRight,
   scroll = true,
   refreshing = false,
@@ -42,7 +52,7 @@ export function Screen({
   children,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const temCabecalho = Boolean(title || subtitle || onBack || headerRight);
+  const temCabecalho = Boolean(title || subtitle || onBack || headerRight || onClose);
 
   // Achado 3 da rodada de correção 1: 'bottom' em edges significa tela sem
   // tab bar (é o próprio comentário da prop, acima), e nesse caminho o
@@ -67,6 +77,15 @@ export function Screen({
         ) : null}
       </View>
       {headerRight}
+      {onClose ? (
+        <IconButton
+          icon={X}
+          accessibilityLabel="Fechar"
+          onPress={onClose}
+          disabled={closeDisabled}
+          style={styles.fechar}
+        />
+      ) : null}
     </View>
   ) : null;
 
@@ -114,6 +133,7 @@ export function Screen({
         edges.includes('bottom') ? { paddingBottom: insets.bottom } : null,
       ]}
     >
+      {onClose ? <View style={styles.alca} testID="screen-grabber" /> : null}
       {cabecalho}
       {conteudo}
     </View>
@@ -132,4 +152,14 @@ const styles = StyleSheet.create({
   headerTexts: { flex: 1, gap: space.xs },
   content: { paddingHorizontal: space.gutter },
   semScroll: { flex: 1 },
+  alca: {
+    alignSelf: 'center',
+    width: 36,
+    height: 5,
+    borderRadius: radius.pill,
+    backgroundColor: color.line2,
+    marginTop: space.sm,
+    marginBottom: space.md,
+  },
+  fechar: { borderRadius: radius.pill },
 });

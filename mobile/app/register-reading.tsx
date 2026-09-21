@@ -1,6 +1,6 @@
 // Registrar leitura (spec S7.2, mockup 04): o sheet da acao mais frequente do
-// app e o gatilho do quiz. A apresentacao (formSheet, detents 0.7 e 1, grabber
-// visivel) e configurada em app/_layout.tsx.
+// app e o gatilho do quiz. A apresentacao (page sheet nativo, `modal`) e
+// configurada em app/_layout.tsx.
 //
 // Aqui ficam dado, envio e navegacao; a composicao vem de src/features/register.
 // A navegacao para a tela de capitulo fechado fica NESTE arquivo, com o
@@ -72,6 +72,9 @@ export default function RegisterReadingScreen() {
         if (!enviando.current) router.replace('/');
       }
     : undefined;
+  // Aberto como folha, o X fecha a folha. Durante o envio ele continua la e
+  // so nao age, pelo mesmo motivo da seta acima.
+  const fecharFolha = raiz ? undefined : () => router.back();
 
   // BER-44: sem a lista, o sheet ainda oferece o livro que a Hoje tinha aberto.
   // Lido por ref para uma mudanca no store nao refazer a busca e apagar o que ja
@@ -284,7 +287,7 @@ export default function RegisterReadingScreen() {
 
   if (loadingBooks) {
     return (
-      <Screen scroll={false} edges={bordas} onBack={fechar} contentStyle={styles.content}>
+      <Screen scroll={false} edges={bordas} onBack={fechar} onClose={fecharFolha} closeDisabled={sending} contentStyle={styles.content}>
         <RegisterSkeleton />
       </Screen>
     );
@@ -292,7 +295,7 @@ export default function RegisterReadingScreen() {
 
   if (loadError) {
     return (
-      <Screen scroll={false} edges={bordas} onBack={fechar} contentStyle={styles.content}>
+      <Screen scroll={false} edges={bordas} onBack={fechar} onClose={fecharFolha} closeDisabled={sending} contentStyle={styles.content}>
         <Banner
           tone="danger"
           message="Não deu pra carregar seus livros."
@@ -304,7 +307,7 @@ export default function RegisterReadingScreen() {
 
   if (!selected || !resumo) {
     return (
-      <Screen scroll={false} edges={bordas} onBack={fechar} contentStyle={styles.content}>
+      <Screen scroll={false} edges={bordas} onBack={fechar} onClose={fecharFolha} closeDisabled={sending} contentStyle={styles.content}>
         <EmptyState
           title="Nada em leitura, por enquanto."
           description="Escolhe um livro no catálogo pra começar a registrar."
@@ -343,7 +346,7 @@ export default function RegisterReadingScreen() {
   // registro fica tocavel. A opcao e passada daqui, pela propria rota, sem
   // tocar em app/_layout.tsx.
   return (
-    <Screen scroll={false} edges={bordas} onBack={fechar} contentStyle={styles.content}>
+    <Screen scroll={false} edges={bordas} onBack={fechar} onClose={fecharFolha} closeDisabled={sending} contentStyle={styles.content}>
       <Stack.Screen options={{ gestureEnabled: !sending }} />
       <KeyboardAvoidingView
         style={styles.flex}
