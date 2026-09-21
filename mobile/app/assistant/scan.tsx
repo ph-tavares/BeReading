@@ -191,9 +191,11 @@ export default function AssistantScanScreen() {
       {cabecalho}
 
       <View style={styles.visor}>
-        <CameraView ref={camera} style={styles.flex} facing="back">
-          <View style={styles.guia} />
-        </CameraView>
+        <CameraView ref={camera} style={StyleSheet.absoluteFill} facing="back" />
+        {/* A moldura fica FORA do CameraView: ele nao aceita filhos desde o SDK 52
+            e avisa em tempo de execucao. Como o visor e a camera esta absoluta,
+            ela ocupa o espaco por cima; `none` deixa o toque passar. */}
+        <View pointerEvents="none" style={styles.guia} />
       </View>
 
       <Text variant="body" align="center" style={styles.dica}>

@@ -25,7 +25,10 @@ jest.mock('expo-camera', () => {
     useCameraPermissions: () => [mockPermissao, mockPedirPermissao],
     CameraView: React.forwardRef((props: { children?: React.ReactNode }, ref: unknown) => {
       React.useImperativeHandle(ref, () => ({ takePictureAsync: mockTirarFoto }));
-      return React.createElement(View, { testID: 'camera' }, props.children);
+      // O CameraView de verdade nao aceita filhos desde o SDK 52: ele so avisa no
+      // LogBox, e aviso em runtime nao reprova teste nenhum. Aqui reprova.
+      if (props.children) throw new Error('CameraView nao aceita filhos (expo-camera SDK 52+)');
+      return React.createElement(View, { testID: 'camera' });
     }),
   };
 });
